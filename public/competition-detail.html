@@ -330,7 +330,7 @@
                 busy: false,
                 error: '',
                 pendingChoice: null,   // { phaseId, options: [[7,7,6], ...] }
-                chosenOptionIdx: 0,,
+                chosenOptionIdx: 0,
 
                 async init() {
                     await Promise.all([this.loadPhases(), this.loadRules()]);
