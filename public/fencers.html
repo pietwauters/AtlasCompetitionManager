@@ -1,187 +1,396 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fencers — Atlas</title>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    body   { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
-    header { background: #1a1a2e; color: #fff; padding: 0.8rem 2rem; display: flex; align-items: center; gap: 1rem; }
-    header a { color: #aad4f5; text-decoration: none; font-size: 0.9rem; }
-    main   { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
-    .card  { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;
-             box-shadow: 0 2px 6px rgba(0,0,0,.08); }
-    h2     { margin-top: 0; }
-    .meta  { font-size: 0.85rem; color: #666; margin-bottom: 1rem; }
-
-    /* Form */
-    .form-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; }
-    .form-row label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; font-weight: bold; }
-    .form-row input {
-      padding: 0.42rem 0.65rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.93rem; }
-    input[name="name"]         { width: 200px; }
-    input[name="club"]         { width: 160px; }
-    input[name="nationality"]  { width: 70px; text-transform: uppercase; }
-    input[name="initial_seed"] { width: 65px; }
-    button.primary { background: #1a6bab; color:#fff; border:none; border-radius:5px;
-                     padding:0.45rem 1.1rem; cursor:pointer; font-size:0.93rem; }
-    button.primary:hover { background:#155594; }
-    button.sm { background:#888; color:#fff; border:none; border-radius:4px;
-                padding:0.2rem 0.6rem; cursor:pointer; font-size:0.8rem; }
-    button.sm.danger  { background:#c0392b; }
-    button.sm:hover   { opacity:.85; }
-    #form-error { color:#c0392b; font-size:0.83rem; margin-top:0.45rem; min-height:1.1rem; }
-
-    /* CSV upload */
-    .csv-area { border: 2px dashed #ccc; border-radius: 6px; padding: 1rem; text-align: center;
-                color: #888; cursor: pointer; transition: border-color .2s; }
-    .csv-area:hover, .csv-area.drag { border-color: #1a6bab; color: #1a6bab; }
-    .csv-area input[type="file"] { display: none; }
-
-    /* Table */
-    table { width:100%; border-collapse:collapse; font-size:0.9rem; }
-    th    { text-align:left; padding:0.55rem 0.75rem; background:#f7f8fa;
-            border-bottom:2px solid #dde; color:#555; font-size:0.78rem; text-transform:uppercase; }
-    td    { padding:0.65rem 0.75rem; border-bottom:1px solid #eee; vertical-align:middle; }
-    tr:last-child td { border-bottom:none; }
-    tr:hover td { background:#fafbfc; }
-
-    .badge-active     { color:#1e8449; }
-    .badge-withdrawn  { color:#c0392b; }
-    .badge-dns        { color:#888; }
-    .empty  { color:#888; font-style:italic; }
-    .loading { color:#888; }
-  </style>
-</head>
-<body>
-  <header>
-    <strong>Atlas</strong>
-    <a href="/">Home</a>
-    <a href="/competitions">Competitions</a>
-    <span id="header-comp-name" style="margin-left:auto; opacity:.7; font-size:.9rem"></span>
-  </header>
-  <main>
-    <!-- Add fencer -->
-    <div class="card">
-      <h2>Fencers</h2>
-      <div class="meta" id="comp-meta">Loading competition…</div>
-
-      <form x-data="addForm()" @submit.prevent="submit">
-        <div class="form-row">
-          <label>Name *
-            <input name="name" x-model="name" placeholder="Last, First" required>
-          </label>
-          <label>Club
-            <input name="club" x-model="club" placeholder="Club name">
-          </label>
-          <label>NAT
-            <input name="nationality" x-model="nationality" placeholder="BEL" maxlength="3">
-          </label>
-          <label>Seed
-            <input name="initial_seed" x-model="initial_seed" type="number" min="1" placeholder="#">
-          </label>
-          <button type="submit" class="primary" :disabled="loading">
-            <span x-text="loading ? 'Adding…' : '+ Add'"></span>
-          </button>
-        </div>
-        <div id="form-error" x-text="error"></div>
-      </form>
-    </div>
-
-    <!-- CSV import -->
-    <div class="card">
-      <strong>Import from CSV</strong>
-      <p style="font-size:.83rem;color:#666;margin:.5rem 0 1rem">
-        Columns (in any order): <code>name</code>, <code>club</code>, <code>nationality</code>, <code>initial_seed</code><br>
-        First row must be a header. Name is the only required field.
-      </p>
-      <div class="csv-area" id="drop-zone" onclick="document.getElementById('csv-input').click()"
-           @dragover.prevent="$el.classList.add('drag')"
-           @dragleave="$el.classList.remove('drag')"
-           @drop.prevent="handleDrop($event)">
-        <input type="file" id="csv-input" accept=".csv,text/csv" onchange="handleFile(this.files[0])">
-        Click or drag a CSV file here to import
-      </div>
-      <div id="csv-status" style="font-size:.83rem;margin-top:.5rem;min-height:1.2rem"></div>
-    </div>
-
-    <!-- Fencer list -->
-    <div class="card">
-      <div id="fencer-list"
-           hx-get=""
-           hx-trigger="load, refresh-list from:body"
-           hx-swap="innerHTML">
-        <span class="loading">Loading…</span>
-      </div>
-    </div>
-  </main>
-
-  <script>
-    const compId = location.pathname.split('/')[2];
-
-    // Set correct HTMX URL on the list element
-    document.getElementById('fencer-list').setAttribute('hx-get', `/api/competitions/${compId}/fencers`);
-    htmx.process(document.getElementById('fencer-list'));
-
-    // Load competition name for header
-    fetch(`/api/competitions/${compId}`)
-      .then(r => r.json())
-      .then(c => {
-        const label = `${c.name} — ${c.weapon} ${c.gender}`;
-        document.getElementById('comp-meta').textContent = label;
-        document.getElementById('header-comp-name').textContent = label;
-      });
-
-    // -------------------------------------------------------------------
-    // Alpine form
-    // -------------------------------------------------------------------
-    function addForm() {
-      return {
-        name: '', club: '', nationality: '', initial_seed: '',
-        loading: false, error: '',
-        async submit() {
-          this.loading = true; this.error = '';
-          try {
-            const r = await fetch(`/api/competitions/${compId}/fencers`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: this.name,
-                club: this.club || undefined,
-                nationality: this.nationality || undefined,
-                initial_seed: this.initial_seed || undefined
-              })
-            });
-            const d = await r.json();
-            if (!r.ok) { this.error = d.error || 'Error adding fencer'; return; }
-            this.name = ''; this.club = ''; this.nationality = ''; this.initial_seed = '';
-            document.body.dispatchEvent(new Event('refresh-list'));
-          } catch(e) {
-            this.error = 'Network error';
-          } finally {
-            this.loading = false;
-          }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fencers — Atlas</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
         }
-      };
-    }
 
-    // -------------------------------------------------------------------
-    // HTMX response renderer
-    // -------------------------------------------------------------------
-    document.body.addEventListener('htmx:beforeSwap', (evt) => {
-      if (evt.detail.target.id !== 'fencer-list') return;
-      try {
-        const data = JSON.parse(evt.detail.serverResponse);
-        evt.detail.serverResponse = renderTable(data);
-      } catch (_) {}
-    });
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f0f2f5;
+            color: #1a1a2e;
+        }
 
-    function renderTable(rows) {
-      if (!rows.length) return `<p class="empty">No fencers yet. Add one above or import a CSV.</p>`;
-      const rows_html = rows.map(f => `
+        header {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 0.8rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        header a {
+            color: #aad4f5;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        main {
+            max-width: 960px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .meta {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        /* Form */
+        .form-row {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .form-row label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            font-size: 0.82rem;
+            font-weight: bold;
+        }
+
+        .form-row input {
+            padding: 0.42rem 0.65rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 0.93rem;
+        }
+
+        input[name="name"] {
+            width: 200px;
+        }
+
+        input[name="club"] {
+            width: 160px;
+        }
+
+        input[name="nationality"] {
+            width: 70px;
+            text-transform: uppercase;
+        }
+
+        input[name="initial_seed"] {
+            width: 65px;
+        }
+
+        button.primary {
+            background: #1a6bab;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 0.45rem 1.1rem;
+            cursor: pointer;
+            font-size: 0.93rem;
+        }
+
+        button.primary:hover {
+            background: #155594;
+        }
+
+        button.sm {
+            background: #888;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 0.2rem 0.6rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        button.sm.danger {
+            background: #c0392b;
+        }
+
+        button.sm:hover {
+            opacity: .85;
+        }
+
+        #form-error {
+            color: #c0392b;
+            font-size: 0.83rem;
+            margin-top: 0.45rem;
+            min-height: 1.1rem;
+        }
+
+        /* CSV upload */
+        .csv-area {
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            padding: 1rem;
+            text-align: center;
+            color: #888;
+            cursor: pointer;
+            transition: border-color .2s;
+        }
+
+        .csv-area:hover,
+        .csv-area.drag {
+            border-color: #1a6bab;
+            color: #1a6bab;
+        }
+
+        .csv-area input[type="file"] {
+            display: none;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.55rem 0.75rem;
+            background: #f7f8fa;
+            border-bottom: 2px solid #dde;
+            color: #555;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #fafbfc;
+        }
+
+        .badge-active {
+            color: #1e8449;
+        }
+
+        .badge-withdrawn {
+            color: #c0392b;
+        }
+
+        .badge-dns {
+            color: #888;
+        }
+
+        .empty {
+            color: #888;
+            font-style: italic;
+        }
+
+        .loading {
+            color: #888;
+        }
+
+        /* Edit modal */
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,.45);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: #fff; border-radius: 10px; padding: 2rem;
+            width: 420px; max-width: 95vw;
+            box-shadow: 0 8px 32px rgba(0,0,0,.2);
+        }
+        .modal h3 { margin-top: 0; }
+        .modal .form-row { margin-bottom: 1rem; }
+        .modal-footer { display: flex; gap: .6rem; justify-content: flex-end; margin-top: 1.2rem; }
+        button.secondary {
+            background: #e8ecf0; color: #333; border: none; border-radius: 5px;
+            padding: .45rem 1rem; cursor: pointer; font-size: .93rem;
+        }
+        button.secondary:hover { background: #d0d5db; }
+    </style>
+</head>
+
+<body>
+    <header>
+        <strong>Atlas</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+        <span id="header-comp-name" style="margin-left:auto; opacity:.7; font-size:.9rem"></span>
+    </header>
+    <main>
+        <!-- Add fencer -->
+        <div class="card">
+            <h2>Fencers</h2>
+            <div class="meta" id="comp-meta">Loading competition…</div>
+
+            <form x-data="addForm()" @submit.prevent="submit">
+                <div class="form-row">
+                    <label>Name *
+                        <input name="name" x-model="name" placeholder="Last, First" required>
+                    </label>
+                    <label>Club
+                        <input name="club" x-model="club" placeholder="Club name">
+                    </label>
+                    <label>NAT
+                        <input name="nationality" x-model="nationality" placeholder="BEL" maxlength="3">
+                    </label>
+                    <label>Seed
+                        <input name="initial_seed" x-model="initial_seed" type="number" min="1" placeholder="#">
+                    </label>
+                    <button type="submit" class="primary" :disabled="loading">
+                        <span x-text="loading ? 'Adding…' : '+ Add'"></span>
+                    </button>
+                </div>
+                <div id="form-error" x-text="error"></div>
+            </form>
+        </div>
+
+        <!-- CSV import -->
+        <div class="card">
+            <strong>Import from CSV</strong>
+            <p style="font-size:.83rem;color:#666;margin:.5rem 0 1rem">
+                Columns (in any order): <code>name</code>, <code>club</code>, <code>nationality</code>,
+                <code>initial_seed</code><br>
+                First row must be a header. Name is the only required field.
+            </p>
+            <div class="csv-area" id="drop-zone" onclick="document.getElementById('csv-input').click()"
+                @dragover.prevent="$el.classList.add('drag')" @dragleave="$el.classList.remove('drag')"
+                @drop.prevent="handleDrop($event)">
+                <input type="file" id="csv-input" accept=".csv,text/csv" onchange="handleFile(this.files[0])">
+                Click or drag a CSV file here to import
+            </div>
+            <div id="csv-status" style="font-size:.83rem;margin-top:.5rem;min-height:1.2rem"></div>
+        </div>
+
+        <!-- Fencer list -->
+        <div class="card">
+            <div id="fencer-list" hx-get="" hx-trigger="load, refresh-list from:body" hx-swap="innerHTML">
+                <span class="loading">Loading…</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit modal -->
+    <div x-data="editModal()" x-show="open" class="modal-backdrop" @keydown.escape.window="close()" style="display:none">
+        <div class="modal" @click.stop>
+            <h3>Edit Fencer</h3>
+            <div class="form-row">
+                <label style="width:100%;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
+                    Name *
+                    <input x-model="name" style="width:100%;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem" required>
+                </label>
+            </div>
+            <div class="form-row" style="gap:.6rem;flex-wrap:wrap">
+                <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
+                    Club
+                    <input x-model="club" style="width:160px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
+                    NAT
+                    <input x-model="nationality" maxlength="3" style="width:70px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem;text-transform:uppercase">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
+                    Seed
+                    <input x-model="initial_seed" type="number" min="1" style="width:65px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                </label>
+            </div>
+            <div x-text="error" style="color:#c0392b;font-size:.83rem;min-height:1.1rem"></div>
+            <div class="modal-footer">
+                <button class="secondary" @click="close()">Cancel</button>
+                <button class="primary" @click="save()" :disabled="loading">
+                    <span x-text="loading ? 'Saving…' : 'Save'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const compId = location.pathname.split('/')[2];
+
+        // Set correct HTMX URL on the list element
+        document.getElementById('fencer-list').setAttribute('hx-get', `/api/competitions/${compId}/fencers`);
+        htmx.process(document.getElementById('fencer-list'));
+
+        // Load competition name for header
+        fetch(`/api/competitions/${compId}`)
+            .then(r => r.json())
+            .then(c => {
+                const label = `${c.name} — ${c.weapon} ${c.gender}`;
+                document.getElementById('comp-meta').textContent = label;
+                document.getElementById('header-comp-name').textContent = label;
+            });
+
+        // -------------------------------------------------------------------
+        // Alpine form
+        // -------------------------------------------------------------------
+        function addForm() {
+            return {
+                name: '', club: '', nationality: '', initial_seed: '',
+                loading: false, error: '',
+                async submit() {
+                    this.loading = true; this.error = '';
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/fencers`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: this.name,
+                                club: this.club || undefined,
+                                nationality: this.nationality || undefined,
+                                initial_seed: this.initial_seed || undefined
+                            })
+                        });
+                        const d = await r.json();
+                        if (!r.ok) { this.error = d.error || 'Error adding fencer'; return; }
+                        this.name = ''; this.club = ''; this.nationality = ''; this.initial_seed = '';
+                        document.body.dispatchEvent(new Event('refresh-list'));
+                    } catch (e) {
+                        this.error = 'Network error';
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+
+        // -------------------------------------------------------------------
+        // HTMX response renderer
+        // -------------------------------------------------------------------
+        document.body.addEventListener('htmx:beforeSwap', (evt) => {
+            if (evt.detail.target.id !== 'fencer-list') return;
+            try {
+                const data = JSON.parse(evt.detail.serverResponse);
+                evt.detail.serverResponse = renderTable(data);
+            } catch (_) { }
+        });
+
+        function renderTable(rows) {
+            if (!rows.length) return `<p class="empty">No fencers yet. Add one above or import a CSV.</p>`;
+            const rows_html = rows.map(f => `
         <tr>
           <td>${f.initial_seed ?? '—'}</td>
           <td>${esc(f.name)}</td>
@@ -189,90 +398,148 @@
           <td>${f.nationality || '—'}</td>
           <td class="badge-${f.status}">${f.status}</td>
           <td>
-            <button class="sm danger" onclick="deleteFencer(${f.id})">Remove</button>
+            <button class="sm" onclick='openEdit(${JSON.stringify(f)})'>Edit</button>
+            <button class="sm danger" onclick="deleteFencer(${f.id})" style="margin-left:.3rem">Remove</button>
           </td>
         </tr>`).join('');
-      return `<table>
+            return `<table>
         <thead><tr>
           <th>Seed</th><th>Name</th><th>Club</th><th>NAT</th><th>Status</th><th></th>
         </tr></thead>
         <tbody>${rows_html}</tbody>
       </table>
       <p style="font-size:.82rem;color:#888;margin-top:.75rem">${rows.length} fencer(s)</p>`;
-    }
+        }
 
-    async function deleteFencer(id) {
-      if (!confirm('Remove this fencer?')) return;
-      const r = await fetch(`/api/competitions/${compId}/fencers/${id}`, { method: 'DELETE' });
-      const d = await r.json();
-      if (!r.ok) { alert(d.error); return; }
-      document.body.dispatchEvent(new Event('refresh-list'));
-    }
+        async function deleteFencer(id) {
+            if (!confirm('Remove this fencer?')) return;
+            const r = await fetch(`/api/competitions/${compId}/fencers/${id}`, { method: 'DELETE' });
+            const d = await r.json();
+            if (!r.ok) { alert(d.error); return; }
+            document.body.dispatchEvent(new Event('refresh-list'));
+        }
 
-    // -------------------------------------------------------------------
-    // CSV import
-    // -------------------------------------------------------------------
-    function handleDrop(evt) {
-      document.getElementById('drop-zone').classList.remove('drag');
-      const file = evt.dataTransfer.files[0];
-      if (file) handleFile(file);
-    }
+        // -------------------------------------------------------------------
+        // CSV import
+        // -------------------------------------------------------------------
+        function handleDrop(evt) {
+            document.getElementById('drop-zone').classList.remove('drag');
+            const file = evt.dataTransfer.files[0];
+            if (file) handleFile(file);
+        }
 
-    function handleFile(file) {
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => parseAndImport(e.target.result);
-      reader.readAsText(file);
-    }
+        function handleFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => parseAndImport(e.target.result);
+            reader.readAsText(file);
+        }
 
-    function parseAndImport(text) {
-      const lines = text.trim().split(/\r?\n/);
-      if (lines.length < 2) { setStatus('CSV has no data rows.', true); return; }
+        function parseAndImport(text) {
+            const lines = text.trim().split(/\r?\n/);
+            if (lines.length < 2) { setStatus('CSV has no data rows.', true); return; }
 
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g,''));
-      const nameIdx = headers.indexOf('name');
-      if (nameIdx === -1) { setStatus('CSV must have a "name" column.', true); return; }
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ''));
+            const nameIdx = headers.indexOf('name');
+            if (nameIdx === -1) { setStatus('CSV must have a "name" column.', true); return; }
 
-      const clubIdx = headers.indexOf('club');
-      const natIdx  = headers.indexOf('nationality');
-      const seedIdx = headers.indexOf('initial_seed');
+            const clubIdx = headers.indexOf('club');
+            const natIdx = headers.indexOf('nationality');
+            const seedIdx = headers.indexOf('initial_seed');
 
-      const fencers = lines.slice(1).map(line => {
-        const cols = line.split(',').map(c => c.trim().replace(/^"(.*)"$/, '$1'));
-        return {
-          name:         cols[nameIdx]  || '',
-          club:         clubIdx  >= 0 ? cols[clubIdx]  : undefined,
-          nationality:  natIdx   >= 0 ? cols[natIdx]   : undefined,
-          initial_seed: seedIdx  >= 0 ? cols[seedIdx]  : undefined,
-        };
-      }).filter(f => f.name);
+            const fencers = lines.slice(1).map(line => {
+                const cols = line.split(',').map(c => c.trim().replace(/^"(.*)"$/, '$1'));
+                return {
+                    name: cols[nameIdx] || '',
+                    club: clubIdx >= 0 ? cols[clubIdx] : undefined,
+                    nationality: natIdx >= 0 ? cols[natIdx] : undefined,
+                    initial_seed: seedIdx >= 0 ? cols[seedIdx] : undefined,
+                };
+            }).filter(f => f.name);
 
-      if (!fencers.length) { setStatus('No valid rows found in CSV.', true); return; }
+            if (!fencers.length) { setStatus('No valid rows found in CSV.', true); return; }
 
-      setStatus(`Importing ${fencers.length} fencer(s)…`);
-      fetch(`/api/competitions/${compId}/fencers/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fencers })
-      })
-      .then(r => r.json().then(d => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => {
-        if (!ok) { setStatus('Import error: ' + d.error, true); return; }
-        setStatus(`Imported ${d.count} fencer(s) successfully.`);
-        document.body.dispatchEvent(new Event('refresh-list'));
-      })
-      .catch(() => setStatus('Network error during import.', true));
-    }
+            setStatus(`Importing ${fencers.length} fencer(s)…`);
+            fetch(`/api/competitions/${compId}/fencers/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fencers })
+            })
+                .then(r => r.json().then(d => ({ ok: r.ok, d })))
+                .then(({ ok, d }) => {
+                    if (!ok) { setStatus('Import error: ' + d.error, true); return; }
+                    setStatus(`Imported ${d.count} fencer(s) successfully.`);
+                    document.body.dispatchEvent(new Event('refresh-list'));
+                })
+                .catch(() => setStatus('Network error during import.', true));
+        }
 
-    function setStatus(msg, isError = false) {
-      const el = document.getElementById('csv-status');
-      el.textContent = msg;
-      el.style.color = isError ? '#c0392b' : '#1e8449';
-    }
+        function setStatus(msg, isError = false) {
+            const el = document.getElementById('csv-status');
+            el.textContent = msg;
+            el.style.color = isError ? '#c0392b' : '#1e8449';
+        }
 
-    function esc(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-  </script>
+        function esc(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // -------------------------------------------------------------------
+        // Edit modal
+        // -------------------------------------------------------------------
+        function openEdit(fencer) {
+            const el = document.querySelector('[x-data]');
+            const data = Alpine.$data(el);
+            data.id = fencer.id;
+            data.name = fencer.name;
+            data.club = fencer.club || '';
+            data.nationality = fencer.nationality || '';
+            data.initial_seed = fencer.initial_seed ?? '';
+            data.error = '';
+            data.open = true;
+        }
+
+        function editModal() {
+            return {
+                open: false,
+                id: null,
+                name: '',
+                club: '',
+                nationality: '',
+                initial_seed: '',
+                error: '',
+                loading: false,
+                close() {
+                    this.open = false;
+                },
+                async save() {
+                    this.error = '';
+                    this.loading = true;
+                    try {
+                        const body = {
+                            name: this.name.trim(),
+                            club: this.club.trim() || null,
+                            nationality: this.nationality.trim() || null,
+                            initial_seed: this.initial_seed !== '' ? Number(this.initial_seed) : null,
+                        };
+                        const r = await fetch(`/api/competitions/${compId}/fencers/${this.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body),
+                        });
+                        const d = await r.json();
+                        if (!r.ok) { this.error = d.error || 'Save failed'; return; }
+                        this.open = false;
+                        document.body.dispatchEvent(new Event('refresh-list'));
+                    } catch {
+                        this.error = 'Network error';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+            };
+        }
+    </script>
 </body>
+
 </html>
