@@ -50,7 +50,7 @@ app.use('/api/competitions/:compId/phases',  require('./routes/phases'));
 app.get('/api/rules', (_req, res) => {
   const rulesDir = path.join(__dirname, 'rules');
   const files = fs.readdirSync(rulesDir)
-    .filter(f => f.endsWith('.json') && !f.startsWith('rule-schema'));
+    .filter(f => f.endsWith('.json') && !f.startsWith('rule-schema') && f !== 'categories.json');
   const rules = files.map(filename => {
     try {
       const data = JSON.parse(fs.readFileSync(path.join(rulesDir, filename), 'utf8'));
@@ -62,11 +62,18 @@ app.get('/api/rules', (_req, res) => {
   res.json(rules);
 });
 
+// Categories catalogue
+app.get('/api/categories', (_req, res) => {
+  const { listCategories } = require('./lib/categories');
+  res.json(listCategories());
+});
+
 // Page routes — serve HTML for each section
 app.get('/competitions',                          (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competitions.html')));
 app.get('/competitions/:id',                      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
 app.get('/competitions/:id/fencers',              (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
-app.get('/competitions/:id/phases/:phaseId',      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'phase.html')));
+app.get('/competitions/:id/fencers/roster',        (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencer-roster.html')));
+app.get('/competitions/:id/phases/:phaseId',       (_req, res) => res.sendFile(path.join(__dirname, 'public', 'phase.html')));
 
 // Stubs (to be added as slices)
 // app.use('/api/resources',    require('./routes/resources'));

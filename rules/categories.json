@@ -1,0 +1,14 @@
+{
+  "_comment": "Category definitions. Age is assessed on cutMonth/cutDay of the competition year.",
+  "_comment2": "minAge and maxAge are inclusive. Omit minAge to mean 'no lower bound', omit maxAge for 'no upper bound'.",
+  "cutMonth": 11,
+  "cutDay": 1,
+  "categories": [
+    { "id": "U12",      "label": "Under 12",  "maxAge": 11 },
+    { "id": "U14",      "label": "Under 14",  "minAge": 12, "maxAge": 13 },
+    { "id": "U17",      "label": "Cadet",     "minAge": 14, "maxAge": 16 },
+    { "id": "U20",      "label": "Junior",    "minAge": 17, "maxAge": 19 },
+    { "id": "senior",   "label": "Senior",    "minAge": 20, "maxAge": 39 },
+    { "id": "veterans", "label": "Veterans",  "minAge": 40 }
+  ]
+}

@@ -49,13 +49,23 @@ CREATE TABLE IF NOT EXISTS competitions (
 -- Competitors (per competition)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS competitors (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  competition_id INTEGER NOT NULL REFERENCES competitions(id) ON DELETE CASCADE,
-  name           TEXT    NOT NULL,
-  club           TEXT,
-  nationality    TEXT,   -- 3-letter NOC code
-  initial_seed   INTEGER,
-  status         TEXT    NOT NULL DEFAULT 'active'  -- active | withdrawn | dns
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id   INTEGER NOT NULL REFERENCES competitions(id) ON DELETE CASCADE,
+  -- Legacy single-string name (kept for backward compat with bulk import).
+  -- If first_name / last_name are set they are canonical; name is the fallback.
+  name             TEXT    NOT NULL,
+  first_name       TEXT,
+  last_name        TEXT,
+  date_of_birth    TEXT,             -- ISO-8601: YYYY-MM-DD
+  gender           TEXT,             -- M | F
+  weapons          TEXT,             -- JSON array: '["foil","epee"]'
+  licence          TEXT,             -- national or FIE licence number
+  handedness       TEXT,             -- R | L
+  national_ranking INTEGER,
+  club             TEXT,
+  nationality      TEXT,             -- 3-letter NOC code
+  initial_seed     INTEGER,
+  status           TEXT    NOT NULL DEFAULT 'active'  -- active | withdrawn | dns
 );
 
 -- ---------------------------------------------------------------------------

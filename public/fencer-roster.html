@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roster — Atlas</title>
+    <script src="/js/alpinejs.min.js" defer></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f0f2f5;
+            color: #1a1a2e;
+        }
+
+        header {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 0.8rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        header a { color: #aad4f5; text-decoration: none; font-size: .9rem; }
+
+        main {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,.08);
+        }
+
+        /* ---- Filter bar ---- */
+        .filters {
+            display: flex;
+            gap: .6rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 1rem;
+        }
+
+        .filters label {
+            display: flex;
+            flex-direction: column;
+            gap: .25rem;
+            font-size: .78rem;
+            font-weight: bold;
+            color: #444;
+        }
+
+        .filters select, .filters input {
+            padding: .38rem .6rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: .88rem;
+            min-width: 110px;
+        }
+
+        button.sm {
+            padding: .3rem .65rem;
+            font-size: .82rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            background: #fff;
+        }
+
+        button.sm:hover { background: #f0f0f0; }
+
+        button.primary {
+            background: #1a6bab;
+            color: #fff;
+            border: none;
+        }
+
+        button.primary:hover { background: #155594; }
+
+        button.primary:disabled { opacity: .5; cursor: default; }
+
+        /* ---- Roster table ---- */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .88rem;
+        }
+
+        th {
+            text-align: left;
+            padding: .5rem .6rem;
+            border-bottom: 2px solid #ddd;
+            font-size: .78rem;
+            text-transform: uppercase;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: .45rem .6rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        tr:hover td { background: #fafbfc; }
+
+        /* status badges */
+        .s-active    { color: #1e8449; font-weight: bold; }
+        .s-withdrawn { color: #c0392b; }
+        .s-dns       { color: #888; }
+
+        /* status toggle buttons */
+        .status-btn {
+            padding: .2rem .55rem;
+            font-size: .75rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .status-btn.active    { background: #d4efdf; color: #1e8449; border-color: #a9dfbf; }
+        .status-btn.withdrawn { background: #fde8e8; color: #c0392b; border-color: #f5b7b1; }
+        .status-btn.dns       { background: #eee;    color: #777;    border-color: #ddd; }
+
+        .status-btn:hover { filter: brightness(.94); }
+
+        /* summary bar */
+        .summary {
+            font-size: .82rem;
+            color: #555;
+            margin-bottom: .8rem;
+            display: flex;
+            gap: 1.4rem;
+        }
+
+        .summary strong { color: #1a1a2e; }
+
+        /* bulk action bar */
+        .bulk-bar {
+            display: flex;
+            gap: .6rem;
+            align-items: center;
+            padding: .6rem .8rem;
+            background: #eaf0fb;
+            border-radius: 6px;
+            margin-bottom: .8rem;
+            font-size: .85rem;
+        }
+
+        .empty { color: #888; font-style: italic; }
+
+        .error-msg { color: #c0392b; font-size: .83rem; margin-top: .5rem; }
+    </style>
+</head>
+
+<body>
+    <header>
+        <strong>Atlas</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+        <a id="comp-link" href="#">← Competition</a>
+        <span id="header-meta" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+    </header>
+
+    <main x-data="roster()" x-init="init()">
+
+        <div class="card">
+            <h2 style="margin-top:0">Roster</h2>
+
+            <!-- Filter bar -->
+            <div class="filters">
+                <label>
+                    Search
+                    <input type="text" x-model.debounce.300ms="filters.search" placeholder="name / club / licence…"
+                        style="min-width:180px">
+                </label>
+                <label>
+                    Gender
+                    <select x-model="filters.gender">
+                        <option value="">All</option>
+                        <option value="M">Men (M)</option>
+                        <option value="F">Women (F)</option>
+                    </select>
+                </label>
+                <label>
+                    Weapon
+                    <select x-model="filters.weapon">
+                        <option value="">All</option>
+                        <option value="foil">Foil</option>
+                        <option value="epee">Épée</option>
+                        <option value="sabre">Sabre</option>
+                    </select>
+                </label>
+                <label>
+                    Category
+                    <select x-model="filters.category">
+                        <option value="">All</option>
+                        <template x-for="c in categories" :key="c.id">
+                            <option :value="c.id" x-text="c.label + ' (' + c.id + ')'"></option>
+                        </template>
+                    </select>
+                </label>
+                <label>
+                    Club
+                    <input type="text" x-model.debounce.300ms="filters.club" placeholder="club…">
+                </label>
+                <label>
+                    Nationality
+                    <input type="text" x-model.debounce.300ms="filters.nationality" maxlength="3"
+                        placeholder="BEL…" style="min-width:70px;width:70px;text-transform:uppercase">
+                </label>
+                <label>
+                    Status
+                    <select x-model="filters.status">
+                        <option value="">All</option>
+                        <option value="active">Active</option>
+                        <option value="withdrawn">Withdrawn</option>
+                        <option value="dns">DNS</option>
+                    </select>
+                </label>
+                <button class="sm" @click="clearFilters()" style="align-self:flex-end">Clear</button>
+            </div>
+
+            <!-- Summary row -->
+            <div class="summary">
+                <span>Showing <strong x-text="filtered.length"></strong> of <strong x-text="fencers.length"></strong></span>
+                <span>Active: <strong x-text="fencers.filter(f=>f.status==='active').length"></strong></span>
+                <span>Withdrawn: <strong x-text="fencers.filter(f=>f.status==='withdrawn').length"></strong></span>
+                <span>DNS: <strong x-text="fencers.filter(f=>f.status==='dns').length"></strong></span>
+            </div>
+
+            <!-- Bulk action bar (shown when rows are checked) -->
+            <div class="bulk-bar" x-show="selected.size > 0">
+                <strong x-text="selected.size + ' selected'"></strong>
+                <button class="sm" style="background:#d4efdf;color:#1e8449;border-color:#a9dfbf"
+                    @click="bulkStatus('active')" :disabled="saving">Set Active</button>
+                <button class="sm" style="background:#fde8e8;color:#c0392b;border-color:#f5b7b1"
+                    @click="bulkStatus('withdrawn')" :disabled="saving">Set Withdrawn</button>
+                <button class="sm" style="background:#eee;color:#777"
+                    @click="bulkStatus('dns')" :disabled="saving">Set DNS</button>
+                <button class="sm" @click="selected.clear(); selected = new Set()">Deselect all</button>
+            </div>
+
+            <!-- Table -->
+            <template x-if="filtered.length === 0">
+                <p class="empty">No fencers match the current filters.</p>
+            </template>
+
+            <template x-if="filtered.length > 0">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:2rem">
+                                <input type="checkbox" :checked="allChecked()"
+                                    @change="toggleAll($event.target.checked)">
+                            </th>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>DOB</th>
+                            <th>Cat.</th>
+                            <th>Gender</th>
+                            <th>Weapons</th>
+                            <th>Club</th>
+                            <th>NAT</th>
+                            <th>Licence</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="f in filtered" :key="f.id">
+                            <tr>
+                                <td>
+                                    <input type="checkbox"
+                                        :checked="selected.has(f.id)"
+                                        @change="toggleOne(f.id, $event.target.checked)">
+                                </td>
+                                <td x-text="f.initial_seed ?? '—'" style="color:#888"></td>
+                                <td x-text="f.display_name"></td>
+                                <td x-text="f.date_of_birth ?? '—'" style="color:#888;font-size:.8rem"></td>
+                                <td>
+                                    <span x-text="f.category ?? '—'"
+                                        style="font-size:.78rem;padding:.1rem .4rem;background:#eaf0fb;color:#1a6bab;border-radius:999px"
+                                        x-show="f.category"></span>
+                                    <span x-show="!f.category" style="color:#bbb">—</span>
+                                </td>
+                                <td x-text="f.gender ?? '—'"></td>
+                                <td x-text="(f.weapons ?? []).join(', ') || '—'" style="font-size:.82rem"></td>
+                                <td x-text="f.club || '—'"></td>
+                                <td x-text="f.nationality || '—'"></td>
+                                <td x-text="f.licence || '—'" style="font-size:.8rem;color:#888"></td>
+                                <td>
+                                    <button class="status-btn" :class="f.status"
+                                        @click="cycleStatus(f)"
+                                        x-text="f.status"
+                                        :disabled="saving"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+
+            <p class="error-msg" x-text="error" x-show="error"></p>
+        </div>
+    </main>
+
+    <script>
+        const compId = location.pathname.split('/')[2];
+
+        document.getElementById('comp-link').href = `/competitions/${compId}`;
+
+        fetch(`/api/competitions/${compId}`)
+            .then(r => r.json())
+            .then(c => {
+                document.getElementById('header-meta').textContent = `${c.name} — ${c.weapon} ${c.gender}`;
+                document.title = `Roster — ${c.name}`;
+            });
+
+        const STATUS_CYCLE = { active: 'withdrawn', withdrawn: 'dns', dns: 'active' };
+
+        function roster() {
+            return {
+                fencers:    [],
+                categories: [],
+                filters: {
+                    search: '', gender: '', weapon: '', category: '',
+                    club: '', nationality: '', status: '',
+                },
+                selected: new Set(),
+                saving: false,
+                error: '',
+
+                async init() {
+                    const [fencers, cats] = await Promise.all([
+                        fetch(`/api/competitions/${compId}/fencers`).then(r => r.json()),
+                        fetch('/api/categories').then(r => r.json()),
+                    ]);
+                    this.fencers    = fencers;
+                    this.categories = cats;
+                },
+
+                get filtered() {
+                    const { search, gender, weapon, category, club, nationality, status } = this.filters;
+                    const q = search.toLowerCase();
+                    return this.fencers.filter(f => {
+                        if (gender     && f.gender !== gender)                              return false;
+                        if (weapon     && !(f.weapons ?? []).includes(weapon))              return false;
+                        if (category   && f.category !== category)                          return false;
+                        if (status     && f.status !== status)                              return false;
+                        if (club       && !(f.club ?? '').toLowerCase().includes(club.toLowerCase())) return false;
+                        if (nationality && (f.nationality ?? '').toUpperCase() !== nationality.toUpperCase()) return false;
+                        if (q && ![f.display_name, f.club, f.licence, f.nationality]
+                                    .some(v => (v ?? '').toLowerCase().includes(q)))        return false;
+                        return true;
+                    });
+                },
+
+                clearFilters() {
+                    this.filters = { search: '', gender: '', weapon: '', category: '',
+                                     club: '', nationality: '', status: '' };
+                },
+
+                // ---- Selection ----
+                toggleOne(id, checked) {
+                    const s = new Set(this.selected);
+                    checked ? s.add(id) : s.delete(id);
+                    this.selected = s;
+                },
+
+                toggleAll(checked) {
+                    this.selected = checked ? new Set(this.filtered.map(f => f.id)) : new Set();
+                },
+
+                allChecked() {
+                    return this.filtered.length > 0 && this.filtered.every(f => this.selected.has(f.id));
+                },
+
+                // ---- Single status cycle (click on badge) ----
+                async cycleStatus(fencer) {
+                    const next = STATUS_CYCLE[fencer.status] ?? 'active';
+                    await this._applyStatus([{ id: fencer.id, status: next }]);
+                    fencer.status = next;
+                },
+
+                // ---- Bulk status change ----
+                async bulkStatus(status) {
+                    const updates = [...this.selected].map(id => ({ id, status }));
+                    await this._applyStatus(updates);
+                    for (const f of this.fencers) {
+                        if (this.selected.has(f.id)) f.status = status;
+                    }
+                    this.selected = new Set();
+                },
+
+                async _applyStatus(updates) {
+                    this.error = '';
+                    this.saving = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/fencers/bulk-status`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ updates }),
+                        });
+                        const d = await r.json();
+                        if (!r.ok) this.error = d.error || 'Error saving status';
+                    } catch {
+                        this.error = 'Network error';
+                    } finally {
+                        this.saving = false;
+                    }
+                },
+            };
+        }
+    </script>
+</body>
+
+</html>

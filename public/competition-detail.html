@@ -297,6 +297,8 @@
         </div>
         <div class="actions">
           <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
+          <a class="primary" href="/competitions/${c.id}/fencers/roster"
+             style="background:#1e8449">Roster / Presence</a>
           ${c.status === 'draft'
                     ? `<button class="success" onclick="activate()">Activate Competition</button>`
                     : ''}
