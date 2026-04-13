@@ -125,6 +125,32 @@ router.patch('/:id', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/competitions/:compId/fencers/export.csv — download fencer list as CSV
+// ---------------------------------------------------------------------------
+router.get('/export.csv', (req, res) => {
+  const { compId } = req.params;
+  const comp = db.prepare('SELECT name FROM competitions WHERE id = ?').get(compId);
+  if (!comp) return res.status(404).json({ error: 'Competition not found' });
+
+  const rows = db.prepare(`
+    SELECT initial_seed, name, club, nationality, status
+    FROM   competitors
+    WHERE  competition_id = ?
+    ORDER  BY initial_seed ASC, name ASC
+  `).all(compId);
+
+  const escape = v => (v == null ? '' : '"' + String(v).replace(/"/g, '""') + '"');
+  const header = 'initial_seed,name,club,nationality,status';
+  const lines  = rows.map(r => [r.initial_seed ?? '', escape(r.name), escape(r.club), escape(r.nationality), r.status].join(','));
+  const csv    = [header, ...lines].join('\r\n');
+
+  const filename = comp.name.replace(/[^a-z0-9_-]/gi, '_') + '_fencers.csv';
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/competitions/:compId/fencers/:id — remove a competitor
 // ---------------------------------------------------------------------------
 router.delete('/:id', (req, res) => {

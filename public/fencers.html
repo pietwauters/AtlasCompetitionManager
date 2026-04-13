@@ -214,23 +214,52 @@
 
         /* Edit modal */
         .modal-backdrop {
-            position: fixed; inset: 0; background: rgba(0,0,0,.45);
-            display: flex; align-items: center; justify-content: center;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             z-index: 1000;
         }
+
         .modal {
-            background: #fff; border-radius: 10px; padding: 2rem;
-            width: 420px; max-width: 95vw;
-            box-shadow: 0 8px 32px rgba(0,0,0,.2);
+            background: #fff;
+            border-radius: 10px;
+            padding: 2rem;
+            width: 420px;
+            max-width: 95vw;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .2);
         }
-        .modal h3 { margin-top: 0; }
-        .modal .form-row { margin-bottom: 1rem; }
-        .modal-footer { display: flex; gap: .6rem; justify-content: flex-end; margin-top: 1.2rem; }
+
+        .modal h3 {
+            margin-top: 0;
+        }
+
+        .modal .form-row {
+            margin-bottom: 1rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: .6rem;
+            justify-content: flex-end;
+            margin-top: 1.2rem;
+        }
+
         button.secondary {
-            background: #e8ecf0; color: #333; border: none; border-radius: 5px;
-            padding: .45rem 1rem; cursor: pointer; font-size: .93rem;
+            background: #e8ecf0;
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            padding: .45rem 1rem;
+            cursor: pointer;
+            font-size: .93rem;
         }
-        button.secondary:hover { background: #d0d5db; }
+
+        button.secondary:hover {
+            background: #d0d5db;
+        }
     </style>
 </head>
 
@@ -269,9 +298,15 @@
             </form>
         </div>
 
-        <!-- CSV import -->
+        <!-- CSV import / export -->
         <div class="card">
-            <strong>Import from CSV</strong>
+            <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+                <strong>Import from CSV</strong>
+                <a id="export-link" href="#"
+                   style="font-size:.83rem;padding:.25rem .7rem;background:#eaf0fb;color:#1a6bab;border-radius:5px;text-decoration:none">
+                   Export CSV
+                </a>
+            </div>
             <p style="font-size:.83rem;color:#666;margin:.5rem 0 1rem">
                 Columns (in any order): <code>name</code>, <code>club</code>, <code>nationality</code>,
                 <code>initial_seed</code><br>
@@ -295,27 +330,34 @@
     </main>
 
     <!-- Edit modal -->
-    <div x-data="editModal()" x-show="open" class="modal-backdrop" @keydown.escape.window="close()" style="display:none">
+    <div x-data="editModal()" x-show="open" class="modal-backdrop" @keydown.escape.window="close()"
+        style="display:none">
         <div class="modal" @click.stop>
             <h3>Edit Fencer</h3>
             <div class="form-row">
-                <label style="width:100%;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
+                <label
+                    style="width:100%;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Name *
-                    <input x-model="name" style="width:100%;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem" required>
+                    <input x-model="name"
+                        style="width:100%;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem"
+                        required>
                 </label>
             </div>
             <div class="form-row" style="gap:.6rem;flex-wrap:wrap">
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Club
-                    <input x-model="club" style="width:160px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                    <input x-model="club"
+                        style="width:160px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     NAT
-                    <input x-model="nationality" maxlength="3" style="width:70px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem;text-transform:uppercase">
+                    <input x-model="nationality" maxlength="3"
+                        style="width:70px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem;text-transform:uppercase">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Seed
-                    <input x-model="initial_seed" type="number" min="1" style="width:65px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                    <input x-model="initial_seed" type="number" min="1"
+                        style="width:65px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
                 </label>
             </div>
             <div x-text="error" style="color:#c0392b;font-size:.83rem;min-height:1.1rem"></div>
@@ -334,6 +376,9 @@
         // Set correct HTMX URL on the list element
         document.getElementById('fencer-list').setAttribute('hx-get', `/api/competitions/${compId}/fencers`);
         htmx.process(document.getElementById('fencer-list'));
+
+        // Wire export link
+        document.getElementById('export-link').href = `/api/competitions/${compId}/fencers/export.csv`;
 
         // Load competition name for header
         fetch(`/api/competitions/${compId}`)
