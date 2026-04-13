@@ -5,9 +5,12 @@
   "type": "pool",
   "poolFormation": {
     "algorithm": "serpentine-seeding",
-    "minFencersPerPool": 5,
-    "maxFencersPerPool": 7,
-    "preferredSize": 6,
+    "allowedSizes": [
+      7,
+      6,
+      5
+    ],
+    "singlePoolMaxN": 10,
     "clubSeparation": true
   },
   "advancement": {

@@ -4,7 +4,7 @@ const express        = require('express');
 const path           = require('path');
 const fs             = require('fs');
 const db             = require('../db/db');
-const { formPools }  = require('../lib/poolFormation');
+const { formPools, calcPoolOptions } = require('../lib/poolFormation');
 
 const router = express.Router({ mergeParams: true });
 
@@ -112,9 +112,11 @@ router.get('/:phaseId', (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/competitions/:compId/phases/:phaseId/generate  — run pool formation
+// Body (optional): { poolSizes: [7, 7, 6] }  — pass when confirming a choice
 // ---------------------------------------------------------------------------
 router.post('/:phaseId/generate', (req, res) => {
   const { compId, phaseId } = req.params;
+  const { poolSizes } = req.body || {};
 
   const phase = db.prepare('SELECT * FROM phases WHERE id = ? AND competition_id = ?').get(phaseId, compId);
   if (!phase) return res.status(404).json({ error: 'Phase not found.' });
@@ -132,9 +134,36 @@ router.post('/:phaseId/generate', (req, res) => {
     WHERE  competition_id = ? AND status = 'active'
   `).all(compId);
 
+  let chosenSizes;
+
+  if (poolSizes) {
+    // User confirmed a specific pool configuration
+    if (!Array.isArray(poolSizes) || !poolSizes.length) {
+      return res.status(400).json({ error: 'poolSizes must be a non-empty array.' });
+    }
+    const total = poolSizes.reduce((s, n) => s + n, 0);
+    if (total !== fencers.length) {
+      return res.status(400).json({ error: `poolSizes sum (${total}) must equal active fencer count (${fencers.length}).` });
+    }
+    chosenSizes = poolSizes;
+  } else {
+    // Calculate options from rule config
+    let options;
+    try {
+      options = calcPoolOptions(fencers.length, rules.poolFormation);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    if (options.length > 1) {
+      // Multiple valid configurations — ask the client to present them to the user
+      return res.json({ status: 'choose', options });
+    }
+    chosenSizes = options[0];
+  }
+
   let poolData;
   try {
-    poolData = formPools(fencers, rules.poolFormation);
+    poolData = formPools(fencers, chosenSizes, rules.poolFormation);
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }

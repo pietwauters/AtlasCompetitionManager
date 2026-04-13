@@ -253,6 +253,23 @@
                 </select>
                 <button class="primary" @click="addPhase()" :disabled="!selectedRule || busy">Add Phase</button>
             </div>
+
+            <!-- Pool configuration choice (shown when generate returns multiple options) -->
+            <div x-show="pendingChoice"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6">
+                <h4 style="margin-top:0;margin-bottom:.8rem">Choose pool configuration</h4>
+                <template x-for="(opt, idx) in (pendingChoice?.options ?? [])" :key="idx">
+                    <label style="display:block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
+                        <input type="radio" :value="idx" x-model.number="chosenOptionIdx" style="margin-right:.5rem">
+                        <span x-text="describeOption(opt)"></span>
+                    </label>
+                </template>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmChoice()" :disabled="busy">Confirm</button>
+                    <button @click="cancelChoice()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
             <p class="error-msg" x-text="error" x-show="error"></p>
         </div>
     </main>
@@ -312,6 +329,8 @@
                 selectedRule: '',
                 busy: false,
                 error: '',
+                pendingChoice: null,   // { phaseId, options: [[7,7,6], ...] }
+                chosenOptionIdx: 0,,
 
                 async init() {
                     await Promise.all([this.loadPhases(), this.loadRules()]);
@@ -352,10 +371,48 @@
                         const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/generate`, { method: 'POST' });
                         const d = await r.json();
                         if (!r.ok) { this.error = d.error; return; }
+                        if (d.status === 'choose') {
+                            this.pendingChoice = { phaseId, options: d.options };
+                            this.chosenOptionIdx = 0;
+                            return;
+                        }
                         await this.loadPhases();
                     } finally {
                         this.busy = false;
                     }
+                },
+
+                async confirmChoice() {
+                    const { phaseId, options } = this.pendingChoice;
+                    const poolSizes = options[this.chosenOptionIdx];
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/generate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ poolSizes }),
+                        });
+                        const d = await r.json();
+                        if (!r.ok) { this.error = d.error; return; }
+                        this.pendingChoice = null;
+                        await this.loadPhases();
+                    } finally {
+                        this.busy = false;
+                    }
+                },
+
+                cancelChoice() {
+                    this.pendingChoice = null;
+                },
+
+                describeOption(sizes) {
+                    const counts = {};
+                    sizes.forEach(s => counts[s] = (counts[s] || 0) + 1);
+                    const parts = Object.entries(counts)
+                        .sort((a, b) => b[0] - a[0])
+                        .map(([s, c]) => `${c} pool${c > 1 ? 's' : ''} of ${s}`);
+                    return parts.join(' + ') + ` (${sizes.length} pool${sizes.length > 1 ? 's' : ''} total)`;
                 },
 
                 async deletePhase(phaseId) {
