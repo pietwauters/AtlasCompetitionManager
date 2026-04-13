@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Competition — Atlas</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body   { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
+    header { background: #1a1a2e; color: #fff; padding: 0.8rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header a { color: #aad4f5; text-decoration: none; font-size: 0.9rem; }
+    main   { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    .card  { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;
+             box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+    h2     { margin-top: 0; }
+    .meta  { display: flex; gap: 2rem; font-size: .9rem; color: #555; margin-bottom: 1.2rem; }
+    .meta span strong { color: #1a1a2e; }
+    .badge { display:inline-block; padding:.15rem .55rem; border-radius:999px;
+             font-size:.75rem; font-weight:bold; text-transform:uppercase; }
+    .badge-draft    { background:#e8ecf0; color:#555; }
+    .badge-active   { background:#d4efdf; color:#1e8449; }
+    .badge-finished { background:#eaf0fb; color:#1a6bab; }
+    .actions a, .actions button {
+      display:inline-block; margin-right:.6rem; padding:.45rem 1rem;
+      border-radius:5px; font-size:.9rem; cursor:pointer; text-decoration:none; }
+    .actions a.primary  { background:#1a6bab; color:#fff; }
+    .actions a.primary:hover { background:#155594; }
+    .actions button.success { background:#1e8449; color:#fff; border:none; }
+    .actions button.success:hover { background:#196b3c; }
+    .phases-placeholder { color:#888; font-style:italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Atlas</strong>
+    <a href="/">Home</a>
+    <a href="/competitions">Competitions</a>
+    <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+  </header>
+  <main>
+    <div class="card" id="comp-card">
+      <div style="color:#888">Loading…</div>
+    </div>
+  </main>
+
+  <script>
+    const compId = location.pathname.split('/')[2];
+
+    fetch(`/api/competitions/${compId}`)
+      .then(r => r.json())
+      .then(render)
+      .catch(() => { document.getElementById('comp-card').innerHTML = '<p>Error loading competition.</p>'; });
+
+    function render(c) {
+      const weaponLabel = { foil:'Foil', epee:'Épée', sabre:'Sabre' };
+      const genderLabel = { M:'Men', F:'Women', X:'Mixed' };
+      const badgeClass  = { draft:'badge-draft', active:'badge-active', finished:'badge-finished' };
+      document.getElementById('header-name').textContent = c.name;
+      document.title = `${c.name} — Atlas`;
+      document.getElementById('comp-card').innerHTML = `
+        <h2>${esc(c.name)} <span class="badge ${badgeClass[c.status]||''}">${c.status}</span></h2>
+        <div class="meta">
+          <span><strong>Weapon:</strong> ${weaponLabel[c.weapon]||c.weapon}</span>
+          <span><strong>Gender:</strong> ${genderLabel[c.gender]||c.gender}</span>
+          <span><strong>Fencers:</strong> ${c.competitor_count}</span>
+          <span><strong>Phases:</strong> ${c.phases.length}</span>
+        </div>
+        <div class="actions">
+          <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
+          ${c.status === 'draft'
+            ? `<button class="success" onclick="activate()">Activate Competition</button>`
+            : ''}
+        </div>
+        <hr style="margin:1.5rem 0;border:none;border-top:1px solid #eee">
+        <h3 style="margin-top:0">Phases</h3>
+        ${c.phases.length
+          ? '<p>Phase management coming in next slice.</p>'
+          : '<p class="phases-placeholder">No phases yet. Phase management coming soon.</p>'}
+      `;
+    }
+
+    async function activate() {
+      if (!confirm('Activate this competition? You will not be able to delete it.')) return;
+      const r = await fetch(`/api/competitions/${compId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' })
+      });
+      if (r.ok) location.reload();
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

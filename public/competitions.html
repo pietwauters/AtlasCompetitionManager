@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Competitions — Atlas</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body   { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
+    header { background: #1a1a2e; color: #fff; padding: 0.8rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header a { color: #aad4f5; text-decoration: none; font-size: 0.9rem; }
+    main   { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h2     { margin-top: 0; }
+
+    /* Page card */
+    .card  { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;
+             box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+
+    /* Form */
+    .form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
+    .form-row label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: bold; }
+    .form-row input, .form-row select {
+      padding: 0.45rem 0.7rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.95rem; }
+    .form-row input[name="name"] { width: 260px; }
+    button.primary {
+      background: #1a6bab; color: #fff; border: none; border-radius: 5px;
+      padding: 0.5rem 1.2rem; cursor: pointer; font-size: 0.95rem; }
+    button.primary:hover { background: #155594; }
+    button.danger  {
+      background: #c0392b; color: #fff; border: none; border-radius: 5px;
+      padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.85rem; }
+    button.danger:hover  { background: #a93226; }
+
+    /* Error message */
+    #form-error { color: #c0392b; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2rem; }
+
+    /* Competition table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th    { text-align: left; padding: 0.6rem 0.8rem; background: #f7f8fa;
+            border-bottom: 2px solid #dde; color: #555; font-size: 0.8rem; text-transform: uppercase; }
+    td    { padding: 0.7rem 0.8rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+    a.row-link { color: #1a6bab; font-weight: bold; text-decoration: none; }
+    a.row-link:hover { text-decoration: underline; }
+
+    /* Status badge */
+    .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
+             font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
+    .badge-draft    { background: #e8ecf0; color: #555; }
+    .badge-active   { background: #d4efdf; color: #1e8449; }
+    .badge-finished { background: #eaf0fb; color: #1a6bab; }
+
+    .empty { color: #888; font-style: italic; padding: 1rem 0; }
+    .loading { color: #888; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Atlas Competition Manager</strong>
+    <a href="/">Home</a>
+  </header>
+  <main>
+    <!-- Create competition -->
+    <div class="card">
+      <h2>Competitions</h2>
+      <form id="create-form" x-data="createForm()" @submit.prevent="submit">
+        <div class="form-row">
+          <label>
+            Name
+            <input name="name" x-model="name" placeholder="e.g. Regional Foil U20" required>
+          </label>
+          <label>
+            Weapon
+            <select name="weapon" x-model="weapon">
+              <option value="foil">Foil</option>
+              <option value="epee">Épée</option>
+              <option value="sabre">Sabre</option>
+            </select>
+          </label>
+          <label>
+            Gender
+            <select name="gender" x-model="gender">
+              <option value="M">Men (M)</option>
+              <option value="F">Women (F)</option>
+              <option value="X">Mixed (X)</option>
+            </select>
+          </label>
+          <button type="submit" class="primary" :disabled="loading">
+            <span x-text="loading ? 'Creating…' : '+ Add Competition'"></span>
+          </button>
+        </div>
+        <div id="form-error" x-text="error"></div>
+      </form>
+    </div>
+
+    <!-- Competition list (HTMX-loaded) -->
+    <div class="card">
+      <div id="comp-list"
+           hx-get="/api/competitions"
+           hx-trigger="load, refresh-list from:body"
+           hx-swap="innerHTML">
+        <span class="loading">Loading…</span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function createForm() {
+      return {
+        name: '', weapon: 'foil', gender: 'M',
+        loading: false, error: '',
+        async submit() {
+          this.loading = true; this.error = '';
+          try {
+            const r = await fetch('/api/competitions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: this.name, weapon: this.weapon, gender: this.gender })
+            });
+            const data = await r.json();
+            if (!r.ok) { this.error = data.error || 'Error creating competition'; return; }
+            this.name = '';
+            // Tell HTMX to refresh the list
+            document.body.dispatchEvent(new Event('refresh-list'));
+          } catch (e) {
+            this.error = 'Network error';
+          } finally {
+            this.loading = false;
+          }
+        }
+      };
+    }
+
+    // HTMX response transformer: the GET /api/competitions returns JSON;
+    // we intercept it here and render a table before HTMX swaps it in.
+    document.body.addEventListener('htmx:beforeSwap', (evt) => {
+      if (evt.detail.target.id !== 'comp-list') return;
+      try {
+        const data = JSON.parse(evt.detail.serverResponse);
+        evt.detail.serverResponse = renderTable(data);
+      } catch (_) { /* leave raw if not JSON */ }
+    });
+
+    function renderTable(rows) {
+      if (!rows.length) return `<p class="empty">No competitions yet. Create one above.</p>`;
+      const weaponLabel = { foil: 'Foil', epee: 'Épée', sabre: 'Sabre' };
+      const genderLabel = { M: 'Men', F: 'Women', X: 'Mixed' };
+      const badgeClass  = { draft: 'badge-draft', active: 'badge-active', finished: 'badge-finished' };
+      const rows_html = rows.map(c => `
+        <tr>
+          <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
+          <td>${weaponLabel[c.weapon] || c.weapon}</td>
+          <td>${genderLabel[c.gender] || c.gender}</td>
+          <td><span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></td>
+          <td>${c.competitor_count}</td>
+          <td>
+            <a href="/competitions/${c.id}/fencers">Fencers</a>
+            ${c.status === 'draft'
+              ? `<button class="danger" onclick="deleteComp(${c.id})" style="margin-left:0.5rem">Delete</button>`
+              : ''}
+          </td>
+        </tr>`).join('');
+      return `<table>
+        <thead><tr>
+          <th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th><th>Fencers</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${rows_html}</tbody>
+      </table>`;
+    }
+
+    async function deleteComp(id) {
+      if (!confirm('Delete this competition? This cannot be undone.')) return;
+      const r = await fetch(`/api/competitions/${id}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error); return; }
+      document.body.dispatchEvent(new Event('refresh-list'));
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

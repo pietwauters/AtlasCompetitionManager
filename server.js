@@ -41,9 +41,16 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });
 
-// Domain route modules (added incrementally)
-// app.use('/api/competitions', require('./routes/competitions'));
-// app.use('/api/fencers',      require('./routes/fencers'));
+// Domain route modules
+app.use('/api/competitions', require('./routes/competitions'));
+app.use('/api/competitions/:compId/fencers', require('./routes/fencers'));
+
+// Page routes — serve HTML for each section
+app.get('/competitions',           (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competitions.html')));
+app.get('/competitions/:id',       (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
+app.get('/competitions/:id/fencers', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
+
+// Stubs (to be added as slices)
 // app.use('/api/phases',       require('./routes/phases'));
 // app.use('/api/resources',    require('./routes/resources'));
 // app.use('/api/auth',         require('./routes/auth'));
