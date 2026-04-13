@@ -44,14 +44,31 @@ app.get('/health', (_req, res) => {
 // Domain route modules
 app.use('/api/competitions', require('./routes/competitions'));
 app.use('/api/competitions/:compId/fencers', require('./routes/fencers'));
+app.use('/api/competitions/:compId/phases',  require('./routes/phases'));
+
+// Rules catalogue — list available rule JSON files
+app.get('/api/rules', (_req, res) => {
+  const rulesDir = path.join(__dirname, 'rules');
+  const files = fs.readdirSync(rulesDir)
+    .filter(f => f.endsWith('.json') && !f.startsWith('rule-schema'));
+  const rules = files.map(filename => {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(rulesDir, filename), 'utf8'));
+      return { filename, id: data.id, description: data.description, type: data.type };
+    } catch {
+      return { filename, id: filename, description: filename, type: 'unknown' };
+    }
+  });
+  res.json(rules);
+});
 
 // Page routes — serve HTML for each section
-app.get('/competitions',           (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competitions.html')));
-app.get('/competitions/:id',       (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
-app.get('/competitions/:id/fencers', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
+app.get('/competitions',                          (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competitions.html')));
+app.get('/competitions/:id',                      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
+app.get('/competitions/:id/fencers',              (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
+app.get('/competitions/:id/phases/:phaseId',      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'phase.html')));
 
 // Stubs (to be added as slices)
-// app.use('/api/phases',       require('./routes/phases'));
 // app.use('/api/resources',    require('./routes/resources'));
 // app.use('/api/auth',         require('./routes/auth'));
 

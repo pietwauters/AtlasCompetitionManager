@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase — Atlas</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f0f2f5;
+            color: #1a1a2e;
+        }
+
+        header {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 0.8rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        header a {
+            color: #aad4f5;
+            text-decoration: none;
+            font-size: .9rem;
+        }
+
+        main {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+        }
+
+        h2,
+        h3,
+        h4 {
+            margin-top: 0;
+        }
+
+        .meta {
+            display: flex;
+            gap: 2rem;
+            font-size: .9rem;
+            color: #555;
+            margin-bottom: 1rem;
+        }
+
+        .meta span strong {
+            color: #1a1a2e;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: .15rem .55rem;
+            border-radius: 999px;
+            font-size: .75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-pending {
+            background: #e8ecf0;
+            color: #555;
+        }
+
+        .badge-active {
+            background: #d4efdf;
+            color: #1e8449;
+        }
+
+        .badge-finished {
+            background: #eaf0fb;
+            color: #1a6bab;
+        }
+
+        /* Pool grid */
+        .pools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.2rem;
+        }
+
+        .pool-card {
+            background: #fff;
+            border: 1px solid #e0e6ee;
+            border-radius: 8px;
+            padding: 1.1rem 1.2rem;
+        }
+
+        .pool-card h4 {
+            margin-bottom: .7rem;
+            color: #1a1a2e;
+            font-size: 1rem;
+        }
+
+        /* Fencer list in a pool */
+        .fencer-list {
+            list-style: none;
+            margin: 0 0 1rem 0;
+            padding: 0;
+        }
+
+        .fencer-list li {
+            display: flex;
+            gap: .5rem;
+            padding: .25rem 0;
+            font-size: .88rem;
+            border-bottom: 1px solid #f0f2f5;
+        }
+
+        .fencer-list li:last-child {
+            border-bottom: none;
+        }
+
+        .fencer-list .seed {
+            width: 1.6rem;
+            text-align: right;
+            color: #888;
+            flex-shrink: 0;
+        }
+
+        .fencer-list .nat {
+            width: 2.2rem;
+            text-align: right;
+            color: #888;
+            flex-shrink: 0;
+            font-size: .78rem;
+        }
+
+        /* Bout table */
+        .bouts-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .82rem;
+            margin-top: .5rem;
+        }
+
+        .bouts-table th {
+            background: #f0f2f5;
+            text-align: left;
+            padding: .3rem .5rem;
+            font-weight: 600;
+        }
+
+        .bouts-table td {
+            padding: .3rem .5rem;
+            border-bottom: 1px solid #f0f2f5;
+        }
+
+        .bouts-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .bouts-table .score {
+            text-align: center;
+            font-weight: bold;
+            color: #1a6bab;
+            white-space: nowrap;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: .1rem .45rem;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            background: #e8ecf0;
+            color: #555;
+        }
+
+        .empty {
+            color: #888;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <strong>Atlas</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+        <a id="back-link" href="#">Competition</a>
+        <span id="header-sub" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+    </header>
+
+    <main>
+        <div class="card" id="phase-card">
+            <div style="color:#888">Loading…</div>
+        </div>
+        <div class="pools-grid" id="pools-grid"></div>
+    </main>
+
+    <script>
+        const parts = location.pathname.split('/');
+        const compId = parts[2];
+        const phaseId = parts[4];
+
+        document.getElementById('back-link').href = `/competitions/${compId}`;
+
+        fetch(`/api/competitions/${compId}/phases/${phaseId}`)
+            .then(r => r.json())
+            .then(render)
+            .catch(() => {
+                document.getElementById('phase-card').innerHTML = '<p>Error loading phase.</p>';
+            });
+
+        function render(phase) {
+            document.title = `Phase ${phase.phase_order} — Atlas`;
+            document.getElementById('header-sub').textContent = `Phase ${phase.phase_order}`;
+
+            document.getElementById('phase-card').innerHTML = `
+                <h2>Phase ${phase.phase_order}
+                    <span class="badge badge-${phase.status}">${phase.status}</span>
+                </h2>
+                <div class="meta">
+                    <span><strong>Rule:</strong> ${esc(phase.rule_doc)}</span>
+                    <span><strong>Type:</strong> ${esc(phase.type)}</span>
+                    <span><strong>Pools:</strong> ${phase.pools.length}</span>
+                </div>
+            `;
+
+            const grid = document.getElementById('pools-grid');
+            if (!phase.pools.length) {
+                grid.innerHTML = '<p class="empty">No pools generated yet.</p>';
+                return;
+            }
+
+            grid.innerHTML = phase.pools.map(pool => renderPool(pool)).join('');
+        }
+
+        function renderPool(pool) {
+            const fencerRows = pool.fencers.map(f => `
+                <li>
+                    <span class="seed">${f.initial_seed ?? '—'}</span>
+                    <span style="flex:1">${esc(f.name)}${f.club ? ` <small style="color:#888">${esc(f.club)}</small>` : ''}</span>
+                    <span class="nat">${f.nationality || ''}</span>
+                </li>
+            `).join('');
+
+            const strip = pool.strip_name ? `<span style="margin-left:.8rem;font-size:.82rem;color:#555">📍 ${esc(pool.strip_name)}</span>` : '';
+            const referee = pool.referee_name ? `<span style="margin-left:.8rem;font-size:.82rem;color:#555">🧑‍⚖️ ${esc(pool.referee_name)}</span>` : '';
+
+            const boutRows = pool.bouts.map(b => {
+                const leftScore = b.left_score ?? '—';
+                const rightScore = b.right_score ?? '—';
+                const isWinLeft = b.winner_id === b.left_id;
+                const isWinRight = b.winner_id === b.right_id;
+                return `
+                <tr>
+                    <td style="${isWinLeft ? 'font-weight:bold' : ''}">${esc(b.left_name)}</td>
+                    <td class="score">${leftScore} — ${rightScore}</td>
+                    <td style="${isWinRight ? 'font-weight:bold' : ''}">${esc(b.right_name)}</td>
+                    <td><span class="status-pill">${b.status}</span></td>
+                </tr>`;
+            }).join('');
+
+            return `
+            <div class="pool-card">
+                <h4>Pool ${pool.pool_number} ${strip}${referee}</h4>
+                <ul class="fencer-list">${fencerRows}</ul>
+                <details>
+                    <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">
+                        Bouts (${pool.bouts.length})
+                    </summary>
+                    <table class="bouts-table">
+                        <thead><tr><th>Left</th><th style="text-align:center">Score</th><th>Right</th><th>Status</th></tr></thead>
+                        <tbody>${boutRows}</tbody>
+                    </table>
+                </details>
+            </div>`;
+        }
+
+        function esc(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+    </script>
+</body>
+
+</html>
