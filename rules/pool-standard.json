@@ -1,0 +1,36 @@
+{
+  "$schema": "../rules/rule-schema.json",
+  "id": "pool-standard",
+  "description": "Standard FIE pool phase",
+  "type": "pool",
+
+  "poolFormation": {
+    "algorithm": "serpentine-seeding",
+    "minFencersPerPool": 5,
+    "maxFencersPerPool": 7,
+    "preferredSize": 6,
+    "clubSeparation": true
+  },
+
+  "advancement": {
+    "method": "percentage",
+    "value": 70,
+    "minimumVictories": null,
+    "eliminateAfterPhase": true
+  },
+
+  "seeding": {
+    "criteria": [
+      "victories_desc",
+      "indicator_desc",
+      "touches_scored_desc",
+      "touches_received_asc",
+      "initial_seed_asc"
+    ]
+  },
+
+  "bout": {
+    "touchTarget": 5,
+    "timeLimitMinutes": 3
+  }
+}

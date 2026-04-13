@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas Competition Manager</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f5f5f5; }
+    h1   { color: #1a1a2e; }
+    .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,.1); }
+  </style>
+</head>
+<body>
+  <h1>Atlas Competition Manager</h1>
+  <div class="card">
+    <p>Welcome. Use the navigation links below.</p>
+    <ul>
+      <li><a href="/competitions">Competitions</a></li>
+      <li><a href="/resources">Resources (Strips &amp; Referees)</a></li>
+    </ul>
+  </div>
+  <div class="card">
+    <small>Server health: <span hx-get="/health" hx-trigger="load" hx-swap="innerHTML">checking…</span></small>
+  </div>
+</body>
+</html>
