@@ -11,7 +11,12 @@ const fs      = require('fs');
 const PORT        = process.env.PORT        || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-me-in-production';
 
+
 const app = express();
+
+// Set up EJS as the view engine
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // ---------------------------------------------------------------------------
 // Middleware
@@ -73,7 +78,8 @@ app.get('/competitions',                          (_req, res) => res.sendFile(pa
 app.get('/competitions/:id',                      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
 app.get('/competitions/:id/fencers',              (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
 app.get('/competitions/:id/fencers/roster',        (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencer-roster.html')));
-app.get('/competitions/:id/phases/:phaseId',       (_req, res) => res.sendFile(path.join(__dirname, 'public', 'phase.html')));
+const phasesRouter = require('./routes/phases');
+app.use('/competitions/:compId/phases', phasesRouter);
 
 // Stubs (to be added as slices)
 // app.use('/api/resources',    require('./routes/resources'));

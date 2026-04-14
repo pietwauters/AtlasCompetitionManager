@@ -5,9 +5,16 @@
   "type": "pool",
   "poolFormation": {
     "algorithm": "serpentine-seeding",
-    "allowedSizes": [7, 6, 5],
+    "allowedSizes": [
+      7,
+      6,
+      5
+    ],
     "singlePoolMaxN": 10,
-    "separation": ["nationality", "club"]
+    "separation": [
+      "nationality",
+      "club"
+    ]
   },
   "advancement": {
     "method": "percentage",
@@ -17,7 +24,7 @@
   },
   "seeding": {
     "criteria": [
-      "victories_desc",
+      "victory_ratio_desc",
       "indicator_desc",
       "touches_scored_desc",
       "touches_received_asc",

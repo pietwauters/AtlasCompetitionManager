@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase — Atlas</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <header>
+        <strong>Atlas</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+        <a href="/competitions/<%= compId %>">Competition</a>
+        <span style="margin-left:auto;opacity:.7;font-size:.9rem">Phase <%= phase.phase_order %></span>
+    </header>
+    <main>
+        <div class="card">
+            <h2>Phase <%= phase.phase_order %>
+                    <span class="badge badge-<%= phase.status %>">
+                        <%= phase.status %>
+                    </span>
+            </h2>
+            <div class="meta">
+                <span><strong>Rule:</strong>
+                    <%= phase.rule_doc %>
+                </span>
+                <span><strong>Type:</strong>
+                    <%= phase.type %>
+                </span>
+                <span><strong>Pools:</strong>
+                    <%= phase.pools.length %>
+                </span>
+            </div>
+        </div>
+        <h2>Phase <%= phase.phase_order %>
+                <span class="badge badge-<%= phase.status %>">
+                    <%= phase.status %>
+                </span>
+        </h2>
+        <div class="meta">
+            <span><strong>Rule:</strong>
+                <%= phase.rule_doc %>
+            </span>
+            <span><strong>Type:</strong>
+                <%= phase.type %>
+            </span>
+            <span><strong>Pools:</strong>
+                <%= phase.pools.length %>
+            </span>
+        </div>
+        </div>
+        <div class="pools-grid">
+            <% phase.pools.forEach(function(pool) { %>
+                <div class="pool-card">
+                    <h4>Pool <%= pool.pool_number %>
+                    </h4>
+                    <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
+                        class="primary" style="margin-bottom:0.5em;display:inline-block">Enter results for this pool</a>
+                </div>
+                <% }); %>
+        </div>
+
+        <div class="card">
+            <h3>Ranking after pools</h3>
+            <% if (typeof rankings !=='undefined' && rankings.length> 0) { %>
+                <table class="bouts-table" style="margin-bottom:1.5em">
+                    <thead>
+                        <tr>
+                            <th>Pos</th>
+                            <th>Name</th>
+                            <th>Victories</th>
+                            <th>Matches</th>
+                            <th>Victory %</th>
+                            <th>Indicator</th>
+                            <th>Scored</th>
+                            <th>Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% rankings.forEach(function(r) { %>
+                            <tr>
+                                <td>
+                                    <%= r.position %>
+                                </td>
+                                <td>
+                                    <%= r.name %>
+                                </td>
+                                <td>
+                                    <%= r.victories %>
+                                </td>
+                                <td>
+                                    <%= r.matches %>
+                                </td>
+                                <td>
+                                    <%= r.matches> 0 ? (r.victory_ratio*100).toFixed(1) : '0.0' %>%
+                                </td>
+                                <td>
+                                    <%= r.indicator %>
+                                </td>
+                                <td>
+                                    <%= r.touches_scored %>
+                                </td>
+                                <td>
+                                    <%= r.touches_received %>
+                                </td>
+                            </tr>
+                            <% }); %>
+                    </tbody>
+                </table>
+                <% } else { %>
+                    <p>No results yet.</p>
+                    <% } %>
+        </div>
+    </main>
+</body>
+
+</html>

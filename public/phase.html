@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phase — Atlas</title>
+    <script src="/js/htmx.min.js"></script>
+    <script src="/js/alpinejs.min.js" defer></script>
     <style>
         *,
         *::before,
@@ -210,18 +212,60 @@
     </main>
 
     <script>
+        // Alpine.js row state for each bout, by ID
+        function boutRowDataById(boutId, compId, phaseId) {
+            const bout = window._boutsById[boutId];
+            return {
+                left: bout.left_score ?? '',
+                right: bout.right_score ?? '',
+                winner: bout.winner_id ?? '',
+                saving: false,
+                error: '',
+                origLeft: bout.left_score ?? '',
+                origRight: bout.right_score ?? '',
+                origWinner: bout.winner_id ?? '',
+                async saveResult() {
+                    if (this.saving) return;
+                    this.error = '';
+                    this.saving = true;
+                    try {
+                        let body = { left_score: this.left, right_score: this.right };
+                        // If tie, allow winner selection
+                        if (this.left !== '' && this.right !== '' && Number(this.left) === Number(this.right)) {
+                            if (this.winner) body.winner_id = this.winner;
+                        }
+                        const resp = await fetch(`/api/competitions/${compId}/phases/${phaseId}/bouts/${bout.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        if (!resp.ok) {
+                            const data = await resp.json();
+                            this.error = data.error || 'Error';
+                        } else {
+                            this.origLeft = this.left;
+                            this.origRight = this.right;
+                            this.origWinner = this.winner;
+                            this.error = '';
+                        }
+                    } catch (e) {
+                        this.error = 'Network error';
+                    } finally {
+                        this.saving = false;
+                    }
+                }
+            };
+        }
         const parts = location.pathname.split('/');
         const compId = parts[2];
         const phaseId = parts[4];
 
         document.getElementById('back-link').href = `/competitions/${compId}`;
 
-        fetch(`/api/competitions/${compId}/phases/${phaseId}`)
-            .then(r => r.json())
-            .then(render)
-            .catch(() => {
-                document.getElementById('phase-card').innerHTML = '<p>Error loading phase.</p>';
-            });
+        // Redirect to the EJS HTML page if loaded directly
+        if (!window.location.pathname.endsWith('/view')) {
+            window.location.pathname = `/competitions/${compId}/phases/${phaseId}/view`;
+        }
 
         function render(phase) {
             document.title = `Phase ${phase.phase_order} — Atlas`;
@@ -248,45 +292,67 @@
         }
 
         function renderPool(pool) {
-            const fencerRows = pool.fencers.map(f => `
-                <li>
-                    <span class="seed">${f.initial_seed ?? '—'}</span>
-                    <span style="flex:1">${esc(f.name)}${f.club ? ` <small style="color:#888">${esc(f.club)}</small>` : ''}</span>
-                    <span class="nat">${f.nationality || ''}</span>
-                </li>
-            `).join('');
-
-            const strip = pool.strip_name ? `<span style="margin-left:.8rem;font-size:.82rem;color:#555">📍 ${esc(pool.strip_name)}</span>` : '';
-            const referee = pool.referee_name ? `<span style="margin-left:.8rem;font-size:.82rem;color:#555">🧑‍⚖️ ${esc(pool.referee_name)}</span>` : '';
-
+            // Only one valid implementation, no stray tags
+            const isWin = (id, winnerId) => id === winnerId ? 'font-weight:bold' : '';
+            // Make bouts globally accessible for Alpine lookup
+            if (!window._boutsById) window._boutsById = {};
+            pool.bouts.forEach(b => { window._boutsById[b.id] = b; });
             const boutRows = pool.bouts.map(b => {
-                const leftScore = b.left_score ?? '—';
-                const rightScore = b.right_score ?? '—';
-                const isWinLeft = b.winner_id === b.left_id;
-                const isWinRight = b.winner_id === b.right_id;
-                return `
-                <tr>
-                    <td style="${isWinLeft ? 'font-weight:bold' : ''}">${esc(b.left_name)}</td>
-                    <td class="score">${leftScore} — ${rightScore}</td>
-                    <td style="${isWinRight ? 'font-weight:bold' : ''}">${esc(b.right_name)}</td>
-                    <td><span class="status-pill">${b.status}</span></td>
-                </tr>`;
+                // Always editable
+                // For tie-winner dropdown
+                const tie = b.left_score !== null && b.right_score !== null && b.left_score === b.right_score;
+                // Escape names for HTML
+                const leftName = esc(b.left_name);
+                const rightName = esc(b.right_name);
+                return [
+                    '<tr x-data="boutRowDataById(' + b.id + ', compId, phaseId)">',
+                    '  <td style="' + isWin(b.left_id, b.winner_id) + '">' + leftName + '</td>',
+                    '  <td class="score">',
+                    '    <span>',
+                    '      <input type="number" min="0" max="99" x-model="left" style="width:2.5em;text-align:right;" :disabled="saving" @keydown.enter.prevent="saveResult()"> — ',
+                    '      <input type="number" min="0" max="99" x-model="right" style="width:2.5em;text-align:right;" :disabled="saving" @keydown.enter.prevent="saveResult()">',
+                    // Tie-winner dropdown
+                    '      <template x-if="left !== '' && right !== '' && Number(left) === Number(right)">',
+                    '        <select x-model="winner" style="margin-left:.5em;" :disabled="saving">',
+                    '          <option value="">-- Winner --</option>',
+                    '          <option :value="' + b.left_id + '">' + leftName + '</option>',
+                    '          <option :value="' + b.right_id + '">' + rightName + '</option>',
+                    '        </select>',
+                    '      </template>',
+                    '      <button type="button" @click="saveResult()" :disabled="saving || (left === origLeft && right === origRight && winner === origWinner)" style="margin-left:.5em;font-size:.9em">Save</button>',
+                    '      <span x-show="saving" style="margin-left:.3em;color:#888">Saving…</span>',
+                    '      <span x-show="error" style="color:#b00;margin-left:.5em" x-text="error"></span>',
+                    '    </span>',
+                    '  </td>',
+                    '  <td style="' + isWin(b.right_id, b.winner_id) + '">' + rightName + '</td>',
+                    '  <td><span class="status-pill">' + b.status + '</span></td>',
+                    '</tr>'
+                ].join('');
             }).join('');
 
-            return `
-            <div class="pool-card">
-                <h4>Pool ${pool.pool_number} ${strip}${referee}</h4>
-                <ul class="fencer-list">${fencerRows}</ul>
-                <details>
-                    <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">
-                        Bouts (${pool.bouts.length})
-                    </summary>
-                    <table class="bouts-table">
-                        <thead><tr><th>Left</th><th style="text-align:center">Score</th><th>Right</th><th>Status</th></tr></thead>
-                        <tbody>${boutRows}</tbody>
-                    </table>
-                </details>
-            </div>`;
+            // fencerRows, strip, referee must be defined in the parent scope
+            return [
+                '<div class="pool-card">',
+                `  <h4>Pool ${pool.pool_number} ${typeof strip !== 'undefined' ? strip : ''}${typeof referee !== 'undefined' ? referee : ''}</h4>`,
+                `  <ul class="fencer-list">${typeof fencerRows !== 'undefined' ? fencerRows : ''}</ul>`,
+                '  <details>',
+                '    <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">',
+                `      Bouts (${pool.bouts.length})`,
+                '    </summary>',
+                '    <table class="bouts-table">',
+                '      <thead>',
+                '        <tr>',
+                '          <th>Left</th>',
+                '          <th style="text-align:center">Score</th>',
+                '          <th>Right</th>',
+                '          <th>Status</th>',
+                '        </tr>',
+                '      </thead>',
+                `      <tbody>${boutRows}</tbody>`,
+                '    </table>',
+                '  </details>',
+                '</div>'
+            ].join('');
         }
 
         function esc(s) {

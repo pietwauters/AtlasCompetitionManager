@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pool <%= pool.pool_number %> — Atlas</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <header>
+        <strong>Atlas</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+        <a href="/competitions/<%= compId %>">Competition</a>
+        <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/view">Back to Phase</a>
+        <span style="margin-left:auto;opacity:.7;font-size:.9rem">Phase <%= phase.phase_order %>, Pool <%=
+                    pool.pool_number %></span>
+    </header>
+    <main>
+        <div class="card">
+            <h2>Pool <%= pool.pool_number %>
+            </h2>
+            <div class="meta">
+                <span><strong>Referee:</strong>
+                    <%= pool.referee_name || '-' %>
+                </span>
+                <span><strong>Strip:</strong>
+                    <%= pool.strip_name || '-' %>
+                </span>
+            </div>
+            <ul class="fencer-list">
+                <% if (pool.fencers) { pool.fencers.forEach(function(f) { %>
+                    <li>
+                        <%= f.name %>
+                    </li>
+                    <% }); } %>
+            </ul>
+            <details open>
+                <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">
+                    Bouts (<%= pool.bouts.length %>)
+                </summary>
+                <form method="post" action="/competitions/<%= compId %>/phases/<%= phase.id %>/bouts/update"
+                    id="bouts-form">
+                    <input type="hidden" name="focus" id="focus-field" value="">
+                    <table class="bouts-table">
+                        <thead>
+                            <tr>
+                                <th>Left</th>
+                                <th style="text-align:center">Score</th>
+                                <th>Right</th>
+                                <th>Winner</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% pool.bouts.forEach(function(bout, idx) { %>
+                                <tr>
+                                    <td>
+                                        <%= bout.left_name %>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="left_score_<%= bout.id %>" inputmode="numeric"
+                                            maxlength="2" value="<%= bout.left_score == null ? '' : bout.left_score %>"
+                                            style="width:2.5em;text-align:right;" id="left_score_<%= bout.id %>"> —
+                                        <input type="text" name="right_score_<%= bout.id %>" inputmode="numeric"
+                                            maxlength="2"
+                                            value="<%= bout.right_score == null ? '' : bout.right_score %>"
+                                            style="width:2.5em;text-align:right;" id="right_score_<%= bout.id %>">
+                                    </td>
+                                    <td>
+                                        <%= bout.right_name %>
+                                    </td>
+                                    <td>
+                                        <% if (bout.left_score !==null && bout.right_score !==null &&
+                                            bout.left_score===bout.right_score) { %>
+                                            <select name="winner_<%= bout.id %>">
+                                                <option value="">-- Winner --</option>
+                                                <option value="<%= bout.left_id %>" <%=bout.winner_id===bout.left_id
+                                                    ? 'selected' : '' %>><%= bout.left_name %>
+                                                </option>
+                                                <option value="<%= bout.right_id %>" <%=bout.winner_id===bout.right_id
+                                                    ? 'selected' : '' %>><%= bout.right_name %>
+                                                </option>
+                                            </select>
+                                            <% } else { %>
+                                                <%= bout.winner_id===bout.left_id ? bout.left_name :
+                                                    (bout.winner_id===bout.right_id ? bout.right_name : '' ) %>
+                                                    <% } %>
+                                    </td>
+                                    <td><span class="status-pill">
+                                            <%= bout.status %>
+                                        </span></td>
+                                    <td><button type="submit" name="save" value="<%= bout.id %>"
+                                            data-next="<%= pool.bouts[idx+1] ? 'left_score_' + pool.bouts[idx+1].id : '' %>">Save</button>
+                                    </td>
+                                </tr>
+                                <% }); %>
+                        </tbody>
+                    </table>
+                </form>
+            </details>
+        </div>
+    </main>
+
+    <script>
+        // Focus logic using URL query parameter
+        document.addEventListener('DOMContentLoaded', function () {
+            // Focus field from ?focus= param
+            var params = new URLSearchParams(window.location.search);
+            var focusField = params.get('focus');
+            if (focusField) {
+                var el = document.getElementById(focusField);
+                if (el) el.focus();
+            }
+            // On Save button click, set the hidden focus field to the next input
+            document.querySelectorAll('button[name="save"]').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    var next = btn.getAttribute('data-next');
+                    document.getElementById('focus-field').value = next;
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

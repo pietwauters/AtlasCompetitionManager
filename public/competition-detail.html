@@ -233,7 +233,7 @@
                         <span class="badge" :class="'badge-' + ph.status" x-text="ph.status"
                             style="margin-left:.4rem"></span>
                     </div>
-                    <a :href="'/competitions/' + compId + '/phases/' + ph.id"
+                    <a :href="'/competitions/' + compId + '/phases/' + ph.id + '/view'"
                         style="padding:.35rem .8rem;background:#eaf0fb;color:#1a6bab;border-radius:5px;font-size:.85rem;text-decoration:none"
                         x-show="ph.pool_count > 0">View pools</a>
                     <button class="success" @click="generate(ph.id)" x-show="ph.status === 'pending'"
