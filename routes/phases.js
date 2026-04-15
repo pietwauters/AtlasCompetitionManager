@@ -194,6 +194,53 @@ router.get('/:phaseId/view', (req, res) => {
       WHERE  b.pool_id = ?
       ORDER  BY b.id
     `).all(pool.id);
+
+    // Build grid: rows/cols = fencers, cells = result
+    const n = pool.fencers.length;
+    const idToIdx = {};
+    pool.fencers.forEach((f, i) => { idToIdx[f.id] = i; });
+    // Initialize grid with nulls
+    const grid = Array.from({length: n}, () => Array(n).fill(null));
+    // Fill grid with bout results
+    for (const bout of pool.bouts) {
+      const i = idToIdx[bout.left_id];
+      const j = idToIdx[bout.right_id];
+      if (i !== undefined && j !== undefined) {
+        grid[i][j] = {
+          left_score: bout.left_score,
+          right_score: bout.right_score,
+          winner_id: bout.winner_id
+        };
+      }
+    }
+    pool.grid = grid;
+    // Calculate stats for each fencer in this pool
+    pool.stats = pool.fencers.map(f => {
+      let victories = 0, matches = 0, indicator = 0, scored = 0, received = 0;
+      for (let k = 0; k < n; ++k) {
+        if (grid[f.idToIdx ?? idToIdx[f.id]] && grid[f.idToIdx ?? idToIdx[f.id]][k]) {
+          const cell = grid[idToIdx[f.id]][k];
+          if (cell.left_score != null && cell.right_score != null) {
+            matches++;
+            scored += cell.left_score;
+            received += cell.right_score;
+            indicator += cell.left_score - cell.right_score;
+            if (cell.winner_id === f.id) victories++;
+          }
+        }
+        if (grid[k] && grid[k][idToIdx[f.id]]) {
+          const cell = grid[k][idToIdx[f.id]];
+          if (cell.left_score != null && cell.right_score != null) {
+            // This is a bout where fencer f was on the right
+            scored += cell.right_score;
+            received += cell.left_score;
+            indicator += cell.right_score - cell.left_score;
+            if (cell.winner_id === f.id) victories++;
+          }
+        }
+      }
+      return { victories, matches, indicator, scored, received };
+    });
   }
 
   // Calculate rankings

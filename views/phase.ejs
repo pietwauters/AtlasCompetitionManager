@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phase — Atlas</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/bouts-table.css">
 </head>
 
 <body>
@@ -17,51 +18,104 @@
         <span style="margin-left:auto;opacity:.7;font-size:.9rem">Phase <%= phase.phase_order %></span>
     </header>
     <main>
-        <div class="card">
-            <h2>Phase <%= phase.phase_order %>
-                    <span class="badge badge-<%= phase.status %>">
-                        <%= phase.status %>
-                    </span>
-            </h2>
-            <div class="meta">
-                <span><strong>Rule:</strong>
-                    <%= phase.rule_doc %>
-                </span>
-                <span><strong>Type:</strong>
-                    <%= phase.type %>
-                </span>
-                <span><strong>Pools:</strong>
-                    <%= phase.pools.length %>
-                </span>
-            </div>
-        </div>
-        <h2>Phase <%= phase.phase_order %>
-                <span class="badge badge-<%= phase.status %>">
-                    <%= phase.status %>
-                </span>
-        </h2>
-        <div class="meta">
-            <span><strong>Rule:</strong>
-                <%= phase.rule_doc %>
-            </span>
-            <span><strong>Type:</strong>
-                <%= phase.type %>
-            </span>
-            <span><strong>Pools:</strong>
-                <%= phase.pools.length %>
-            </span>
-        </div>
-        </div>
+
         <div class="pools-grid">
-            <% phase.pools.forEach(function(pool) { %>
-                <div class="pool-card">
-                    <h4>Pool <%= pool.pool_number %>
-                    </h4>
-                    <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
-                        class="primary" style="margin-bottom:0.5em;display:inline-block">Enter results for this pool</a>
-                </div>
-                <% }); %>
+            <% if (phase.pools && phase.pools.length> 0) { %>
+                <% phase.pools.forEach(function(pool) { %>
+                    <div class="pool-card">
+                        <h4>Pool <%= pool.pool_number %>
+                        </h4>
+                        <div style="overflow-x:auto;margin-bottom:0.5em">
+                            <table class="bouts-table" style="font-size:0.95em;min-width:400px">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>#</th>
+                                        <% pool.fencers.forEach(function(f, idx) { %>
+                                            <th>
+                                                <%= idx + 1 %>
+                                            </th>
+                                            <% }); %>
+                                                <th>V</th>
+                                                <th>Ind</th>
+                                                <th>Sc</th>
+                                                <th>Rc</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% pool.fencers.forEach(function(f, i) { %>
+                                        <tr>
+                                            <th style="text-align:left">
+                                                <%= f.name %>
+                                            </th>
+                                            <th>
+                                                <%= i + 1 %>
+                                            </th>
+                                            <% pool.fencers.forEach(function(_, j) { %>
+                                                <% if (i===j) { %>
+                                                    <td style="background:#eee"></td>
+                                                    <% } else { %>
+                                                        <% var cell=pool.grid[i][j]; var swapped=false; if (!(cell &&
+                                                            cell.left_score !=null && cell.right_score !=null)) {
+                                                            cell=pool.grid[j][i]; swapped=true; } %>
+                                                            <td style="text-align:center">
+                                                                <% if (cell && cell.left_score !=null &&
+                                                                    cell.right_score !=null) { %>
+                                                                    <% if (!swapped) { %>
+                                                                        <% if (cell.winner_id===pool.fencers[i].id) { %>
+                                                                            <span
+                                                                                style="color:green;font-weight:bold">V</span>
+                                                                            <%= cell.left_score %>
+                                                                                <% } else { %>
+                                                                                    <%= cell.left_score %>
+                                                                                        <% } %>
+                                                                                            <% } else { %>
+                                                                                                <% if
+                                                                                                    (cell.winner_id===pool.fencers[i].id)
+                                                                                                    { %>
+                                                                                                    <span
+                                                                                                        style="color:green;font-weight:bold">V</span>
+                                                                                                    <%= cell.right_score
+                                                                                                        %>
+                                                                                                        <% } else { %>
+                                                                                                            <%= cell.right_score
+                                                                                                                %>
+                                                                                                                <% } %>
+                                                                                                                    <% }
+                                                                                                                        %>
+                                                                                                                        <% }
+                                                                                                                            %>
+                                                            </td>
+                                                            <% } %>
+                                                                <% }); %>
+                                                                    <% var stat=pool.stats[i]; %>
+                                                                        <td>
+                                                                            <%= stat.victories %>
+                                                                        </td>
+                                                                        <td>
+                                                                            <%= stat.indicator %>
+                                                                        </td>
+                                                                        <td>
+                                                                            <%= stat.scored %>
+                                                                        </td>
+                                                                        <td>
+                                                                            <%= stat.received %>
+                                                                        </td>
+                                        </tr>
+                                        <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
+                            class="primary" style="margin-bottom:0.5em;display:inline-block">Enter results for this
+                            pool</a>
+                    </div>
+                    <% }); %>
+                        <% } else { %>
+                            <p>No pools available.</p>
+                            <% } %>
         </div>
+
 
         <div class="card">
             <h3>Ranking after pools</h3>
