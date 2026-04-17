@@ -1,3 +1,10 @@
+// ...existing code...
+// ...existing code...
+// ...existing code...
+// ...existing code...
+
+// ...existing code...
+// ...existing code...
 // ---------------------------------------------------------------------------
 // Calculate pool rankings for a phase
 // Returns: [{competitor_id, victories, indicator, touches_scored, touches_received, position}]
@@ -115,6 +122,46 @@ const db             = require('../db/db');
 const { formPools, calcPoolOptions } = require('../lib/poolFormation');
 
 const router = express.Router({ mergeParams: true });
+
+// ---------------------------------------------------------------------------
+// POST /api/competitions/:compId/phases/:phaseId/simulate — fill random results for all incomplete bouts
+// ---------------------------------------------------------------------------
+router.post('/:phaseId/simulate', (req, res) => {
+  const compId = req.params.compId;
+  const phaseId = req.params.phaseId;
+  console.log('Simulate endpoint hit for compId:', compId, 'phaseId:', phaseId);
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ? AND competition_id = ?').get(phaseId, compId);
+  if (!phase) return res.status(404).json({ error: 'Phase not found.' });
+  if (phase.status !== 'active') return res.status(409).json({ error: 'Can only simulate results for an active phase.' });
+
+  // Get all incomplete bouts for this phase
+  const bouts = db.prepare('SELECT * FROM bouts WHERE phase_id = ? AND (left_score IS NULL OR right_score IS NULL)').all(phaseId);
+  if (!bouts.length) return res.json({ message: 'No incomplete bouts to simulate.' });
+
+  // Simulate results
+  const updates = [];
+  for (const bout of bouts) {
+    // Generate random scores (e.g., 5-0 to 5-4, no ties)
+    let left_score, right_score, winner_id;
+    const maxScore = 5;
+    if (Math.random() < 0.5) {
+      left_score = maxScore;
+      right_score = Math.floor(Math.random() * maxScore);
+      winner_id = bout.left_id;
+    } else {
+      right_score = maxScore;
+      left_score = Math.floor(Math.random() * maxScore);
+      winner_id = bout.right_id;
+    }
+    // Save current state to bouts_history for undo
+    db.prepare(`INSERT INTO bouts_history (bout_id, left_score, right_score, winner_id, status) VALUES (?, ?, ?, ?, ?)`)
+      .run(bout.id, bout.left_score, bout.right_score, bout.winner_id, bout.status);
+    db.prepare('UPDATE bouts SET left_score = ?, right_score = ?, winner_id = ?, status = ? WHERE id = ?')
+      .run(left_score, right_score, winner_id, 'finished', bout.id);
+    updates.push({ id: bout.id, left_score, right_score, winner_id });
+  }
+  res.json({ updated: updates.length, bouts: updates });
+});
 
 // ---------------------------------------------------------------------------
 // GET /competitions/:compId/phases/:phaseId/pools/:poolId/view — render pool entry page (EJS)
@@ -375,8 +422,45 @@ router.post('/:phaseId/generate', (req, res) => {
   `).all(compId);
 
   let chosenSizes;
-
-  if (poolSizes) {
+  // Special handling for block-seeding (level pools)
+  if (rules.poolFormation.algorithm === 'block-seeding') {
+    const blockSize = rules.poolFormation.blockSize || 6;
+    // Sort by initial_seed ASC; unseeded fencers go last
+    const sorted = [...fencers].sort((a, b) => {
+      const sa = a.initial_seed ?? 99999;
+      const sb = b.initial_seed ?? 99999;
+      return sa - sb;
+    });
+    const { blockSeedingOptions } = require('../lib/poolFormation');
+    const opts = blockSeedingOptions(sorted, blockSize);
+    if (opts.type === 'ok') {
+      chosenSizes = Array(sorted.length / blockSize).fill(blockSize);
+    } else {
+      // If user provided a choice, handle it
+      if (req.body && req.body.blockChoice) {
+        if (req.body.blockChoice === 'drop') {
+          // Drop lowest ranked
+          const keep = sorted.slice(0, sorted.length - opts.drop.length);
+          chosenSizes = Array(Math.floor(keep.length / blockSize)).fill(blockSize);
+          fencers.length = 0; keep.forEach(f => fencers.push(f));
+        } else if (req.body.blockChoice === 'redistribute' && opts.redistribute) {
+          chosenSizes = opts.redistribute;
+        } else {
+          return res.status(400).json({ error: 'Invalid blockChoice or redistribution not possible.' });
+        }
+      } else {
+        // Present options to user
+        return res.json({
+          status: 'block-seeding-options',
+          message: `Number of fencers (${sorted.length}) is not divisible by ${blockSize}. Choose to drop the lowest ranked (${opts.drop.length}) or redistribute (${opts.redistribute ? opts.redistribute.join(',') : 'not possible'}).`,
+          options: {
+            drop: opts.drop,
+            redistribute: opts.redistribute
+          }
+        });
+      }
+    }
+  } else if (poolSizes) {
     // User confirmed a specific pool configuration
     if (!Array.isArray(poolSizes) || !poolSizes.length) {
       return res.status(400).json({ error: 'poolSizes must be a non-empty array.' });
@@ -585,5 +669,74 @@ router.post('/:phaseId/bouts/:boutId/undo', (req, res) => {
 
   res.json({ success: true, undone: true });
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/competitions/:compId/phases/:phaseId/close — finalize phase, eliminate fencers
+// ---------------------------------------------------------------------------
+router.post('/:phaseId/close', (req, res) => {
+  const { compId, phaseId } = req.params;
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ? AND competition_id = ?').get(phaseId, compId);
+  if (!phase) return res.status(404).json({ error: 'Phase not found.' });
+  if (phase.status === 'finished') return res.status(409).json({ error: 'Phase already finished.' });
+
+  // Only pool phases supported for now
+  if (phase.type !== 'pool') return res.status(400).json({ error: 'Only pool phases can be closed.' });
+
+  // Check all bouts are complete
+  const incomplete = db.prepare(`
+    SELECT COUNT(*) AS n FROM bouts WHERE phase_id = ? AND (left_score IS NULL OR right_score IS NULL)
+  `).get(phaseId);
+  if (incomplete.n > 0) return res.status(400).json({ error: 'Not all bouts are complete.' });
+
+  // Calculate rankings
+  const rankings = calculatePoolRankings(phaseId);
+  let rule = {};
+  try { rule = loadRule(phase.rule_doc); } catch (e) {}
+
+  const adv = rule?.advancement;
+  if (!adv) return res.status(400).json({ error: 'No advancement rule in rule doc.' });
+
+  // Determine advancing count
+  let N = rankings.length;
+  let advanceN = N;
+  if (adv.method === 'percentage') {
+    advanceN = Math.ceil(N * (adv.value / 100));
+  } else if (adv.method === 'count') {
+    advanceN = Math.min(N, adv.value);
+  } else if (adv.method === 'top_per_pool') {
+    // Not implemented here
+    return res.status(400).json({ error: 'top_per_pool advancement not supported yet.' });
+  }
+
+  // Mark eliminated fencers
+  const toEliminate = rankings.slice(advanceN);
+  const tx = db.transaction(() => {
+    for (const f of toEliminate) {
+      db.prepare('UPDATE competitors SET status = ?, eliminated_after = ? WHERE id = ?')
+        .run('eliminated', phaseId, f.competitor_id);
+      db.prepare('UPDATE competitors SET final_rank = ? WHERE id = ?')
+        .run(f.position, f.competitor_id);
+    }
+    db.prepare('UPDATE phases SET status = ? WHERE id = ?').run('finished', phaseId);
+  });
+  tx();
+  res.json({ closed: true, eliminated: toEliminate.length });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/competitions/:compId/phases/:phaseId/reopen — set phase back to active
+// ---------------------------------------------------------------------------
+router.post('/:phaseId/reopen', (req, res) => {
+  const { compId, phaseId } = req.params;
+  const phase = db.prepare('SELECT * FROM phases WHERE id = ? AND competition_id = ?').get(phaseId, compId);
+  if (!phase) return res.status(404).json({ error: 'Phase not found.' });
+  if (phase.status !== 'finished') return res.status(409).json({ error: 'Only finished phases can be reopened.' });
+
+  // Optionally, undo eliminations for this phase
+  db.prepare('UPDATE competitors SET status = ?, eliminated_after = NULL, final_rank = NULL WHERE eliminated_after = ?').run('active', phaseId);
+  db.prepare('UPDATE phases SET status = ? WHERE id = ?').run('active', phaseId);
+  res.json({ reopened: true });
+});
+
 
 module.exports = router;

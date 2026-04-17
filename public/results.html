@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Competition Results</title>
+    <link rel="stylesheet" href="/bouts-table.css">
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #f8f9fa;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px #0001;
+            margin: 2rem auto;
+            max-width: 900px;
+            padding: 2rem;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+
+        th,
+        td {
+            padding: .5rem .7rem;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+
+        th {
+            background: #f0f4fa;
+        }
+
+        .eliminated {
+            color: #c0392b;
+        }
+    </style>
+</head>
+
+<body>
+    <header style="background:#222;color:#fff;padding:.7rem 2rem;display:flex;align-items:center;gap:1.5rem">
+        <strong style="font-weight:700">Atlas</strong>
+        <a href="/" style="color:#fff;text-decoration:none;">Home</a>
+        <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
+        <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+    </header>
+    <div class="card">
+        <h2>Competition Results</h2>
+        <div id="results-placeholder">No results yet. Results will appear here after each phase.</div>
+        <table id="results-table" style="display:none">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Name</th>
+                    <th>Club</th>
+                    <th>Status</th>
+                    <th>Eliminated After</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <script>
+        // Set competition name in header
+        (function() {
+            const compId = location.pathname.split('/')[2];
+            fetch(`/api/competitions/${compId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.name) {
+                        document.getElementById('header-name').textContent = data.name;
+                        document.title = `${data.name} — Results`;
+                    }
+                });
+        })();
+        // Placeholder: will be filled by backend data
+        // Example fetch: /api/competitions/:id/results
+        const compId = location.pathname.split('/')[2];
+        fetch(`/api/competitions/${compId}/results`).then(r => r.json()).then(data => {
+            if (!data || !data.length) return;
+            document.getElementById('results-placeholder').style.display = 'none';
+            const table = document.getElementById('results-table');
+            table.style.display = '';
+            const tbody = table.querySelector('tbody');
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.rank ?? ''}</td>
+                    <td>${row.name ?? ''}</td>
+                    <td>${row.club ?? ''}</td>
+                    <td class="${row.status === 'Eliminated' ? 'eliminated' : ''}">${row.status ?? ''}</td>
+                    <td>${row.eliminated_after ?? ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+    </script>
+</body>
+
+</html>

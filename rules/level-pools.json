@@ -1,0 +1,35 @@
+{
+    "id": "level-pools",
+    "description": "Level Pools (blocks of 6 by ranking)",
+    "type": "pool",
+    "poolFormation": {
+        "algorithm": "block-seeding",
+        "allowedSizes": [
+            6
+        ],
+        "blockSize": 6,
+        "separation": [
+            "nationality",
+            "club"
+        ]
+    },
+    "advancement": {
+        "method": "percentage",
+        "value": 80,
+        "minimumVictories": null,
+        "eliminateAfterPhase": true
+    },
+    "seeding": {
+        "criteria": [
+            "victory_ratio_desc",
+            "indicator_desc",
+            "touches_scored_desc",
+            "touches_received_asc",
+            "initial_seed_asc"
+        ]
+    },
+    "bout": {
+        "touchTarget": 5,
+        "timeLimitMinutes": 3
+    }
+}

@@ -7,203 +7,7 @@
     <title>Competition — Atlas</title>
     <script src="/js/htmx.min.js"></script>
     <script src="/js/alpinejs.min.js" defer></script>
-    <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f0f2f5;
-            color: #1a1a2e;
-        }
-
-        header {
-            background: #1a1a2e;
-            color: #fff;
-            padding: 0.8rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        header a {
-            color: #aad4f5;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-
-        main {
-            max-width: 860px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
-        }
-
-        h2 {
-            margin-top: 0;
-        }
-
-        .meta {
-            display: flex;
-            gap: 2rem;
-            font-size: .9rem;
-            color: #555;
-            margin-bottom: 1.2rem;
-        }
-
-        .meta span strong {
-            color: #1a1a2e;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: .15rem .55rem;
-            border-radius: 999px;
-            font-size: .75rem;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .badge-draft {
-            background: #e8ecf0;
-            color: #555;
-        }
-
-        .badge-active {
-            background: #d4efdf;
-            color: #1e8449;
-        }
-
-        .badge-finished {
-            background: #eaf0fb;
-            color: #1a6bab;
-        }
-
-        .actions a,
-        .actions button {
-            display: inline-block;
-            margin-right: .6rem;
-            padding: .45rem 1rem;
-            border-radius: 5px;
-            font-size: .9rem;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .actions a.primary {
-            background: #1a6bab;
-            color: #fff;
-        }
-
-        .actions a.primary:hover {
-            background: #155594;
-        }
-
-        .actions button.success {
-            background: #1e8449;
-            color: #fff;
-            border: none;
-        }
-
-        .actions button.success:hover {
-            background: #196b3c;
-        }
-
-        .phases-placeholder {
-            color: #888;
-            font-style: italic;
-        }
-
-        .phase-row {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: .6rem 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .phase-row:last-child {
-            border-bottom: none;
-        }
-
-        .phase-row .label {
-            flex: 1;
-            font-size: .92rem;
-        }
-
-        .phase-row .label small {
-            color: #888;
-            margin-left: .4rem;
-        }
-
-        select,
-        button {
-            font-size: .9rem;
-            padding: .4rem .8rem;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            cursor: pointer;
-        }
-
-        button.primary {
-            background: #1a6bab;
-            color: #fff;
-            border: none;
-        }
-
-        button.primary:hover {
-            background: #155594;
-        }
-
-        button.success {
-            background: #1e8449;
-            color: #fff;
-            border: none;
-        }
-
-        button.success:hover {
-            background: #196b3c;
-        }
-
-        button.danger {
-            background: #c0392b;
-            color: #fff;
-            border: none;
-        }
-
-        button.danger:hover {
-            background: #a93226;
-        }
-
-        button:disabled {
-            opacity: .5;
-            cursor: default;
-        }
-
-        .add-phase-form {
-            display: flex;
-            gap: .6rem;
-            align-items: center;
-            margin-top: 1rem;
-        }
-
-        .error-msg {
-            color: #c0392b;
-            font-size: .85rem;
-            margin-top: .4rem;
-        }
-    </style>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 
 <body>
@@ -219,6 +23,11 @@
         </div>
 
         <div class="card" x-data="phaseMgr()" x-init="init()" id="phases-card" style="display:none">
+            <template x-if="error">
+                <div class="notification" x-text="error"
+                    style="margin-bottom:1rem;padding:.7rem 1.2rem;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;color:#856404;font-size:1rem">
+                </div>
+            </template>
             <h3 style="margin-top:0">Phases</h3>
 
             <!-- Phase list -->
@@ -238,6 +47,12 @@
                         x-show="ph.pool_count > 0">View pools</a>
                     <button class="success" @click="generate(ph.id)" x-show="ph.status === 'pending'"
                         :disabled="busy">Generate pools</button>
+                    <button class="primary" @click="() => closePhase(ph.id)" x-show="ph.status !== 'finished'"
+                        :disabled="busy">Close Phase</button>
+                    <button class="danger" @click="reopenPhase(ph.id)" x-show="ph.status === 'finished'"
+                        :disabled="busy">Reopen Phase</button>
+                    <button class="primary" @click="simulatePhase(ph.id)" x-show="ph.status === 'active'"
+                        :disabled="busy">Simulate Results</button>
                     <button class="danger" @click="deletePhase(ph.id)" x-show="ph.status !== 'finished'"
                         :disabled="busy">Delete</button>
                 </div>
@@ -254,8 +69,9 @@
                 <button class="primary" @click="addPhase()" :disabled="!selectedRule || busy">Add Phase</button>
             </div>
 
+
             <!-- Pool configuration choice (shown when generate returns multiple options) -->
-            <div x-show="pendingChoice"
+            <div x-show="pendingChoice && pendingChoice.options"
                 style="margin-top:1.2rem;padding:1rem 1.2rem;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6">
                 <h4 style="margin-top:0;margin-bottom:.8rem">Choose pool configuration</h4>
                 <template x-for="(opt, idx) in (pendingChoice?.options ?? [])" :key="idx">
@@ -267,6 +83,33 @@
                 <div style="margin-top:.9rem;display:flex;gap:.6rem">
                     <button class="primary" @click="confirmChoice()" :disabled="busy">Confirm</button>
                     <button @click="cancelChoice()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Block-seeding special options dialog -->
+            <div x-show="blockSeedingDialog"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#fffbe6;border-radius:6px;border:1px solid #ffe58f">
+                <h4 style="margin-top:0;margin-bottom:.8rem">Number of fencers not divisible by 6</h4>
+                <p x-text="blockSeedingDialog?.message"></p>
+                <div style="margin-top:.7rem">
+                    <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
+                        <input type="radio" value="drop" x-model="blockSeedingChoice" style="margin-right:.5rem">
+                        Drop the lowest ranked <span x-text="blockSeedingDialog?.options?.drop?.length"></span>
+                        fencer(s)
+                    </label>
+                    <template x-if="blockSeedingDialog?.options?.redistribute">
+                        <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
+                            <input type="radio" value="redistribute" x-model="blockSeedingChoice"
+                                style="margin-right:.5rem">
+                            Redistribute remainder: <span
+                                x-text="blockSeedingDialog?.options?.redistribute.join(', ')"></span> per pool
+                        </label>
+                    </template>
+                </div>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmBlockSeeding()"
+                        :disabled="!blockSeedingChoice || busy">Confirm</button>
+                    <button @click="cancelBlockSeeding()" :disabled="busy">Cancel</button>
                 </div>
             </div>
 
@@ -295,14 +138,14 @@
           <span><strong>Gender:</strong> ${genderLabel[c.gender] || c.gender}</span>
           <span><strong>Fencers:</strong> ${c.competitor_count}</span>
         </div>
-        <div class="actions">
-          <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
-          <a class="primary" href="/competitions/${c.id}/fencers/roster"
-             style="background:#1e8449">Roster / Presence</a>
-          ${c.status === 'draft'
+                <div class="actions">
+                    <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
+                    <a class="primary" href="/competitions/${c.id}/fencers/roster" style="background:#1e8449">Roster / Presence</a>
+                    <a class="primary" href="/competitions/${c.id}/results" style="background:#6c3483">Results</a>
+                    ${c.status === 'draft'
                     ? `<button class="success" onclick="activate()">Activate Competition</button>`
                     : ''}
-        </div>
+                </div>
       `;
             document.getElementById('phases-card').style.display = '';
         }
@@ -326,6 +169,58 @@
         // -------------------------------------------------------------------
         function phaseMgr() {
             return {
+                async simulatePhase(phaseId) {
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/simulate`, { method: 'POST' });
+                        const d = await r.json();
+                        if (!r.ok || d.error) {
+                            this.error = d.error || 'Failed to simulate results.';
+                            return;
+                        }
+                        await this.loadPhases();
+                        this.error = `Simulated results for ${d.updated} bout(s).`;
+                    } finally {
+                        this.busy = false;
+                    }
+                },
+                reopenPhase: async function (phaseId) {
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/reopen`, { method: 'POST' });
+                        const d = await r.json();
+                        if (!r.ok || d.error) {
+                            this.error = d.error || 'Failed to reopen phase.';
+                            return;
+                        }
+                        await this.loadPhases();
+                        this.error = 'Phase reopened.';
+                    } finally {
+                        this.busy = false;
+                    }
+                },
+                closePhase: async function (phaseId) {
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/close`, { method: 'POST' });
+                        const d = await r.json();
+                        if (!r.ok || d.error) {
+                            this.error = d.error || 'Failed to close phase.';
+                            return;
+                        }
+                        await this.loadPhases();
+                        if (d.eliminated !== undefined) {
+                            this.error = `Phase closed. ${d.eliminated} fencer(s) eliminated.`;
+                        } else {
+                            this.error = 'Phase closed.';
+                        }
+                    } finally {
+                        this.busy = false;
+                    }
+                },
                 phases: [],
                 rules: [],
                 selectedRule: '',
@@ -333,6 +228,8 @@
                 error: '',
                 pendingChoice: null,   // { phaseId, options: [[7,7,6], ...] }
                 chosenOptionIdx: 0,
+                blockSeedingDialog: null, // { phaseId, message, options }
+                blockSeedingChoice: '',
 
                 async init() {
                     await Promise.all([this.loadPhases(), this.loadRules()]);
@@ -378,10 +275,39 @@
                             this.chosenOptionIdx = 0;
                             return;
                         }
+                        if (d.status === 'block-seeding-options') {
+                            this.blockSeedingDialog = { phaseId, message: d.message, options: d.options };
+                            this.blockSeedingChoice = '';
+                            return;
+                        }
                         await this.loadPhases();
                     } finally {
                         this.busy = false;
                     }
+                },
+                async confirmBlockSeeding() {
+                    if (!this.blockSeedingDialog || !this.blockSeedingChoice) return;
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${this.blockSeedingDialog.phaseId}/generate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ blockChoice: this.blockSeedingChoice })
+                        });
+                        const d = await r.json();
+                        if (!r.ok) { this.error = d.error; return; }
+                        this.blockSeedingDialog = null;
+                        this.blockSeedingChoice = '';
+                        await this.loadPhases();
+                    } finally {
+                        this.busy = false;
+                    }
+                },
+
+                cancelBlockSeeding() {
+                    this.blockSeedingDialog = null;
+                    this.blockSeedingChoice = '';
                 },
 
                 async confirmChoice() {

@@ -1,0 +1,109 @@
+button,
+.actions a,
+input[type="submit"] {
+    display: inline-block;
+    font-size: 0.95rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+    color: #1a1a2e;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    margin-right: 0.5rem;
+}
+
+button.primary,
+.actions a.primary {
+    background: #1a6bab;
+    color: #fff;
+    border: none;
+}
+
+button.primary:hover,
+.actions a.primary:hover {
+    background: #155594;
+}
+
+button.success,
+.actions a.success {
+    background: #1e8449;
+    color: #fff;
+    border: none;
+}
+
+button.success:hover,
+.actions a.success:hover {
+    background: #196b3c;
+}
+
+button.danger,
+.actions a.danger {
+    background: #c0392b;
+    color: #fff;
+    border: none;
+}
+
+button.danger:hover,
+.actions a.danger:hover {
+    background: #a93226;
+}
+
+button:disabled,
+.actions a:disabled,
+button[disabled] {
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Shared stylesheet for Atlas Competition Manager */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background: #f0f2f5;
+    color: #1a1a2e;
+}
+
+header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 0.8rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+header a {
+    color: #aad4f5;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+main {
+    max-width: 860px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+}
+
+h1,
+h2 {
+    color: #1a1a2e;
+    margin-top: 0;
+}
+
+.meta {
+    display: flex;
+    gap: 2rem;
+    font-size: .9rem;
+}

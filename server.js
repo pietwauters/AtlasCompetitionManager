@@ -47,9 +47,16 @@ app.get('/health', (_req, res) => {
 });
 
 // Domain route modules
+
 app.use('/api/competitions', require('./routes/competitions'));
+app.use('/api/competitions/:compId/results', require('./routes/results'));
 app.use('/api/competitions/:compId/fencers', require('./routes/fencers'));
 app.use('/api/competitions/:compId/phases',  require('./routes/phases'));
+
+// Serve overall results page per competition
+app.get('/competitions/:id/results', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'results.html'));
+});
 
 // Rules catalogue — list available rule JSON files
 app.get('/api/rules', (_req, res) => {
