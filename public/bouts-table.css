@@ -1,3 +1,9 @@
+/* Darker diagonal for pool matrix */
+.bouts-table .diagonal {
+    background: #bbb !important;
+    color: #222;
+}
+
 /* Add grid lines for fencing pool tables */
 .bouts-table {
     border-collapse: collapse;

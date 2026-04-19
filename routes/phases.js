@@ -25,7 +25,95 @@ function calculatePoolRankings(phaseId) {
     'name_asc'
   ];
 
-  // Get all fencers in pools for this phase
+  // Level pool logic: if rule.levelPools is true, rank by pool order, then by pool-internal ranking
+  if (rule.levelPools) {
+    // Get all pools for this phase, ordered by pool_number
+    const pools = db.prepare('SELECT id FROM pools WHERE phase_id = ? ORDER BY pool_number ASC').all(phaseId);
+    let ranked = [];
+    let pos = 1;
+    for (const pool of pools) {
+      // Get fencers in this pool
+      const fencers = db.prepare(`
+        SELECT c.id, c.name, c.initial_seed
+        FROM pool_competitors pc
+        JOIN competitors c ON c.id = pc.competitor_id
+        WHERE pc.pool_id = ?
+      `).all(pool.id);
+      // Get all bouts for this pool
+      const bouts = db.prepare(`
+        SELECT * FROM bouts WHERE pool_id = ? AND left_score IS NOT NULL AND right_score IS NOT NULL
+      `).all(pool.id);
+      // Stats per fencer
+      const stats = {};
+      for (const f of fencers) {
+        stats[f.id] = {
+          competitor_id: f.id,
+          name: f.name,
+          initial_seed: f.initial_seed ?? 9999,
+          victories: 0,
+          matches: 0,
+          indicator: 0,
+          touches_scored: 0,
+          touches_received: 0
+        };
+      }
+      for (const bout of bouts) {
+        // Left
+        if (stats[bout.left_id]) {
+          stats[bout.left_id].touches_scored += bout.left_score;
+          stats[bout.left_id].touches_received += bout.right_score;
+          stats[bout.left_id].matches += 1;
+          if (bout.winner_id === bout.left_id) stats[bout.left_id].victories += 1;
+        }
+        // Right
+        if (stats[bout.right_id]) {
+          stats[bout.right_id].touches_scored += bout.right_score;
+          stats[bout.right_id].touches_received += bout.left_score;
+          stats[bout.right_id].matches += 1;
+          if (bout.winner_id === bout.right_id) stats[bout.right_id].victories += 1;
+        }
+      }
+      for (const s of Object.values(stats)) {
+        s.indicator = s.touches_scored - s.touches_received;
+        s.victory_ratio = s.matches > 0 ? s.victories / s.matches : 0;
+      }
+      // Sort within pool
+      const poolRanked = Object.values(stats).sort((a, b) => {
+        for (const crit of criteria) {
+          switch (crit) {
+            case 'victory_ratio_desc':
+              if (b.victory_ratio !== a.victory_ratio) return b.victory_ratio - a.victory_ratio;
+              break;
+            case 'victories_desc':
+              if (b.victories !== a.victories) return b.victories - a.victories;
+              break;
+            case 'indicator_desc':
+              if (b.indicator !== a.indicator) return b.indicator - a.indicator;
+              break;
+            case 'touches_scored_desc':
+              if (b.touches_scored !== a.touches_scored) return b.touches_scored - a.touches_scored;
+              break;
+            case 'touches_received_asc':
+              if (a.touches_received !== b.touches_received) return a.touches_received - b.touches_received;
+              break;
+            case 'initial_seed_asc':
+              if ((a.initial_seed ?? 9999) !== (b.initial_seed ?? 9999)) return (a.initial_seed ?? 9999) - (b.initial_seed ?? 9999);
+              break;
+            case 'name_asc':
+              if (a.name !== b.name) return a.name.localeCompare(b.name);
+              break;
+          }
+        }
+        return 0;
+      });
+      poolRanked.forEach((s, i) => { s.position = pos + i; });
+      ranked = ranked.concat(poolRanked);
+      pos += poolRanked.length;
+    }
+    return ranked;
+  }
+
+  // Default: classic pool ranking across all pools
   const fencers = db.prepare(`
     SELECT c.id, c.name, c.initial_seed
     FROM pool_competitors pc
@@ -403,28 +491,42 @@ router.get('/:phaseId', (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/:phaseId/generate', (req, res) => {
   const { compId, phaseId } = req.params;
-  const { poolSizes } = req.body || {};
+  const { poolSizes, blockChoice, advancementChoice } = req.body || {};
+  // Debug log removed for production cleanup
 
   const phase = db.prepare('SELECT * FROM phases WHERE id = ? AND competition_id = ?').get(phaseId, compId);
-  if (!phase) return res.status(404).json({ error: 'Phase not found.' });
-  if (phase.status !== 'pending') return res.status(409).json({ error: 'Can only generate pools for a pending phase.' });
-
+  if (!phase) {
+    return res.status(404).json({ error: 'Phase not found.' });
+  }
+  if (phase.status !== 'pending') {
+    return res.status(409).json({ error: 'Can only generate pools for a pending phase.' });
+  }
   const existing = db.prepare('SELECT COUNT(*) AS n FROM pools WHERE phase_id = ?').get(phaseId);
-  if (existing.n > 0) return res.status(409).json({ error: 'Pools already generated. Delete and recreate phase to regenerate.' });
+  if (existing.n > 0) {
+    return res.status(409).json({ error: 'Pools already generated. Delete and recreate phase to regenerate.' });
+  }
 
   let rules;
   try { rules = loadRule(phase.rule_doc); } catch (e) { return res.status(500).json({ error: e.message }); }
+  // If user provided advancementChoice, override advancement in rules
+  if (advancementChoice) {
+    rules.advancement = advancementChoice;
+    // Optionally persist the choice for this phase if you want to use it later (e.g., in phase close)
+    db.prepare('UPDATE phases SET advancement_choice = ? WHERE id = ?').run(JSON.stringify(advancementChoice), phaseId);
+  }
 
   const fencers = db.prepare(`
-    SELECT id, name, club, nationality, initial_seed
+    SELECT id, name, club, nationality, initial_seed, status
     FROM   competitors
     WHERE  competition_id = ? AND status = 'active'
   `).all(compId);
+  // Debug log removed for production cleanup
 
   let chosenSizes;
   // Special handling for block-seeding (level pools)
   if (rules.poolFormation.algorithm === 'block-seeding') {
     const blockSize = rules.poolFormation.blockSize || 6;
+    // Debug log removed for production cleanup
     // Sort by initial_seed ASC; unseeded fencers go last
     const sorted = [...fencers].sort((a, b) => {
       const sa = a.initial_seed ?? 99999;
@@ -433,19 +535,29 @@ router.post('/:phaseId/generate', (req, res) => {
     });
     const { blockSeedingOptions } = require('../lib/poolFormation');
     const opts = blockSeedingOptions(sorted, blockSize);
+    let droppedFencers = [];
     if (opts.type === 'ok') {
       chosenSizes = Array(sorted.length / blockSize).fill(blockSize);
+      // Debug log removed for production cleanup
     } else {
       // If user provided a choice, handle it
       if (req.body && req.body.blockChoice) {
         if (req.body.blockChoice === 'drop') {
           // Drop lowest ranked
+          // Debug log removed for production cleanup
           const keep = sorted.slice(0, sorted.length - opts.drop.length);
+          const keptIds = keep.map(f => f.id);
+          const droppedIds = sorted.slice(sorted.length - opts.drop.length).map(f => f.id);
+          // Debug log removed for production cleanup
           chosenSizes = Array(Math.floor(keep.length / blockSize)).fill(blockSize);
           fencers.length = 0; keep.forEach(f => fencers.push(f));
+          droppedFencers = opts.drop;
+          // Debug log removed for production cleanup
         } else if (req.body.blockChoice === 'redistribute' && opts.redistribute) {
           chosenSizes = opts.redistribute;
+          // Debug log removed for production cleanup
         } else {
+          // Debug log removed for production cleanup
           return res.status(400).json({ error: 'Invalid blockChoice or redistribution not possible.' });
         }
       } else {
@@ -453,12 +565,19 @@ router.post('/:phaseId/generate', (req, res) => {
         return res.json({
           status: 'block-seeding-options',
           message: `Number of fencers (${sorted.length}) is not divisible by ${blockSize}. Choose to drop the lowest ranked (${opts.drop.length}) or redistribute (${opts.redistribute ? opts.redistribute.join(',') : 'not possible'}).`,
+          totalFencers: sorted.length,
+          toDrop: opts.drop.length,
           options: {
             drop: opts.drop,
             redistribute: opts.redistribute
           }
         });
       }
+    }
+    // Store dropped fencers in the phase for later ranking
+    if (droppedFencers.length > 0) {
+      db.prepare('UPDATE phases SET dropped_fencers = ? WHERE id = ?').run(JSON.stringify(droppedFencers), phaseId);
+      // Debug log removed for production cleanup
     }
   } else if (poolSizes) {
     // User confirmed a specific pool configuration
@@ -488,7 +607,9 @@ router.post('/:phaseId/generate', (req, res) => {
   let poolData;
   try {
     poolData = formPools(fencers, chosenSizes, rules.poolFormation);
+    // Debug log removed for production cleanup
   } catch (e) {
+    // Debug log removed for production cleanup
     return res.status(400).json({ error: e.message });
   }
 
@@ -528,7 +649,27 @@ router.delete('/:phaseId', (req, res) => {
   if (!phase) return res.status(404).json({ error: 'Phase not found.' });
   if (phase.status === 'finished') return res.status(409).json({ error: 'Cannot delete a finished phase.' });
 
+  // Only allow deleting the last phase
+  const lastPhase = db.prepare('SELECT id FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1').get(compId);
+  if (!lastPhase || String(lastPhase.id) !== String(phaseId)) {
+    return res.status(409).json({ error: 'Only the last phase can be deleted.' });
+  }
+
+  // Delete all pools, bouts, pool_competitors for this phase
+  const poolIds = db.prepare('SELECT id FROM pools WHERE phase_id = ?').all(phaseId).map(r => r.id);
+  for (const poolId of poolIds) {
+    db.prepare('DELETE FROM bouts WHERE pool_id = ?').run(poolId);
+    db.prepare('DELETE FROM pool_competitors WHERE pool_id = ?').run(poolId);
+  }
+  db.prepare('DELETE FROM pools WHERE phase_id = ?').run(phaseId);
   db.prepare('DELETE FROM phases WHERE id = ?').run(phaseId);
+
+  // Restore only competitors eliminated in this phase
+  db.prepare("UPDATE competitors SET status = 'active', eliminated_after = NULL WHERE competition_id = ? AND eliminated_after = ?")
+    .run(compId, phaseId);
+  // Optionally, you could also clear final_rank for these competitors if needed:
+  // db.prepare("UPDATE competitors SET final_rank = NULL WHERE competition_id = ? AND eliminated_after = ?").run(compId, phaseId);
+
   res.json({ deleted: true });
 });
 
@@ -691,18 +832,45 @@ router.post('/:phaseId/close', (req, res) => {
   // Calculate rankings
   const rankings = calculatePoolRankings(phaseId);
   let rule = {};
+  let adv = null;
   try { rule = loadRule(phase.rule_doc); } catch (e) {}
-
-  const adv = rule?.advancement;
-  if (!adv) return res.status(400).json({ error: 'No advancement rule in rule doc.' });
+  // Use advancement_choice from phase if present, else from rule
+  if (phase.advancement_choice) {
+    try { adv = JSON.parse(phase.advancement_choice); } catch (e) { adv = null; }
+  }
+  if (!adv) {
+    adv = rule?.advancement;
+  }
+  if (!adv) return res.status(400).json({ error: 'No advancement rule in rule doc or phase.' });
 
   // Determine advancing count
   let N = rankings.length;
   let advanceN = N;
   if (adv.method === 'percentage') {
-    advanceN = Math.ceil(N * (adv.value / 100));
+    let percent = Number(adv.value);
+    if (isNaN(percent) || percent <= 0 || percent > 100) {
+      return res.status(400).json({ error: 'Invalid percentage value for advancement.' });
+    }
+    advanceN = Math.ceil(N * (percent / 100));
+    let roundTo = adv.roundTo !== undefined && adv.roundTo !== null ? Number(adv.roundTo) : null;
+    if (roundTo && !isNaN(roundTo) && roundTo > 1) {
+      // Always round UP to the closest multiple of roundTo (but not above N)
+      advanceN = Math.ceil(advanceN / roundTo) * roundTo;
+      if (advanceN > N) advanceN = Math.floor(N / roundTo) * roundTo;
+    }
   } else if (adv.method === 'count') {
-    advanceN = Math.min(N, adv.value);
+    let count = Number(adv.value);
+    if (isNaN(count) || count < 1 || count > N) {
+      return res.status(400).json({ error: 'Invalid count value for advancement.' });
+    }
+    advanceN = Math.min(N, count);
+  } else if (adv.method === 'multiple') {
+    const multipleOf = Number(adv.multipleOf) || 1;
+    if (isNaN(multipleOf) || multipleOf < 1) {
+      return res.status(400).json({ error: 'Invalid multipleOf value for multiple advancement.' });
+    }
+    advanceN = Math.floor(N / multipleOf) * multipleOf;
+    if (advanceN < 1) advanceN = multipleOf <= N ? multipleOf : N; // fallback: at least one advances
   } else if (adv.method === 'top_per_pool') {
     // Not implemented here
     return res.status(400).json({ error: 'top_per_pool advancement not supported yet.' });
@@ -710,6 +878,9 @@ router.post('/:phaseId/close', (req, res) => {
 
   // Mark eliminated fencers
   const toEliminate = rankings.slice(advanceN);
+  const toAdvance = rankings.slice(0, advanceN);
+  console.log('[PHASE CLOSE] Advancing:', toAdvance.map(f => ({id: f.competitor_id, pos: f.position})));
+  console.log('[PHASE CLOSE] Eliminating:', toEliminate.map(f => ({id: f.competitor_id, pos: f.position})));
   const tx = db.transaction(() => {
     for (const f of toEliminate) {
       db.prepare('UPDATE competitors SET status = ?, eliminated_after = ? WHERE id = ?')
@@ -717,9 +888,17 @@ router.post('/:phaseId/close', (req, res) => {
       db.prepare('UPDATE competitors SET final_rank = ? WHERE id = ?')
         .run(f.position, f.competitor_id);
     }
+    for (const f of toAdvance) {
+      db.prepare('UPDATE competitors SET status = ? WHERE id = ?')
+        .run('active', f.competitor_id);
+    }
     db.prepare('UPDATE phases SET status = ? WHERE id = ?').run('finished', phaseId);
   });
   tx();
+  // If the user wants to finish the competition, call the new endpoint below.
+  // ---------------------------------------------------------------------------
+  // POST /api/competitions/:compId/finish — finish the competition, mark all active as finished
+  // ---------------------------------------------------------------------------
   res.json({ closed: true, eliminated: toEliminate.length });
 });
 

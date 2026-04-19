@@ -53,7 +53,7 @@
                                             </th>
                                             <% pool.fencers.forEach(function(_, j) { %>
                                                 <% if (i===j) { %>
-                                                    <td style="background:#eee"></td>
+                                                    <td class="diagonal"></td>
                                                     <% } else { %>
                                                         <% var cell=pool.grid[i][j]; var swapped=false; if (!(cell &&
                                                             cell.left_score !=null && cell.right_score !=null)) {

@@ -2,6 +2,7 @@
     "id": "level-pools",
     "description": "Level Pools (blocks of 6 by ranking)",
     "type": "pool",
+    "levelPools": true,
     "poolFormation": {
         "algorithm": "block-seeding",
         "allowedSizes": [
@@ -15,7 +16,7 @@
     },
     "advancement": {
         "method": "percentage",
-        "value": 80,
+        "value": 100,
         "minimumVictories": null,
         "eliminateAfterPhase": true
     },

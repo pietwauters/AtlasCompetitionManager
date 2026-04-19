@@ -10,7 +10,11 @@ router.get('/', (req, res) => {
   const fencers = db.prepare(`
     SELECT c.id, c.name, c.club,
            c.final_rank AS rank,
-           CASE WHEN c.eliminated_after IS NULL THEN 'Active' ELSE 'Eliminated' END AS status,
+           CASE 
+             WHEN c.status = 'finished' THEN 'Finished'
+             WHEN c.status = 'active' THEN 'Active'
+             ELSE 'Eliminated'
+           END AS status,
            c.eliminated_after
       FROM competitors c
      WHERE c.competition_id = ?

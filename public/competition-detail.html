@@ -113,6 +113,46 @@
                 </div>
             </div>
 
+            <!-- Advancement choice dialog -->
+            <div x-show="advancementChoiceDialog"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#eaf0fb;border-radius:6px;border:1px solid #b5c9e8">
+                <h4 style="margin-top:0;margin-bottom:.8rem"
+                    x-text="advancementChoiceDialog?.label || 'Select advancement option'"></h4>
+                <template x-for="(choice, idx) in (advancementChoiceDialog?.choices ?? [])" :key="idx">
+                    <div style="margin-bottom:0.5rem">
+                        <label style="display:inline-block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
+                            <input type="radio" :value="idx" x-model.number="chosenAdvancementIdx"
+                                style="margin-right:.5rem">
+                            <span x-text="choice.label"></span>
+                        </label>
+                        <template x-if="choice.method === 'percentage'">
+                            <span>
+                                <input type="number" min="1" max="100" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="%" x-model.number="choice._value" @click.stop
+                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">%</span>
+                                <input type="text" style="margin-left:1.2rem;width:5em" placeholder="Round to"
+                                    x-model="choice._roundTo" @click.stop>
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">(optional: round up to
+                                    multiple)</span>
+                            </span>
+                        </template>
+                        <template x-if="choice.method === 'count' && (choice.value === '?' || choice._value === '?')">
+                            <span>
+                                <input type="number" min="1" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="Count" x-model.number="choice._value" @click.stop
+                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">fencers</span>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmAdvancementChoice()" :disabled="busy">Confirm</button>
+                    <button @click="cancelAdvancementChoice()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
             <p class="error-msg" x-text="error" x-show="error"></p>
         </div>
     </main>
@@ -132,21 +172,28 @@
             document.getElementById('header-name').textContent = c.name;
             document.title = `${c.name} — Atlas`;
             document.getElementById('comp-card').innerHTML = `
-        <h2>${esc(c.name)} <span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></h2>
-        <div class="meta">
-          <span><strong>Weapon:</strong> ${weaponLabel[c.weapon] || c.weapon}</span>
-          <span><strong>Gender:</strong> ${genderLabel[c.gender] || c.gender}</span>
-          <span><strong>Fencers:</strong> ${c.competitor_count}</span>
-        </div>
+                <h2>${esc(c.name)} <span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></h2>
+                <div class="meta">
+                    <span><strong>Weapon:</strong> ${weaponLabel[c.weapon] || c.weapon}</span>
+                    <span><strong>Gender:</strong> ${genderLabel[c.gender] || c.gender}</span>
+                    <span><strong>Fencers:</strong> ${c.competitor_count}</span>
+                </div>
                 <div class="actions">
                     <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
                     <a class="primary" href="/competitions/${c.id}/fencers/roster" style="background:#1e8449">Roster / Presence</a>
                     <a class="primary" href="/competitions/${c.id}/results" style="background:#6c3483">Results</a>
                     ${c.status === 'draft'
-                    ? `<button class="success" onclick="activate()">Activate Competition</button>`
+                    ? `<button class="success" onclick="activate()">Activate Competition</button>
+                           <button class="danger" onclick="deleteCompetition()" style="margin-left:0.7em">Delete Competition</button>`
+                    : ''}
+                    ${c.status === 'finished'
+                    ? `<button class="danger" onclick="deleteCompetition(true)" style="margin-left:0.7em">Delete Competition</button>`
+                    : ''}
+                    ${c.status !== 'finished' && c.status !== 'draft'
+                    ? `<button class="danger" onclick="finishCompetition()">Finish Competition</button>`
                     : ''}
                 </div>
-      `;
+            `;
             document.getElementById('phases-card').style.display = '';
         }
 
@@ -162,6 +209,29 @@
 
         function esc(s) {
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Delete competition handler (global)
+            async function deleteCompetition(isFinished) {
+                let msg = 'Delete this competition? This cannot be undone.';
+                if (isFinished) msg = 'Delete this finished competition? All results and history will be lost. This cannot be undone.';
+                if (!confirm(msg)) return;
+                const r = await fetch(`/api/competitions/${compId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (r.ok) window.location.href = '/competitions';
+                else alert('Failed to delete competition. Only draft or finished competitions can be deleted.');
+            }
+
+            // Finish competition handler (global)
+            async function finishCompetition() {
+                if (!confirm('Finish this competition? All remaining active fencers will be marked as finished and final rankings assigned.')) return;
+                const r = await fetch(`/api/competitions/${compId}/finish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (r.ok) location.reload();
+                else alert('Failed to finish competition.');
+            }
         }
 
         // -------------------------------------------------------------------
@@ -230,6 +300,8 @@
                 chosenOptionIdx: 0,
                 blockSeedingDialog: null, // { phaseId, message, options }
                 blockSeedingChoice: '',
+                advancementChoiceDialog: null, // { phaseId, choices, label }
+                chosenAdvancementIdx: 0,
 
                 async init() {
                     await Promise.all([this.loadPhases(), this.loadRules()]);
@@ -267,6 +339,33 @@
                     this.error = '';
                     this.busy = true;
                     try {
+                        // Fetch the rule for this phase to check for advancement prompt/choices
+                        const phase = this.phases.find(p => p.id === phaseId);
+                        let rule = null;
+                        if (phase && phase.rule_doc) {
+                            const ruleResp = await fetch(`/api/rules/${phase.rule_doc}`);
+                            if (ruleResp.ok) rule = await ruleResp.json();
+                        }
+                        if (rule && rule.advancement && rule.advancement.prompt && Array.isArray(rule.advancement.choices)) {
+                            // Deep clone choices and initialize _value/_roundTo for percentage
+                            const clonedChoices = rule.advancement.choices.map(c => {
+                                const cc = { ...c };
+                                if (cc.method === 'percentage') {
+                                    cc._value = cc.value;
+                                    // Always define _roundTo for reactivity
+                                    cc._roundTo = (typeof cc.roundTo !== 'undefined') ? cc.roundTo : '';
+                                }
+                                return cc;
+                            });
+                            this.advancementChoiceDialog = {
+                                phaseId,
+                                choices: clonedChoices,
+                                label: rule.advancement.label || 'Select advancement option'
+                            };
+                            this.chosenAdvancementIdx = 0;
+                            this.busy = false;
+                            return;
+                        }
                         const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/generate`, { method: 'POST' });
                         const d = await r.json();
                         if (!r.ok) { this.error = d.error; return; }
@@ -284,6 +383,57 @@
                     } finally {
                         this.busy = false;
                     }
+                },
+
+                async confirmAdvancementChoice() {
+                    if (!this.advancementChoiceDialog) return;
+                    const { phaseId, choices } = this.advancementChoiceDialog;
+                    // Clone the selected choice to avoid mutating the rule
+                    const selected = { ...choices[this.chosenAdvancementIdx] };
+                    // Always copy user input for count and percentage
+                    if (selected.method === 'count') {
+                        if (selected._value && selected._value > 0) {
+                            selected.value = selected._value;
+                        }
+                    } else if (selected.method === 'percentage') {
+                        if (selected._value && selected._value > 0 && selected._value <= 100) {
+                            selected.value = selected._value;
+                        }
+                        if (selected._roundTo && selected._roundTo > 1) {
+                            selected.roundTo = selected._roundTo;
+                        } else {
+                            delete selected.roundTo;
+                        }
+                    }
+                    this.error = '';
+                    this.busy = true;
+                    try {
+                        const r = await fetch(`/api/competitions/${compId}/phases/${phaseId}/generate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ advancementChoice: selected })
+                        });
+                        const d = await r.json();
+                        if (!r.ok) { this.error = d.error; return; }
+                        this.advancementChoiceDialog = null;
+                        if (d.status === 'choose') {
+                            this.pendingChoice = { phaseId, options: d.options };
+                            this.chosenOptionIdx = 0;
+                            return;
+                        }
+                        if (d.status === 'block-seeding-options') {
+                            this.blockSeedingDialog = { phaseId, message: d.message, options: d.options };
+                            this.blockSeedingChoice = '';
+                            return;
+                        }
+                        await this.loadPhases();
+                    } finally {
+                        this.busy = false;
+                    }
+                },
+
+                cancelAdvancementChoice() {
+                    this.advancementChoiceDialog = null;
                 },
                 async confirmBlockSeeding() {
                     if (!this.blockSeedingDialog || !this.blockSeedingChoice) return;
@@ -357,6 +507,32 @@
                     }
                 },
             };
+        }
+    </script>
+    </script>
+    <script>
+        // Delete competition handler (global)
+        async function deleteCompetition(isFinished) {
+            let msg = 'Delete this competition? This cannot be undone.';
+            if (isFinished) msg = 'Delete this finished competition? All results and history will be lost. This cannot be undone.';
+            if (!confirm(msg)) return;
+            const r = await fetch(`/api/competitions/${compId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (r.ok) window.location.href = '/competitions';
+            else alert('Failed to delete competition. Only draft or finished competitions can be deleted.');
+        }
+
+        // Finish competition handler (global)
+        async function finishCompetition() {
+            if (!confirm('Finish this competition? All remaining active fencers will be marked as finished and final rankings assigned.')) return;
+            const r = await fetch(`/api/competitions/${compId}/finish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (r.ok) location.reload();
+            else alert('Failed to finish competition.');
         }
     </script>
 </body>

@@ -72,7 +72,7 @@
     </div>
     <script>
         // Set competition name in header
-        (function() {
+        (function () {
             const compId = location.pathname.split('/')[2];
             fetch(`/api/competitions/${compId}`)
                 .then(r => r.json())

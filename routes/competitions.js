@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 const express = require('express');
 const router  = express.Router();
@@ -7,6 +7,24 @@ const db      = require('../db/db');
 const VALID_WEAPONS = ['foil', 'epee', 'sabre'];
 const VALID_GENDERS = ['M', 'F', 'X'];
 const VALID_STATUSES = ['draft', 'active', 'finished'];
+
+// ---------------------------------------------------------------------------
+// POST /api/competitions/:id/finish — finish the competition, mark all active as finished
+// ---------------------------------------------------------------------------
+router.post('/:id/finish', (req, res) => {
+  const compId = req.params.id;
+  // Mark all active competitors as finished
+  const active = db.prepare('SELECT id FROM competitors WHERE competition_id = ? AND status = ?').all(compId, 'active');
+  let nextRank = 1;
+  for (const f of active) {
+    db.prepare('UPDATE competitors SET status = ?, final_rank = ? WHERE id = ?')
+      .run('finished', nextRank, f.id);
+    nextRank++;
+  }
+  db.prepare('UPDATE competitions SET status = ? WHERE id = ?').run('finished', compId);
+  res.json({ finished: true, competitors: active.length });
+});
+
 
 // ---------------------------------------------------------------------------
 // GET /api/competitions — list all competitions, newest first
@@ -83,7 +101,7 @@ router.patch('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const comp = db.prepare(`SELECT * FROM competitions WHERE id = ?`).get(req.params.id);
   if (!comp) return res.status(404).json({ error: 'Competition not found' });
-  if (comp.status !== 'draft') return res.status(409).json({ error: 'Only draft competitions can be deleted' });
+  if (comp.status !== 'draft' && comp.status !== 'finished') return res.status(409).json({ error: 'Only draft or finished competitions can be deleted' });
 
   db.prepare(`DELETE FROM competitions WHERE id = ?`).run(comp.id);
   res.json({ ok: true });

@@ -74,6 +74,26 @@ app.get('/api/rules', (_req, res) => {
   res.json(rules);
 });
 
+// Serve individual rule JSON file by filename
+app.get('/api/rules/:filename', (req, res) => {
+  const rulesDir = path.join(__dirname, 'rules');
+  const filename = req.params.filename;
+  // Prevent directory traversal
+  if (!/^[\w.-]+\.json$/.test(filename)) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  const filePath = path.join(rulesDir, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Rule file not found' });
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read rule file' });
+  }
+});
+
 // Categories catalogue
 app.get('/api/categories', (_req, res) => {
   const { listCategories } = require('./lib/categories');
@@ -97,4 +117,12 @@ app.use('/competitions/:compId/phases', phasesRouter);
 // ---------------------------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`AtlasCompetitionManager running on http://localhost:${PORT}`);
+});
+
+// Global error handler — always return JSON for errors
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(err.status || 500);
+  res.type('application/json');
+  res.json({ error: err.message || 'Internal Server Error' });
 });

@@ -58,7 +58,7 @@
                         <tbody>
                             <% pool.bouts.forEach(function(bout, idx) { %>
                                 <tr>
-                                    <td>
+                                    <td class="<%= bout.left_id === bout.right_id ? 'diagonal' : '' %>">
                                         <%= bout.left_name %>
                                     </td>
                                     <td>
@@ -70,7 +70,7 @@
                                             value="<%= bout.right_score == null ? '' : bout.right_score %>"
                                             style="width:2.5em;text-align:right;" id="right_score_<%= bout.id %>">
                                     </td>
-                                    <td>
+                                    <td class="<%= bout.left_id === bout.right_id ? 'diagonal' : '' %>">
                                         <%= bout.right_name %>
                                     </td>
                                     <td>
