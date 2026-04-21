@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Strips</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <header>
+        <h1>Strips Management</h1>
+        <a href="/">Back to Home</a>
+    </header>
+    <main>
+        <section>
+            <h2>Add New Strip</h2>
+            <form id="add-strip-form">
+                <label>
+                    Strip Number (unique):
+                    <input type="number" name="strip_number" required min="1">
+                </label>
+                <label>
+                    Friendly Name (optional):
+                    <input type="text" name="name" maxlength="64">
+                </label>
+                <button type="submit">Add Strip</button>
+                <span id="form-msg" style="color:red;"></span>
+            </form>
+        </section>
+        <!-- MQTT Broker Configuration moved to System Administration page -->
+        <section>
+            <h2>Existing Strips</h2>
+            <div id="strips-list"></div>
+        </section>
+    </main>
+    <script>
+        // MQTT Broker Hostname Resolution Logic
+        document.getElementById('resolve-broker').onclick = async function () {
+            const hostInput = document.getElementById('mqtt-broker-host');
+            const ipInput = document.getElementById('mqtt-broker-ip');
+            const msg = document.getElementById('broker-msg');
+            msg.textContent = '';
+            const host = hostInput.value.trim();
+            if (!host) {
+                msg.style.color = 'red';
+                msg.textContent = 'Please enter a hostname.';
+                return;
+            }
+            msg.style.color = 'black';
+            msg.textContent = 'Resolving...';
+            try {
+                // Try mDNS/Bonjour first
+                let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
+                let data = await res.json();
+                if (res.ok && data.ip) {
+                    ipInput.value = data.ip;
+                    msg.style.color = 'green';
+                    msg.textContent = `Resolved (mDNS): ${data.ip}`;
+                    return;
+                }
+                // If mDNS fails, try DNS
+                res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
+                data = await res.json();
+                if (res.ok && data.ip) {
+                    ipInput.value = data.ip;
+                    msg.style.color = 'green';
+                    msg.textContent = `Resolved (DNS): ${data.ip}`;
+                } else {
+                    msg.style.color = 'red';
+                    msg.textContent = data.error || 'Could not resolve hostname.';
+                }
+            } catch (e) {
+                msg.style.color = 'red';
+                msg.textContent = 'Error resolving hostname.';
+            }
+        };
+        async function fetchStrips() {
+            const res = await fetch('/api/strips');
+            const strips = await res.json();
+            const list = document.getElementById('strips-list');
+            if (!strips.length) {
+                list.innerHTML = '<p>No strips defined yet.</p>';
+                return;
+            }
+            list.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Status</th></tr></thead><tbody>` +
+                strips.map(s => `<tr><td>${s.strip_number}</td><td>${s.name || ''}</td><td>${s.status}</td></tr>`).join('') +
+                '</tbody></table>';
+        }
+        document.getElementById('add-strip-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                strip_number: form.strip_number.valueAsNumber,
+                name: form.name.value.trim() || null
+            };
+            const msg = document.getElementById('form-msg');
+            msg.textContent = '';
+            const res = await fetch('/api/strips', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                form.reset();
+                await fetchStrips();
+            } else {
+                const err = await res.json();
+                msg.textContent = err.error || 'Failed to add strip.';
+            }
+        };
+        fetchStrips();
+    </script>
+</body>
+
+</html>

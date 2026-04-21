@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>System Administration</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <header>
+        <h1>System Administration</h1>
+        <a href="/">Back to Home</a>
+    </header>
+    <main>
+        <section>
+            <h2>MQTT Broker Configuration</h2>
+            <form id="mqtt-broker-form" onsubmit="return false;">
+                <label>
+                    Broker Address (hostname or URL):
+                    <input type="text" id="mqtt-broker-host" placeholder="e.g. CyranoBroker.local or mqtt://host">
+                </label>
+                <label>
+                    Broker IP Address:
+                    <input type="text" id="mqtt-broker-ip" placeholder="e.g. 10.154.1.126">
+                </label>
+                <button type="button" id="resolve-broker">Resolve Hostname</button>
+                <button type="button" id="save-broker">Save Settings</button>
+                <span id="broker-msg" style="color:green;"></span>
+            </form>
+        </section>
+    </main>
+    <script>
+        // Load config on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const hostInput = document.getElementById('mqtt-broker-host');
+            const ipInput = document.getElementById('mqtt-broker-ip');
+            try {
+                const res = await fetch('/api/config');
+                if (res.ok) {
+                    const config = await res.json();
+                    if (config.mqttBroker) hostInput.value = config.mqttBroker;
+                    if (config.mqttBrokerIp) ipInput.value = config.mqttBrokerIp;
+                }
+            } catch { }
+        });
+
+        // MQTT Broker Hostname Resolution Logic
+        document.getElementById('resolve-broker').onclick = async function () {
+            const hostInput = document.getElementById('mqtt-broker-host');
+            const ipInput = document.getElementById('mqtt-broker-ip');
+            const msg = document.getElementById('broker-msg');
+            msg.textContent = '';
+            const host = hostInput.value.trim();
+            if (!host) {
+                msg.style.color = 'red';
+                msg.textContent = 'Please enter a hostname.';
+                return;
+            }
+            msg.style.color = 'black';
+            msg.textContent = 'Resolving...';
+            try {
+                // Try mDNS/Bonjour first
+                let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
+                let data = await res.json();
+                if (res.ok && data.ip) {
+                    ipInput.value = data.ip;
+                    msg.style.color = 'green';
+                    msg.textContent = `Resolved (mDNS): ${data.ip}`;
+                    return;
+                }
+                // If mDNS fails, try DNS
+                res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
+                data = await res.json();
+                if (res.ok && data.ip) {
+                    ipInput.value = data.ip;
+                    msg.style.color = 'green';
+                    msg.textContent = `Resolved (DNS): ${data.ip}`;
+                } else {
+                    msg.style.color = 'red';
+                    msg.textContent = data.error || 'Could not resolve hostname.';
+                }
+            } catch (e) {
+                msg.style.color = 'red';
+                msg.textContent = 'Error resolving hostname.';
+            }
+        };
+
+        // Save config
+        document.getElementById('save-broker').onclick = async function () {
+            const hostInput = document.getElementById('mqtt-broker-host');
+            const ipInput = document.getElementById('mqtt-broker-ip');
+            const msg = document.getElementById('broker-msg');
+            const config = {
+                mqttBroker: hostInput.value.trim(),
+                mqttBrokerIp: ipInput.value.trim()
+            };
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (res.ok) {
+                    msg.style.color = 'green';
+                    msg.textContent = 'Settings saved.';
+                } else {
+                    msg.style.color = 'red';
+                    msg.textContent = 'Failed to save settings.';
+                }
+            } catch {
+                msg.style.color = 'red';
+                msg.textContent = 'Error saving settings.';
+            }
+        };
+    </script>
+</body>
+
+</html>

@@ -46,12 +46,20 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });
 
-// Domain route modules
 
+// Strips API
+app.use('/api/strips', require('./routes/strips'));
+
+// Domain route modules
 app.use('/api/competitions', require('./routes/competitions'));
 app.use('/api/competitions/:compId/results', require('./routes/results'));
 app.use('/api/competitions/:compId/fencers', require('./routes/fencers'));
 app.use('/api/competitions/:compId/phases',  require('./routes/phases'));
+// Strips management page
+app.get('/strips', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'strips.html')));
+
+// Resources page
+app.get('/resources', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'resources.html')));
 
 // Serve overall results page per competition
 app.get('/competitions/:id/results', (_req, res) => {
@@ -101,6 +109,7 @@ app.get('/api/categories', (_req, res) => {
 });
 
 // Page routes — serve HTML for each section
+app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/competitions',                          (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competitions.html')));
 app.get('/competitions/:id',                      (_req, res) => res.sendFile(path.join(__dirname, 'public', 'competition-detail.html')));
 app.get('/competitions/:id/fencers',              (_req, res) => res.sendFile(path.join(__dirname, 'public', 'fencers.html')));
@@ -126,3 +135,7 @@ app.use((err, req, res, next) => {
   res.type('application/json');
   res.json({ error: err.message || 'Internal Server Error' });
 });
+
+app.use('/api/mdns', require('./routes/mdns'));
+app.use('/api/resolve', require('./routes/resolve'));
+app.use('/api/config', require('./routes/config'));
