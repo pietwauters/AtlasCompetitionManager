@@ -52,6 +52,8 @@
         <strong style="font-weight:700">Atlas</strong>
         <a href="/" style="color:#fff;text-decoration:none;">Home</a>
         <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
+        <a id="header-comp-link" href="#" style="color:#aad4f5;text-decoration:none;display:none">Current
+            Competition</a>
         <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
     </header>
     <div class="card">
@@ -71,7 +73,7 @@
         </table>
     </div>
     <script>
-        // Set competition name in header
+        // Set competition name in header and enable Current Competition link
         (function () {
             const compId = location.pathname.split('/')[2];
             fetch(`/api/competitions/${compId}`)
@@ -80,6 +82,9 @@
                     if (data && data.name) {
                         document.getElementById('header-name').textContent = data.name;
                         document.title = `${data.name} — Results`;
+                        const compLink = document.getElementById('header-comp-link');
+                        compLink.href = `/competitions/${compId}`;
+                        compLink.style.display = '';
                     }
                 });
         })();
@@ -92,6 +97,14 @@
             const table = document.getElementById('results-table');
             table.style.display = '';
             const tbody = table.querySelector('tbody');
+            // Sort: non-eliminated (Active/Finished) by rank, then eliminated by rank
+            data.sort((a, b) => {
+                const aElim = a.status === 'Eliminated';
+                const bElim = b.status === 'Eliminated';
+                if (aElim !== bElim) return aElim ? 1 : -1; // Eliminated go after
+                // Both same elimination status: sort by rank ascending
+                return (a.rank ?? 9999) - (b.rank ?? 9999);
+            });
             data.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `

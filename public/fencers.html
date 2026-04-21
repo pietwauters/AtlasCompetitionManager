@@ -264,10 +264,11 @@
 </head>
 
 <body>
-    <header>
-        <strong>Atlas</strong>
-        <a href="/">Home</a>
-        <a href="/competitions">Competitions</a>
+    <header style="background:#222;color:#fff;padding:.7rem 2rem;display:flex;align-items:center;gap:1.5rem">
+        <strong style="font-weight:700">Atlas</strong>
+        <a href="/" style="color:#fff;text-decoration:none;">Home</a>
+        <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
+        <a id="header-comp-link" href="#" style="color:#aad4f5;text-decoration:none;">Current Competition</a>
         <span id="header-comp-name" style="margin-left:auto; opacity:.7; font-size:.9rem"></span>
     </header>
     <main>
@@ -384,13 +385,14 @@
         // Wire export link
         document.getElementById('export-link').href = `/api/competitions/${compId}/fencers/export.csv`;
 
-        // Load competition name for header
+        // Load competition name for header and set current comp link
         fetch(`/api/competitions/${compId}`)
             .then(r => r.json())
             .then(c => {
                 const label = `${c.name} — ${c.weapon} ${c.gender}`;
                 document.getElementById('comp-meta').textContent = label;
                 document.getElementById('header-comp-name').textContent = label;
+                document.getElementById('header-comp-link').href = `/competitions/${compId}`;
             });
 
         // -------------------------------------------------------------------

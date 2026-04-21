@@ -5,158 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Competition — Atlas</title>
-    <script src="/js/htmx.min.js"></script>
-    <script src="/js/alpinejs.min.js" defer></script>
-    <link rel="stylesheet" href="/css/style.css">
-</head>
-
-<body>
-    <header>
-        <strong>Atlas</strong>
-        <a href="/">Home</a>
-        <a href="/competitions">Competitions</a>
-        <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
-    </header>
-    <main>
-        <div class="card" id="comp-card">
-            <div style="color:#888">Loading…</div>
-        </div>
-
-        <div class="card" x-data="phaseMgr()" x-init="init()" id="phases-card" style="display:none">
-            <template x-if="error">
-                <div class="notification" x-text="error"
-                    style="margin-bottom:1rem;padding:.7rem 1.2rem;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;color:#856404;font-size:1rem">
-                </div>
-            </template>
-            <h3 style="margin-top:0">Phases</h3>
-
-            <!-- Phase list -->
-            <template x-if="phases.length === 0">
-                <p class="phases-placeholder">No phases yet. Add one below.</p>
-            </template>
-            <template x-for="ph in phases" :key="ph.id">
-                <div class="phase-row">
-                    <div class="label">
-                        <strong x-text="'Phase ' + ph.phase_order + ' — ' + ph.rule_doc"></strong>
-                        <small x-text="'(' + ph.type + ', ' + (ph.pool_count ?? 0) + ' pools)'"></small>
-                        <span class="badge" :class="'badge-' + ph.status" x-text="ph.status"
-                            style="margin-left:.4rem"></span>
-                    </div>
-                    <a :href="'/competitions/' + compId + '/phases/' + ph.id + '/view'"
-                        style="padding:.35rem .8rem;background:#eaf0fb;color:#1a6bab;border-radius:5px;font-size:.85rem;text-decoration:none"
-                        x-show="ph.pool_count > 0">View pools</a>
-                    <button class="success" @click="generate(ph.id)" x-show="ph.status === 'pending'"
-                        :disabled="busy">Generate pools</button>
-                    <button class="primary" @click="() => closePhase(ph.id)" x-show="ph.status !== 'finished'"
-                        :disabled="busy">Close Phase</button>
-                    <button class="danger" @click="reopenPhase(ph.id)" x-show="ph.status === 'finished'"
-                        :disabled="busy">Reopen Phase</button>
-                    <button class="primary" @click="simulatePhase(ph.id)" x-show="ph.status === 'active'"
-                        :disabled="busy">Simulate Results</button>
-                    <button class="danger" @click="deletePhase(ph.id)" x-show="ph.status !== 'finished'"
-                        :disabled="busy">Delete</button>
-                </div>
-            </template>
-
-            <!-- Add phase form -->
-            <div class="add-phase-form">
-                <select x-model="selectedRule">
-                    <option value="">-- select rule --</option>
-                    <template x-for="r in rules" :key="r.filename">
-                        <option :value="r.filename" x-text="r.description + ' (' + r.filename + ')'"></option>
-                    </template>
-                </select>
-                <button class="primary" @click="addPhase()" :disabled="!selectedRule || busy">Add Phase</button>
-            </div>
-
-
-            <!-- Pool configuration choice (shown when generate returns multiple options) -->
-            <div x-show="pendingChoice && pendingChoice.options"
-                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6">
-                <h4 style="margin-top:0;margin-bottom:.8rem">Choose pool configuration</h4>
-                <template x-for="(opt, idx) in (pendingChoice?.options ?? [])" :key="idx">
-                    <label style="display:block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
-                        <input type="radio" :value="idx" x-model.number="chosenOptionIdx" style="margin-right:.5rem">
-                        <span x-text="describeOption(opt)"></span>
-                    </label>
-                </template>
-                <div style="margin-top:.9rem;display:flex;gap:.6rem">
-                    <button class="primary" @click="confirmChoice()" :disabled="busy">Confirm</button>
-                    <button @click="cancelChoice()" :disabled="busy">Cancel</button>
-                </div>
-            </div>
-
-            <!-- Block-seeding special options dialog -->
-            <div x-show="blockSeedingDialog"
-                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#fffbe6;border-radius:6px;border:1px solid #ffe58f">
-                <h4 style="margin-top:0;margin-bottom:.8rem">Number of fencers not divisible by 6</h4>
-                <p x-text="blockSeedingDialog?.message"></p>
-                <div style="margin-top:.7rem">
-                    <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
-                        <input type="radio" value="drop" x-model="blockSeedingChoice" style="margin-right:.5rem">
-                        Drop the lowest ranked <span x-text="blockSeedingDialog?.options?.drop?.length"></span>
-                        fencer(s)
-                    </label>
-                    <template x-if="blockSeedingDialog?.options?.redistribute">
-                        <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
-                            <input type="radio" value="redistribute" x-model="blockSeedingChoice"
-                                style="margin-right:.5rem">
-                            Redistribute remainder: <span
-                                x-text="blockSeedingDialog?.options?.redistribute.join(', ')"></span> per pool
-                        </label>
-                    </template>
-                </div>
-                <div style="margin-top:.9rem;display:flex;gap:.6rem">
-                    <button class="primary" @click="confirmBlockSeeding()"
-                        :disabled="!blockSeedingChoice || busy">Confirm</button>
-                    <button @click="cancelBlockSeeding()" :disabled="busy">Cancel</button>
-                </div>
-            </div>
-
-            <!-- Advancement choice dialog -->
-            <div x-show="advancementChoiceDialog"
-                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#eaf0fb;border-radius:6px;border:1px solid #b5c9e8">
-                <h4 style="margin-top:0;margin-bottom:.8rem"
-                    x-text="advancementChoiceDialog?.label || 'Select advancement option'"></h4>
-                <template x-for="(choice, idx) in (advancementChoiceDialog?.choices ?? [])" :key="idx">
-                    <div style="margin-bottom:0.5rem">
-                        <label style="display:inline-block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
-                            <input type="radio" :value="idx" x-model.number="chosenAdvancementIdx"
-                                style="margin-right:.5rem">
-                            <span x-text="choice.label"></span>
-                        </label>
-                        <template x-if="choice.method === 'percentage'">
-                            <span>
-                                <input type="number" min="1" max="100" step="1" style="margin-left:1.2rem;width:4em"
-                                    placeholder="%" x-model.number="choice._value" @click.stop
-                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
-                                <span style="font-size:.85em;color:#888;margin-left:.3em">%</span>
-                                <input type="text" style="margin-left:1.2rem;width:5em" placeholder="Round to"
-                                    x-model="choice._roundTo" @click.stop>
-                                <span style="font-size:.85em;color:#888;margin-left:.3em">(optional: round up to
-                                    multiple)</span>
-                            </span>
-                        </template>
-                        <template x-if="choice.method === 'count' && (choice.value === '?' || choice._value === '?')">
-                            <span>
-                                <input type="number" min="1" step="1" style="margin-left:1.2rem;width:4em"
-                                    placeholder="Count" x-model.number="choice._value" @click.stop
-                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
-                                <span style="font-size:.85em;color:#888;margin-left:.3em">fencers</span>
-                            </span>
-                        </template>
-                    </div>
-                </template>
-                <div style="margin-top:.9rem;display:flex;gap:.6rem">
-                    <button class="primary" @click="confirmAdvancementChoice()" :disabled="busy">Confirm</button>
-                    <button @click="cancelAdvancementChoice()" :disabled="busy">Cancel</button>
-                </div>
-            </div>
-
-            <p class="error-msg" x-text="error" x-show="error"></p>
-        </div>
-    </main>
-
     <script>
         const compId = location.pathname.split('/')[2];
 
@@ -209,29 +57,30 @@
 
         function esc(s) {
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            // Delete competition handler (global)
-            async function deleteCompetition(isFinished) {
-                let msg = 'Delete this competition? This cannot be undone.';
-                if (isFinished) msg = 'Delete this finished competition? All results and history will be lost. This cannot be undone.';
-                if (!confirm(msg)) return;
-                const r = await fetch(`/api/competitions/${compId}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                if (r.ok) window.location.href = '/competitions';
-                else alert('Failed to delete competition. Only draft or finished competitions can be deleted.');
-            }
+        }
 
-            // Finish competition handler (global)
-            async function finishCompetition() {
-                if (!confirm('Finish this competition? All remaining active fencers will be marked as finished and final rankings assigned.')) return;
-                const r = await fetch(`/api/competitions/${compId}/finish`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                if (r.ok) location.reload();
-                else alert('Failed to finish competition.');
-            }
+        // Delete competition handler (global)
+        async function deleteCompetition(isFinished) {
+            let msg = 'Delete this competition? This cannot be undone.';
+            if (isFinished) msg = 'Delete this finished competition? All results and history will be lost. This cannot be undone.';
+            if (!confirm(msg)) return;
+            const r = await fetch(`/api/competitions/${compId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (r.ok) window.location.href = '/competitions';
+            else alert('Failed to delete competition. Only draft or finished competitions can be deleted.');
+        }
+
+        // Finish competition handler (global)
+        async function finishCompetition() {
+            if (!confirm('Finish this competition? All remaining active fencers will be marked as finished and final rankings assigned.')) return;
+            const r = await fetch(`/api/competitions/${compId}/finish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (r.ok) location.reload();
+            else alert('Failed to finish competition.');
         }
 
         // -------------------------------------------------------------------
@@ -390,7 +239,7 @@
                     const { phaseId, choices } = this.advancementChoiceDialog;
                     // Clone the selected choice to avoid mutating the rule
                     const selected = { ...choices[this.chosenAdvancementIdx] };
-                    // Always copy user input for count and percentage
+                    // Always copy user input for count, percentage, and multiple
                     if (selected.method === 'count') {
                         if (selected._value && selected._value > 0) {
                             selected.value = selected._value;
@@ -399,10 +248,15 @@
                         if (selected._value && selected._value > 0 && selected._value <= 100) {
                             selected.value = selected._value;
                         }
-                        if (selected._roundTo && selected._roundTo > 1) {
+                        // Only set roundTo if present in this choice
+                        if ('_roundTo' in selected && selected._roundTo && selected._roundTo > 1) {
                             selected.roundTo = selected._roundTo;
                         } else {
                             delete selected.roundTo;
+                        }
+                    } else if (selected.method === 'multiple') {
+                        if (selected._multipleOf && selected._multipleOf > 1) {
+                            selected.multipleOf = selected._multipleOf;
                         }
                     }
                     this.error = '';
@@ -434,6 +288,27 @@
 
                 cancelAdvancementChoice() {
                     this.advancementChoiceDialog = null;
+                },
+
+                isAdvancementChoiceValid() {
+                    if (!this.advancementChoiceDialog) return false;
+                    const { choices } = this.advancementChoiceDialog;
+                    const selected = choices[this.chosenAdvancementIdx];
+                    if (!selected) return false;
+                    if (selected.method === 'count') {
+                        return selected._value && selected._value > 0;
+                    } else if (selected.method === 'percentage') {
+                        if (!(selected._value && selected._value > 0 && selected._value <= 100)) return false;
+                        if ('_roundTo' in selected && selected._roundTo !== undefined && selected._roundTo !== null && selected._roundTo !== '') {
+                            if (Number(selected._roundTo) && Number(selected._roundTo) > 1) return true;
+                            // If roundTo is present but not valid, block
+                            return false;
+                        }
+                        return true;
+                    } else if (selected.method === 'multiple') {
+                        return selected._multipleOf && selected._multipleOf > 1;
+                    }
+                    return false;
                 },
                 async confirmBlockSeeding() {
                     if (!this.blockSeedingDialog || !this.blockSeedingChoice) return;
@@ -509,7 +384,182 @@
             };
         }
     </script>
-    </script>
+    <script src="/js/htmx.min.js"></script>
+    <script src="/js/alpinejs.min.js" defer></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <header style="background:#222;color:#fff;padding:.7rem 2rem;display:flex;align-items:center;gap:1.5rem">
+        <strong style="font-weight:700">Atlas</strong>
+        <a href="/" style="color:#fff;text-decoration:none;">Home</a>
+        <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
+        <a :href="'/competitions/' + compId" style="color:#aad4f5;text-decoration:none;" x-show="compId">Current
+            Competition</a>
+        <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+    </header>
+    <main>
+        <div class="card" id="comp-card">
+            <div style="color:#888">Loading…</div>
+        </div>
+
+        <div class="card" x-data="phaseMgr()" x-init="init()" id="phases-card" style="display:none">
+            <template x-if="error">
+                <div class="notification" x-text="error"
+                    style="margin-bottom:1rem;padding:.7rem 1.2rem;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;color:#856404;font-size:1rem">
+                </div>
+            </template>
+            <h3 style="margin-top:0">Phases</h3>
+
+            <!-- Phase list -->
+            <template x-if="phases.length === 0">
+                <p class="phases-placeholder">No phases yet. Add one below.</p>
+            </template>
+            <template x-for="ph in phases" :key="ph.id">
+                <div class="phase-row">
+                    <div class="label">
+                        <strong x-text="'Phase ' + ph.phase_order + ' — ' + ph.rule_doc"></strong>
+                        <small x-text="'(' + ph.type + ', ' + (ph.pool_count ?? 0) + ' pools)'"></small>
+                        <span class="badge" :class="'badge-' + ph.status" x-text="ph.status"
+                            style="margin-left:.4rem"></span>
+                    </div>
+                    <a :href="'/competitions/' + compId + '/phases/' + ph.id + '/view'"
+                        style="padding:.35rem .8rem;background:#eaf0fb;color:#1a6bab;border-radius:5px;font-size:.85rem;text-decoration:none"
+                        x-show="ph.pool_count > 0">View pools</a>
+                    <button class="success" @click="generate(ph.id)" x-show="ph.status === 'pending'"
+                        :disabled="busy">Generate pools</button>
+                    <button class="primary" @click="() => closePhase(ph.id)" x-show="ph.status !== 'finished'"
+                        :disabled="busy">Close Phase</button>
+                    <button class="danger" @click="reopenPhase(ph.id)" x-show="ph.status === 'finished'"
+                        :disabled="busy">Reopen Phase</button>
+                    <button class="primary" @click="simulatePhase(ph.id)" x-show="ph.status === 'active'"
+                        :disabled="busy">Simulate Results</button>
+                    <button class="danger" @click="deletePhase(ph.id)" x-show="ph.status !== 'finished'"
+                        :disabled="busy">Delete</button>
+                </div>
+            </template>
+
+            <!-- Add phase form -->
+            <div class="add-phase-form">
+                <select x-model="selectedRule">
+                    <option value="">-- select rule --</option>
+                    <template x-for="r in rules" :key="r.filename">
+                        <option :value="r.filename" x-text="r.description + ' (' + r.filename + ')'"></option>
+                    </template>
+                </select>
+                <button class="primary" @click="addPhase()" :disabled="!selectedRule || busy">Add Phase</button>
+            </div>
+
+
+            <!-- Pool configuration choice (shown when generate returns multiple options) -->
+            <div x-show="pendingChoice && pendingChoice.options"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6">
+                <h4 style="margin-top:0;margin-bottom:.8rem">Choose pool configuration</h4>
+                <template x-for="(opt, idx) in (pendingChoice?.options ?? [])" :key="idx">
+                    <label style="display:block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
+                        <input type="radio" :value="idx" x-model.number="chosenOptionIdx" style="margin-right:.5rem">
+                        <span x-text="describeOption(opt)"></span>
+                    </label>
+                </template>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmChoice()" :disabled="busy">Confirm</button>
+                    <button @click="cancelChoice()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Block-seeding special options dialog -->
+            <div x-show="blockSeedingDialog"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#fffbe6;border-radius:6px;border:1px solid #ffe58f">
+                <h4 style="margin-top:0;margin-bottom:.8rem">Number of fencers not divisible by 6</h4>
+                <p x-text="blockSeedingDialog?.message"></p>
+                <div style="margin-top:.7rem">
+                    <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
+                        <input type="radio" value="drop" x-model="blockSeedingChoice" style="margin-right:.5rem">
+                        Drop the lowest ranked <span x-text="blockSeedingDialog?.options?.drop?.length"></span>
+                        fencer(s)
+                    </label>
+                    <template x-if="blockSeedingDialog?.options?.redistribute">
+                        <label style="display:block;padding:.3rem 0;cursor:pointer;font-size:.92rem">
+                            <input type="radio" value="redistribute" x-model="blockSeedingChoice"
+                                style="margin-right:.5rem">
+                            Redistribute remainder: <span
+                                x-text="blockSeedingDialog?.options?.redistribute.join(', ')"></span> per pool
+                        </label>
+                    </template>
+                </div>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmBlockSeeding()"
+                        :disabled="!blockSeedingChoice || busy">Confirm</button>
+                    <button @click="cancelBlockSeeding()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Advancement choice dialog -->
+            <div x-show="advancementChoiceDialog"
+                style="margin-top:1.2rem;padding:1rem 1.2rem;background:#eaf0fb;border-radius:6px;border:1px solid #b5c9e8">
+                <h4 style="margin-top:0;margin-bottom:.8rem"
+                    x-text="advancementChoiceDialog?.label || 'Select advancement option'"></h4>
+                <template x-for="(choice, idx) in (advancementChoiceDialog?.choices ?? [])" :key="idx">
+                    <div style="margin-bottom:0.5rem">
+                        <label style="display:inline-block;padding:.35rem 0;cursor:pointer;font-size:.92rem">
+                            <input type="radio" :value="idx" x-model.number="chosenAdvancementIdx"
+                                style="margin-right:.5rem">
+                            <span x-text="choice.label"></span>
+                        </label>
+                        <!-- Plain percentage: only show % input -->
+                        <template x-if="choice.method === 'percentage' && !('roundTo' in choice)">
+                            <span>
+                                <input type="number" min="1" max="100" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="%" x-model.number="choice._value" @click.stop
+                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">%</span>
+                            </span>
+                        </template>
+                        <!-- Percentage + roundTo: show % and roundTo input -->
+                        <template x-if="choice.method === 'percentage' && ('roundTo' in choice)">
+                            <span>
+                                <input type="number" min="1" max="100" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="%" x-model.number="choice._value" @click.stop
+                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">%</span>
+                                <input type="number" min="2" step="1" style="margin-left:1.2rem;width:5em"
+                                    placeholder="Round to" x-model.number="choice._roundTo" @click.stop>
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">(optional: round up to
+                                    multiple)</span>
+                            </span>
+                        </template>
+                        <!-- Count: show count input -->
+                        <template x-if="choice.method === 'count' && (choice.value === '?' || choice._value === '?')">
+                            <span>
+                                <input type="number" min="1" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="Count" x-model.number="choice._value" @click.stop
+                                    @input="choice._value = $event.target.valueAsNumber > 0 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">fencers</span>
+                            </span>
+                        </template>
+                        <!-- Multiple: show multipleOf input if needed -->
+                        <template
+                            x-if="choice.method === 'multiple' && (choice.multipleOf === '?' || choice._multipleOf === '?')">
+                            <span>
+                                <input type="number" min="2" step="1" style="margin-left:1.2rem;width:4em"
+                                    placeholder="Multiple of" x-model.number="choice._multipleOf" @click.stop
+                                    @input="choice._multipleOf = $event.target.valueAsNumber > 1 ? $event.target.valueAsNumber : null">
+                                <span style="font-size:.85em;color:#888;margin-left:.3em">fencers</span>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+                <div style="margin-top:.9rem;display:flex;gap:.6rem">
+                    <button class="primary" @click="confirmAdvancementChoice()"
+                        :disabled="busy || !isAdvancementChoiceValid()">Confirm</button>
+                    <button @click="cancelAdvancementChoice()" :disabled="busy">Cancel</button>
+                </div>
+            </div>
+
+            <p class="error-msg" x-text="error" x-show="error"></p>
+        </div>
+    </main>
+
     <script>
         // Delete competition handler (global)
         async function deleteCompetition(isFinished) {
