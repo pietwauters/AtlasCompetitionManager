@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Details — Atlas</title>
+    <script src="/js/htmx.min.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+        }
+
+        .empty {
+            color: #888;
+            font-style: italic;
+            padding: 1rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.92rem;
+        }
+
+        th,
+        td {
+            padding: 0.7rem 0.8rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f7f8fa;
+            color: #555;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #fafbfc;
+        }
+
+        a.row-link {
+            color: #1a6bab;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        a.row-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <strong>Atlas Competition Manager</strong>
+        <a href="/">Home</a>
+        <a href="/tournaments">Tournaments</a>
+        <a href="/competitions">Competitions</a>
+    </header>
+    <main>
+        <div class="card" id="tournament-detail">
+            <span class="loading">Loading…</span>
+        </div>
+    </main>
+    <script>
+        // Get tournament id from URL
+        function getTournamentId() {
+            // Support both /tournaments-detail.html?tournament=ID and /tournaments/ID
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('tournament')) return urlParams.get('tournament');
+            const m = window.location.pathname.match(/tournaments\/(\d+)/);
+            return m ? m[1] : null;
+        }
+        async function loadTournamentDetail() {
+            const id = getTournamentId();
+            if (!id) return;
+            const r = await fetch(`/api/tournaments/${id}`);
+            if (!r.ok) { document.getElementById('tournament-detail').innerHTML = '<p class="empty">Tournament not found.</p>'; return; }
+            const t = await r.json();
+            let html = `<h2>${esc(t.name)}</h2>`;
+            html += `<div style='margin-bottom:1rem;color:#555;'>${esc(t.city)}, ${esc(t.country)} | ${t.date_start || ''}${t.date_end ? ' – ' + t.date_end : ''} | Level: ${esc(t.level || '')}</div>`;
+            if (!t.competitions || !t.competitions.length) {
+                html += `<p class='empty'>No competitions linked to this tournament.</p>`;
+            } else {
+                html += `<table><thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th></tr></thead><tbody>` +
+                    t.competitions.map(c => `<tr>
+                    <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
+                    <td>${esc(c.weapon)}</td>
+                    <td>${esc(c.gender)}</td>
+                    <td>${esc(c.status)}</td>
+                </tr>`).join('') + '</tbody></table>';
+            }
+            document.getElementById('tournament-detail').innerHTML = html;
+        }
+        function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        window.addEventListener('DOMContentLoaded', loadTournamentDetail);
+    </script>
+</body>
+
+</html>

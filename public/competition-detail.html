@@ -6,58 +6,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Competition — Atlas</title>
     <script>
+        // Make compId global for Alpine.js and all scripts
         const compId = location.pathname.split('/')[2];
+        document.addEventListener('DOMContentLoaded', function () {
+            fetch(`/api/competitions/${compId}`)
+                .then(r => r.json())
+                .then(render)
+                .catch(() => { document.getElementById('comp-card').innerHTML = '<p>Error loading competition.</p>'; });
 
-        fetch(`/api/competitions/${compId}`)
-            .then(r => r.json())
-            .then(render)
-            .catch(() => { document.getElementById('comp-card').innerHTML = '<p>Error loading competition.</p>'; });
+            function render(c) {
+                const weaponLabel = { foil: 'Foil', epee: 'Épée', sabre: 'Sabre' };
+                const genderLabel = { M: 'Men', F: 'Women', X: 'Mixed' };
+                const badgeClass = { draft: 'badge-draft', active: 'badge-active', finished: 'badge-finished' };
+                document.getElementById('header-name').textContent = c.name;
+                document.title = `${c.name} — Atlas`;
+                document.getElementById('comp-card').innerHTML = `
+                    <h2>${esc(c.name)} <span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></h2>
+                    <div class="meta">
+                        <span><strong>Weapon:</strong> ${weaponLabel[c.weapon] || c.weapon}</span>
+                        <span><strong>Gender:</strong> ${genderLabel[c.gender] || c.gender}</span>
+                        <span><strong>Fencers:</strong> ${c.competitor_count}</span>
+                    </div>
+                    <div class="actions">
+                        <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
+                        <a class="primary" href="/competitions/${c.id}/fencers/roster" style="background:#1e8449">Roster / Presence</a>
+                        <a class="primary" href="/competitions/${c.id}/results" style="background:#6c3483">Results</a>
+                        ${c.status === 'draft'
+                        ? `<button class="success" onclick="activate()">Activate Competition</button>
+                               <button class="danger" onclick="deleteCompetition()" style="margin-left:0.7em">Delete Competition</button>`
+                        : ''}
+                        ${c.status === 'finished'
+                        ? `<button class="danger" onclick="deleteCompetition(true)" style="margin-left:0.7em">Delete Competition</button>`
+                        : ''}
+                        ${c.status !== 'finished' && c.status !== 'draft'
+                        ? `<button class="danger" onclick="finishCompetition()">Finish Competition</button>`
+                        : ''}
+                    </div>
+                `;
+                document.getElementById('phases-card').style.display = '';
+            }
 
-        function render(c) {
-            const weaponLabel = { foil: 'Foil', epee: 'Épée', sabre: 'Sabre' };
-            const genderLabel = { M: 'Men', F: 'Women', X: 'Mixed' };
-            const badgeClass = { draft: 'badge-draft', active: 'badge-active', finished: 'badge-finished' };
-            document.getElementById('header-name').textContent = c.name;
-            document.title = `${c.name} — Atlas`;
-            document.getElementById('comp-card').innerHTML = `
-                <h2>${esc(c.name)} <span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></h2>
-                <div class="meta">
-                    <span><strong>Weapon:</strong> ${weaponLabel[c.weapon] || c.weapon}</span>
-                    <span><strong>Gender:</strong> ${genderLabel[c.gender] || c.gender}</span>
-                    <span><strong>Fencers:</strong> ${c.competitor_count}</span>
-                </div>
-                <div class="actions">
-                    <a class="primary" href="/competitions/${c.id}/fencers">Manage Fencers</a>
-                    <a class="primary" href="/competitions/${c.id}/fencers/roster" style="background:#1e8449">Roster / Presence</a>
-                    <a class="primary" href="/competitions/${c.id}/results" style="background:#6c3483">Results</a>
-                    ${c.status === 'draft'
-                    ? `<button class="success" onclick="activate()">Activate Competition</button>
-                           <button class="danger" onclick="deleteCompetition()" style="margin-left:0.7em">Delete Competition</button>`
-                    : ''}
-                    ${c.status === 'finished'
-                    ? `<button class="danger" onclick="deleteCompetition(true)" style="margin-left:0.7em">Delete Competition</button>`
-                    : ''}
-                    ${c.status !== 'finished' && c.status !== 'draft'
-                    ? `<button class="danger" onclick="finishCompetition()">Finish Competition</button>`
-                    : ''}
-                </div>
-            `;
-            document.getElementById('phases-card').style.display = '';
-        }
+            async function activate() {
+                if (!confirm('Activate this competition? You will not be able to delete it.')) return;
+                const r = await fetch(`/api/competitions/${compId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'active' })
+                });
+                if (r.ok) location.reload();
+            }
 
-        async function activate() {
-            if (!confirm('Activate this competition? You will not be able to delete it.')) return;
-            const r = await fetch(`/api/competitions/${compId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'active' })
-            });
-            if (r.ok) location.reload();
-        }
-
-        function esc(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
+            function esc(s) {
+                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+        });
 
         // Delete competition handler (global)
         async function deleteCompetition(isFinished) {

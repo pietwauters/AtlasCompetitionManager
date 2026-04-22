@@ -121,6 +121,12 @@ app.use('/competitions/:compId/phases', phasesRouter);
 // app.use('/api/resources',    require('./routes/resources'));
 // app.use('/api/auth',         require('./routes/auth'));
 
+// Tournament management API
+app.use('/api/tournaments', require('./routes/tournaments'));
+
+// Serve the tournaments management page
+app.get('/tournaments', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'tournaments.html')));
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------

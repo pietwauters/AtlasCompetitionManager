@@ -37,7 +37,7 @@
         }
 
         main {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 2rem auto;
             padding: 0 1rem;
         }
@@ -53,6 +53,8 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
             box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+            max-width: 1150px;
+            overflow-x: auto;
         }
 
         /* Form */
@@ -124,6 +126,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.92rem;
+            min-width: 1000px;
         }
 
         th {
@@ -206,7 +209,7 @@
         <!-- Create competition -->
         <div class="card">
             <h2>Competitions</h2>
-            <form id="create-form" x-data="createForm()" @submit.prevent="submit">
+            <form id="create-form" x-data="createForm()" x-init="init()" @submit.prevent="submit">
                 <div class="form-row">
                     <label>
                         Name
@@ -228,6 +231,19 @@
                             <option value="X">Mixed (X)</option>
                         </select>
                     </label>
+                    <label>
+                        Tournament
+                        <select name="tournament_id" x-model="tournament_id" :disabled="tournaments.length === 0">
+                            <option value="">-- None --</option>
+                            <template x-for="t in tournaments" :key="t.id">
+                                <option :value="t.id" x-text="t.name + (t.city ? ' (' + t.city + ')' : '')"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label>
+                        Date
+                        <input type="date" name="date" x-model="date">
+                    </label>
                     <button type="submit" class="primary" :disabled="loading">
                         <span x-text="loading ? 'Creating…' : '+ Add Competition'"></span>
                     </button>
@@ -248,19 +264,29 @@
     <script>
         function createForm() {
             return {
-                name: '', weapon: 'foil', gender: 'M',
+                name: '', weapon: 'foil', gender: 'M', tournament_id: '', date: '',
+                tournaments: [],
                 loading: false, error: '',
                 async submit() {
                     this.loading = true; this.error = '';
                     try {
+                        const payload = {
+                            name: this.name,
+                            weapon: this.weapon,
+                            gender: this.gender,
+                            date: this.date || null
+                        };
+                        if (this.tournament_id) payload.tournament_id = this.tournament_id;
                         const r = await fetch('/api/competitions', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: this.name, weapon: this.weapon, gender: this.gender })
+                            body: JSON.stringify(payload)
                         });
                         const data = await r.json();
                         if (!r.ok) { this.error = data.error || 'Error creating competition'; return; }
                         this.name = '';
+                        this.tournament_id = '';
+                        this.date = '';
                         // Tell HTMX to refresh the list
                         document.body.dispatchEvent(new Event('refresh-list'));
                     } catch (e) {
@@ -268,18 +294,43 @@
                     } finally {
                         this.loading = false;
                     }
+                },
+                async fetchTournaments() {
+                    try {
+                        const r = await fetch('/api/tournaments');
+                        if (r.ok) {
+                            this.tournaments = await r.json();
+                        }
+                    } catch (_) { this.tournaments = []; }
+                },
+                async init() {
+                    await this.fetchTournaments();
                 }
             };
         }
 
-        // HTMX response transformer: the GET /api/competitions returns JSON;
-        // we intercept it here and render a table before HTMX swaps it in.
-        document.body.addEventListener('htmx:beforeSwap', (evt) => {
+        // Always fetch tournaments before rendering table, to ensure dropdowns are populated in all browsers
+        document.body.addEventListener('htmx:beforeSwap', function (evt) {
             if (evt.detail.target.id !== 'comp-list') return;
+            // Synchronously fetch tournaments (from cache if available, else fallback)
+            // This avoids async issues with HTMX swap
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/tournaments', false); // synchronous
+            try {
+                xhr.send(null);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    window._tournamentsCache = JSON.parse(xhr.responseText);
+                } else {
+                    window._tournamentsCache = [];
+                }
+            } catch { window._tournamentsCache = []; }
             try {
                 const data = JSON.parse(evt.detail.serverResponse);
                 evt.detail.serverResponse = renderTable(data);
-            } catch (_) { /* leave raw if not JSON */ }
+            } catch (_) {
+                // If not JSON, leave as-is (raw HTML or error)
+                evt.detail.serverResponse = String(evt.detail.serverResponse);
+            }
         });
 
         function renderTable(rows) {
@@ -287,26 +338,59 @@
             const weaponLabel = { foil: 'Foil', epee: 'Épée', sabre: 'Sabre' };
             const genderLabel = { M: 'Men', F: 'Women', X: 'Mixed' };
             const badgeClass = { draft: 'badge-draft', active: 'badge-active', finished: 'badge-finished' };
-            const rows_html = rows.map(c => `
-        <tr>
-          <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
-          <td>${weaponLabel[c.weapon] || c.weapon}</td>
-          <td>${genderLabel[c.gender] || c.gender}</td>
-          <td><span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></td>
-          <td>${c.competitor_count}</td>
-          <td>
-            <a href="/competitions/${c.id}/fencers">Fencers</a>
-            ${c.status === 'draft'
-                    ? `<button class="danger" onclick="deleteComp(${c.id})" style="margin-left:0.5rem">Delete</button>`
-                    : ''}
-          </td>
-        </tr>`).join('');
-            return `<table>
-        <thead><tr>
-          <th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th><th>Fencers</th><th>Actions</th>
-        </tr></thead>
-        <tbody>${rows_html}</tbody>
-      </table>`;
+            // Fetch tournaments for dropdown (reuse global cache if available)
+            const tournaments = window._tournamentsCache || [];
+            const rows_html = rows.map(c => {
+                let tournamentCell = '';
+                let dateCell = '';
+                let deleteCell = '';
+                if (c.status === 'draft') {
+                    // Editable dropdown for draft competitions
+                    tournamentCell = `<select onchange="assignTournament(${c.id}, this.value, null)" style='min-width:120px'>\n` +
+                        `<option value="">-- None --</option>` +
+                        tournaments.map(t => `<option value="${t.id}" ${c.tournament_id == t.id ? 'selected' : ''}>${esc(t.name)}${t.city ? ' (' + esc(t.city) + ')' : ''}</option>`).join('') +
+                        `</select>`;
+                    dateCell = `<input type="date" value="${c.date ? esc(c.date) : ''}" onchange="assignTournament(${c.id}, null, this.value)">`;
+                    deleteCell = `<button class="danger" onclick="deleteComp(${c.id})">Delete</button>`;
+                } else {
+                    tournamentCell = esc(c.tournament_name || '');
+                    dateCell = esc(c.date || '');
+                    deleteCell = '';
+                }
+                return `
+                <tr>
+                    <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
+                    <td>${weaponLabel[c.weapon] || c.weapon}</td>
+                    <td>${genderLabel[c.gender] || c.gender}</td>
+                    <td><span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></td>
+                    <td><a href="/competitions/${c.id}/fencers">Fencers</a></td>
+                    <td>${deleteCell}</td>
+                    <td>${tournamentCell}</td>
+                    <td>${dateCell}</td>
+                </tr>`;
+            }).join('');
+            return `<div style="overflow-x:auto;"><table>
+                <thead><tr>
+                    <th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th><th>Fencers</th><th>Delete</th><th>Tournament</th><th>Date</th>
+                </tr></thead>
+                <tbody>${rows_html}</tbody>
+            </table></div>`;
+        }
+        // Assign tournament or date to competition
+        async function assignTournament(compId, tournamentId, date) {
+            const payload = {};
+            if (tournamentId !== null) payload.tournament_id = tournamentId || null;
+            if (date !== null) payload.date = date || null;
+            const r = await fetch(`/api/competitions/${compId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!r.ok) {
+                const d = await r.json();
+                alert(d.error || 'Failed to update competition');
+            }
+            document.body.dispatchEvent(new Event('refresh-list'));
         }
 
         async function deleteComp(id) {
@@ -318,8 +402,19 @@
         }
 
         function esc(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
+        // Fetch tournaments for dropdown and cache globally for table rendering
+        (async function cacheTournaments() {
+            try {
+                const r = await fetch('/api/tournaments');
+                if (r.ok) {
+                    window._tournamentsCache = await r.json();
+                } else {
+                    window._tournamentsCache = [];
+                }
+            } catch { window._tournamentsCache = []; }
+        })();
     </script>
 </body>
 

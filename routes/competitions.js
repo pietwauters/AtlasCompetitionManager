@@ -27,13 +27,14 @@ router.post('/:id/finish', (req, res) => {
 
 
 // ---------------------------------------------------------------------------
-// GET /api/competitions — list all competitions, newest first
+// GET /api/competitions — list all competitions, newest first, with tournament name
 // ---------------------------------------------------------------------------
 router.get('/', (_req, res) => {
   const rows = db.prepare(`
-    SELECT c.*,
+    SELECT c.*, t.name AS tournament_name,
            COUNT(DISTINCT co.id) AS competitor_count
     FROM   competitions c
+    LEFT JOIN tournaments t ON c.tournament_id = t.id
     LEFT JOIN competitors co ON co.competition_id = c.id
     GROUP  BY c.id
     ORDER  BY c.created_at DESC
@@ -44,16 +45,25 @@ router.get('/', (_req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/competitions — create a competition
 // ---------------------------------------------------------------------------
+
+// Allow tournament_id to be set if provided
 router.post('/', (req, res) => {
-  const { name, weapon, gender } = req.body;
+  const { name, weapon, gender, tournament_id, date } = req.body;
 
   if (!name || !name.trim())             return res.status(400).json({ error: 'name is required' });
   if (!VALID_WEAPONS.includes(weapon))   return res.status(400).json({ error: 'weapon must be foil, epee or sabre' });
   if (!VALID_GENDERS.includes(gender))   return res.status(400).json({ error: 'gender must be M, F or X' });
 
-  const result = db.prepare(
-    `INSERT INTO competitions (name, weapon, gender) VALUES (?, ?, ?)`
-  ).run(name.trim(), weapon, gender);
+  let result;
+  if (tournament_id || date) {
+    result = db.prepare(
+      `INSERT INTO competitions (name, weapon, gender, tournament_id, date) VALUES (?, ?, ?, ?, ?)`
+    ).run(name.trim(), weapon, gender, tournament_id || null, date || null);
+  } else {
+    result = db.prepare(
+      `INSERT INTO competitions (name, weapon, gender) VALUES (?, ?, ?)`
+    ).run(name.trim(), weapon, gender);
+  }
 
   res.status(201).json({ id: result.lastInsertRowid });
 });
@@ -83,14 +93,20 @@ router.patch('/:id', (req, res) => {
   const comp = db.prepare(`SELECT * FROM competitions WHERE id = ?`).get(req.params.id);
   if (!comp) return res.status(404).json({ error: 'Competition not found' });
 
-  const { name, status } = req.body;
+  const { name, status, tournament_id, date } = req.body;
 
   if (status && !VALID_STATUSES.includes(status))
     return res.status(400).json({ error: 'Invalid status' });
 
   db.prepare(
-    `UPDATE competitions SET name = ?, status = ? WHERE id = ?`
-  ).run(name ?? comp.name, status ?? comp.status, comp.id);
+    `UPDATE competitions SET name = ?, status = ?, tournament_id = ?, date = ? WHERE id = ?`
+  ).run(
+    name ?? comp.name,
+    status ?? comp.status,
+    tournament_id === undefined ? comp.tournament_id : (tournament_id === '' || tournament_id === null ? null : tournament_id),
+    date === undefined ? comp.date : (date === '' ? null : date),
+    comp.id
+  );
 
   res.json({ ok: true });
 });

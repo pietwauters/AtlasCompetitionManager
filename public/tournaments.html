@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournaments — Atlas</title>
+    <script src="/js/htmx.min.js"></script>
+    <script src="/js/alpinejs.min.js" defer></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .form-row label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        .form-row input,
+        .form-row select {
+            padding: 0.45rem 0.7rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 0.95rem;
+        }
+
+        .form-row input[name="name"] {
+            width: 200px;
+        }
+
+        .form-row input[name="city"] {
+            width: 140px;
+        }
+
+        .form-row input[name="country"] {
+            width: 70px;
+            text-transform: uppercase;
+        }
+
+        .form-row input[type="date"] {
+            width: 140px;
+        }
+
+        button.primary {
+            background: #1a6bab;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 0.5rem 1.2rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        button.primary:hover {
+            background: #155594;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-open {
+            background: #e8ecf0;
+            color: #555;
+        }
+
+        .badge-closed {
+            background: #d4efdf;
+            color: #1e8449;
+        }
+
+        .badge-finished {
+            background: #eaf0fb;
+            color: #1a6bab;
+        }
+
+        .empty {
+            color: #888;
+            font-style: italic;
+            padding: 1rem 0;
+        }
+
+        .loading {
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <strong>Atlas Competition Manager</strong>
+        <a href="/">Home</a>
+        <a href="/competitions">Competitions</a>
+    </header>
+    <main>
+        <!-- Create tournament -->
+        <div class="card">
+            <h2>Tournaments</h2>
+            <form id="create-tournament-form" x-data="tournamentForm()" @submit.prevent="submit">
+                <div class="form-row">
+                    <label>Name<input name="name" x-model="name" required></label>
+                    <label>City<input name="city" x-model="city" required></label>
+                    <label>Country<input name="country" x-model="country" maxlength="3" required></label>
+                    <label>Start <input type="date" name="date_start" x-model="date_start"></label>
+                    <label>End <input type="date" name="date_end" x-model="date_end"></label>
+                    <label>Level
+                        <select name="level" x-model="level">
+                            <option value="">(none)</option>
+                            <option value="FIE">FIE</option>
+                            <option value="Zone">Zone</option>
+                            <option value="National">National</option>
+                            <option value="Local">Local</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="primary" :disabled="loading">
+                        <span x-text="loading ? 'Creating…' : '+ Add Tournament'"></span>
+                    </button>
+                </div>
+                <div id="form-error" x-text="error"
+                    style="color:#c0392b;font-size:0.85rem;margin-top:0.5rem;min-height:1.2rem;"></div>
+            </form>
+        </div>
+        <!-- Tournament list -->
+        <div class="card">
+            <div id="tournament-list" hx-get="/api/tournaments" hx-trigger="load, refresh-tournaments from:body"
+                hx-swap="innerHTML">
+                <span class="loading">Loading…</span>
+            </div>
+        </div>
+    </main>
+    <script>
+        function tournamentForm() {
+            return {
+                name: '', city: '', country: '', date_start: '', date_end: '', level: '', loading: false, error: '',
+                async submit() {
+                    this.loading = true; this.error = '';
+                    try {
+                        const r = await fetch('/api/tournaments', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: this.name, city: this.city, country: this.country, date_start: this.date_start, date_end: this.date_end, level: this.level })
+                        });
+                        const data = await r.json();
+                        if (!r.ok) { this.error = data.error || 'Error creating tournament'; return; }
+                        this.name = this.city = this.country = this.date_start = this.date_end = this.level = '';
+                        document.body.dispatchEvent(new Event('refresh-tournaments'));
+                    } catch (e) {
+                        this.error = 'Network error';
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+        // Render tournament table from JSON
+        document.body.addEventListener('htmx:beforeSwap', (evt) => {
+            if (evt.detail.target.id !== 'tournament-list') return;
+            try {
+                const data = JSON.parse(evt.detail.serverResponse);
+                evt.detail.serverResponse = renderTournamentTable(data);
+            } catch (_) { /* leave raw if not JSON */ }
+        });
+        function renderTournamentTable(rows) {
+            if (!rows.length) return `<p class='empty'>No tournaments yet. Create one above.</p>`;
+            const badgeClass = { open: 'badge-open', closed: 'badge-closed', finished: 'badge-finished' };
+            return `<table><thead><tr><th>Name</th><th>City</th><th>Country</th><th>Dates</th><th>Level</th><th>Status</th><th>Actions</th></tr></thead><tbody>` +
+                rows.map(t => `<tr>
+                    <td><a class="row-link" href="/tournaments-detail.html?tournament=${t.id}">${esc(t.name)}</a></td>
+                    <td>${esc(t.city)}</td>
+                    <td>${esc(t.country)}</td>
+                    <td>${t.date_start || ''} ${t.date_end ? '– ' + t.date_end : ''}</td>
+                    <td>${t.level || ''}</td>
+                    <td><span class="badge ${badgeClass[t.status] || ''}">${t.status}</span></td>
+                    <td><button class="danger" onclick="deleteTournament(${t.id})">Delete</button></td>
+                </tr>`).join('') + '</tbody></table>';
+        }
+        // Delete tournament logic with prompt for linked competitions
+        async function deleteTournament(id) {
+            if (!confirm('Delete this tournament? This cannot be undone.')) return;
+            // First, check if there are linked competitions
+            let r = await fetch(`/api/tournaments/${id}`);
+            let t = await r.json();
+            if (r.ok && t.competitions && t.competitions.length > 0) {
+                // Tournament has competitions, prompt user
+                let msg = `This tournament has ${t.competitions.length} linked competition(s).\nDelete tournament and ALL its competitions? This cannot be undone.`;
+                if (!confirm(msg)) return;
+                // Proceed with deletion, including competitions
+                r = await fetch(`/api/tournaments/${id}?delete_competitions=true`, { method: 'DELETE' });
+            } else {
+                // No competitions or not found, proceed with normal delete
+                r = await fetch(`/api/tournaments/${id}`, { method: 'DELETE' });
+            }
+            const d = await r.json();
+            if (!r.ok) { alert(d.error || 'Error deleting tournament'); return; }
+            document.body.dispatchEvent(new Event('refresh-tournaments'));
+        }
+        function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    </script>
+</body>
+
+</html>
