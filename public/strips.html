@@ -36,45 +36,48 @@
     </main>
     <script>
         // MQTT Broker Hostname Resolution Logic
-        document.getElementById('resolve-broker').onclick = async function () {
-            const hostInput = document.getElementById('mqtt-broker-host');
-            const ipInput = document.getElementById('mqtt-broker-ip');
-            const msg = document.getElementById('broker-msg');
-            msg.textContent = '';
-            const host = hostInput.value.trim();
-            if (!host) {
-                msg.style.color = 'red';
-                msg.textContent = 'Please enter a hostname.';
-                return;
-            }
-            msg.style.color = 'black';
-            msg.textContent = 'Resolving...';
-            try {
-                // Try mDNS/Bonjour first
-                let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
-                let data = await res.json();
-                if (res.ok && data.ip) {
-                    ipInput.value = data.ip;
-                    msg.style.color = 'green';
-                    msg.textContent = `Resolved (mDNS): ${data.ip}`;
+        const resolveBtn = document.getElementById('resolve-broker');
+        if (resolveBtn) {
+            resolveBtn.onclick = async function () {
+                const hostInput = document.getElementById('mqtt-broker-host');
+                const ipInput = document.getElementById('mqtt-broker-ip');
+                const msg = document.getElementById('broker-msg');
+                msg.textContent = '';
+                const host = hostInput.value.trim();
+                if (!host) {
+                    msg.style.color = 'red';
+                    msg.textContent = 'Please enter a hostname.';
                     return;
                 }
-                // If mDNS fails, try DNS
-                res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
-                data = await res.json();
-                if (res.ok && data.ip) {
-                    ipInput.value = data.ip;
-                    msg.style.color = 'green';
-                    msg.textContent = `Resolved (DNS): ${data.ip}`;
-                } else {
+                msg.style.color = 'black';
+                msg.textContent = 'Resolving...';
+                try {
+                    // Try mDNS/Bonjour first
+                    let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
+                    let data = await res.json();
+                    if (res.ok && data.ip) {
+                        ipInput.value = data.ip;
+                        msg.style.color = 'green';
+                        msg.textContent = `Resolved (mDNS): ${data.ip}`;
+                        return;
+                    }
+                    // If mDNS fails, try DNS
+                    res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
+                    data = await res.json();
+                    if (res.ok && data.ip) {
+                        ipInput.value = data.ip;
+                        msg.style.color = 'green';
+                        msg.textContent = `Resolved (DNS): ${data.ip}`;
+                    } else {
+                        msg.style.color = 'red';
+                        msg.textContent = data.error || 'Could not resolve hostname.';
+                    }
+                } catch (e) {
                     msg.style.color = 'red';
-                    msg.textContent = data.error || 'Could not resolve hostname.';
+                    msg.textContent = 'Error resolving hostname.';
                 }
-            } catch (e) {
-                msg.style.color = 'red';
-                msg.textContent = 'Error resolving hostname.';
-            }
-        };
+            };
+        }
         async function fetchStrips() {
             const res = await fetch('/api/strips');
             const strips = await res.json();
