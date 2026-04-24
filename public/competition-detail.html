@@ -46,7 +46,8 @@
                 document.getElementById('phases-card').style.display = '';
             }
 
-            async function activate() {
+
+            window.activate = async function () {
                 if (!confirm('Activate this competition? You will not be able to delete it.')) return;
                 const r = await fetch(`/api/competitions/${compId}`, {
                     method: 'PATCH',
