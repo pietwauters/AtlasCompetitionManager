@@ -106,9 +106,50 @@
                                 </tbody>
                             </table>
                         </div>
+                        <form class="assign-strip-form" data-pool-id="<%= pool.id %>"
+                            style="margin-bottom:0.5em;display:inline-block">
+                            <label style="font-size:0.95em;margin-right:0.5em;">
+                                Assign strip:
+                                <select name="strip_id">
+                                    <option value="">-- Select --</option>
+                                    <% strips.forEach(function(strip) { %>
+                                        <option value="<%= strip.id %>" <%=pool.strip_id===strip.id ? 'selected' : '' %>
+                                            >
+                                            <%= strip.name || ('Piste ' + strip.strip_number) %> [<%= strip.state %>, <%= strip.network_state %>]
+                                        </option>
+                                    <% }); %>
+                                </select>
+                            </label>
+                            <button type="submit">Assign</button>
+                        </form>
                         <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
                             class="primary" style="margin-bottom:0.5em;display:inline-block">Enter results for this
                             pool</a>
+                    <script>
+                        // Assign strip to pool via AJAX
+                        document.querySelectorAll(' .assign-strip-form').forEach(form => {
+                            form.addEventListener('submit', async function (e) {
+                                e.preventDefault();
+                                const poolId = form.getAttribute('data-pool-id');
+                                const stripId = form.strip_id.value;
+                                // Use the correct API endpoint
+                                const compId = '<%= compId %>';
+                                const phaseId = '<%= phase.id %>';
+                                const apiUrl =
+                                    `/api/competitions/${compId}/phases/${phaseId}/pools/${poolId}/assign-strip`;
+                                const res = await fetch(apiUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ strip_id: stripId || null })
+                                });
+                                if (res.ok) {
+                                    window.location.reload();
+                                } else {
+                                    alert('Failed to assign strip.');
+                                }
+                            });
+                        });
+                    </script>
                     </div>
                     <% }); %>
                         <% } else { %>

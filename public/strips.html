@@ -86,8 +86,8 @@
                 list.innerHTML = '<p>No strips defined yet.</p>';
                 return;
             }
-            list.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Status</th></tr></thead><tbody>` +
-                strips.map(s => `<tr><td>${s.strip_number}</td><td>${s.name || ''}</td><td>${s.status}</td></tr>`).join('') +
+            list.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>State</th><th>Network</th></tr></thead><tbody>` +
+                strips.map(s => `<tr><td>${s.strip_number}</td><td>${s.name || ''}</td><td>${s.status}</td><td>${s.state}</td><td>${s.network_state}</td></tr>`).join('') +
                 '</tbody></table>';
         }
         document.getElementById('add-strip-form').onsubmit = async (e) => {

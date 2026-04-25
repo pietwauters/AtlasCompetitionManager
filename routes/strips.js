@@ -8,7 +8,7 @@ const router = express.Router();
 // Get all strips
 router.get('/', (req, res) => {
     try {
-        const strips = db.prepare('SELECT id, strip_number, name, status FROM strips ORDER BY strip_number').all();
+        const strips = db.prepare('SELECT id, strip_number, name, status, state, network_state FROM strips ORDER BY strip_number').all();
         res.json(strips);
     } catch (e) {
         res.status(500).json({ error: 'Failed to fetch strips.' });

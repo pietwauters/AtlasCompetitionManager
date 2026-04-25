@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS strips (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT    NOT NULL UNIQUE,   -- e.g. "Piste 001", "Podium"
-  status     TEXT    NOT NULL DEFAULT 'idle'  -- idle | assigned | maintenance
+  status     TEXT    NOT NULL DEFAULT 'idle',  -- idle | assigned | maintenance
+  state      TEXT    NOT NULL DEFAULT 'idle',  -- idle | busy | ...
+  network_state TEXT NOT NULL DEFAULT 'offline'  -- connected | offline
 );
 
 CREATE TABLE IF NOT EXISTS referees (
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS competitors (
   club             TEXT,
   nationality      TEXT,             -- 3-letter NOC code
   initial_seed     INTEGER,
-  status           TEXT    NOT NULL DEFAULT 'active'  -- active | withdrawn | dns
+  status           TEXT    NOT NULL DEFAULT 'active',  -- active | withdrawn | dns
+  final_rank       INTEGER  -- final ranking after elimination or competition end
 );
 
 -- ---------------------------------------------------------------------------

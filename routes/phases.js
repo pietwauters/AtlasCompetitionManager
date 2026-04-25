@@ -354,6 +354,8 @@ router.get('/:phaseId/view', (req, res) => {
       let victories = 0, matches = 0, indicator = 0, scored = 0, received = 0;
       for (let k = 0; k < n; ++k) {
         if (grid[f.idToIdx ?? idToIdx[f.id]] && grid[f.idToIdx ?? idToIdx[f.id]][k]) {
+        // Fetch all strips for assignment UI
+        const strips = db.prepare('SELECT id, strip_number, name, status, state, network_state FROM strips ORDER BY strip_number').all();
           const cell = grid[idToIdx[f.id]][k];
           if (cell.left_score != null && cell.right_score != null) {
             matches++;
@@ -378,9 +380,11 @@ router.get('/:phaseId/view', (req, res) => {
     });
   }
 
+  // Fetch all strips for assignment UI
+  const strips = db.prepare('SELECT id, strip_number, name, status, state, network_state FROM strips ORDER BY strip_number').all();
   // Calculate rankings
   const rankings = calculatePoolRankings(phaseId);
-  res.render('phase', { compId, phase: { ...phase, pools }, rankings });
+  res.render('phase', { compId, phase: { ...phase, pools }, rankings, strips });
 });
 
 // ---------------------------------------------------------------------------
@@ -425,7 +429,7 @@ router.post('/', (req, res) => {
 
   if (!rule_doc) return res.status(400).json({ error: 'rule_doc is required.' });
 
-  let ruleJson;
+        res.render('phase', { compId, phase: { ...phase, pools }, rankings, strips });
   try { ruleJson = loadRule(rule_doc); } catch (e) { return res.status(e.status || 500).json({ error: e.message }); }
 
   const order = phase_order ?? (() => {
@@ -917,5 +921,22 @@ router.post('/:phaseId/reopen', (req, res) => {
   res.json({ reopened: true });
 });
 
+
+
+// POST /api/competitions/:compId/phases/:phaseId/pools/:poolId/assign-strip
+router.post('/:phaseId/pools/:poolId/assign-strip', (req, res) => {
+  const { compId, phaseId, poolId } = req.params;
+  const { strip_id } = req.body;
+  // Validate pool exists
+  const pool = db.prepare('SELECT * FROM pools WHERE id = ? AND phase_id = ?').get(poolId, phaseId);
+  if (!pool) return res.status(404).json({ error: 'Pool not found.' });
+  // Optionally validate strip exists
+  if (strip_id) {
+    const strip = db.prepare('SELECT * FROM strips WHERE id = ?').get(strip_id);
+    if (!strip) return res.status(400).json({ error: 'Strip not found.' });
+  }
+  db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(strip_id || null, poolId);
+  res.json({ success: true });
+});
 
 module.exports = router;
