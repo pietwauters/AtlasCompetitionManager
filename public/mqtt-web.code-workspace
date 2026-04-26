@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "../../mqtt-web"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
