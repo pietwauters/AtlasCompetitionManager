@@ -309,13 +309,19 @@
                 </a>
             </div>
             <p style="font-size:.83rem;color:#666;margin:.5rem 0 1rem">
-                Columns (in any order): <code>name</code>, <code>first_name</code>, <code>last_name</code>,
-                <code>date_of_birth</code>, <code>gender</code>, <code>weapons</code>, <code>licence</code>,
-                <code>handedness</code>, <code>national_ranking</code>, <code>club</code>, <code>nationality</code>,
-                <code>initial_seed</code><br>
-                First row must be a header. At least <code>name</code> or <code>first_name</code> is required.<br>
-                <span style="color:#888">Weapons: comma-separated (e.g. <code>foil,epee</code>). Gender: M or F. Date:
-                    YYYY-MM-DD.</span>
+                <strong>CSV columns (any order):</strong><br>
+                <code>first_name</code>, <code>last_name</code>, <code>date_of_birth</code>, <code>gender</code>,
+                <code>club</code>, <code>nationality</code>, <code>initial_seed</code>,
+                <code>national_ranking</code><br>
+                <span style="color:#888">Optionally: <code>name</code> (full name), <code>weapons</code>,
+                    <code>licence</code>, <code>handedness</code>, <code>status</code></span><br>
+                <span style="color:#888">First row must be a header. At least <code>first_name</code> or
+                    <code>name</code> is required.<br>
+                    Nationality must be a 3-letter NOC code (e.g. <code>BEL</code>). Club will be created if not
+                    found.<br>
+                    Example:<br>
+                    <code>first_name,last_name,date_of_birth,gender,club,nationality,initial_seed,national_ranking</code><br>
+                    <code>Alice,Smith,2001-05-12,F,Brussels Fencing,BEL,1,42</code></span>
             </p>
             <div class="csv-area" id="drop-zone" onclick="document.getElementById('csv-input').click()"
                 @dragover.prevent="$el.classList.add('drag')" @dragleave="$el.classList.remove('drag')"
@@ -450,7 +456,7 @@
           <td class="badge-${f.status}">${f.status}</td>
           <td>
             <button class="sm" onclick='openEdit(${JSON.stringify(f)})'>Edit</button>
-            <button class="sm danger" onclick="deleteFencer(${f.id})" style="margin-left:.3rem">Remove</button>
+            <button class="sm danger" onclick="deleteFencer(${f.fencerId})" style="margin-left:.3rem">Remove</button>
           </td>
         </tr>`).join('');
             return `<table>

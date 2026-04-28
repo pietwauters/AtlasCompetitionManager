@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const db      = require('../db/db');
+const models  = require('../models');
 
 const VALID_WEAPONS = ['foil', 'epee', 'sabre'];
 const VALID_GENDERS = ['M', 'F', 'X'];
@@ -27,19 +27,17 @@ router.post('/:id/finish', (req, res) => {
 
 
 // ---------------------------------------------------------------------------
-// GET /api/competitions — list all competitions, newest first, with tournament name
+// GET /api/competitions — list all competitions, newest first
 // ---------------------------------------------------------------------------
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`
-    SELECT c.*, t.name AS tournament_name,
-           COUNT(DISTINCT co.id) AS competitor_count
-    FROM   competitions c
-    LEFT JOIN tournaments t ON c.tournament_id = t.id
-    LEFT JOIN competitors co ON co.competition_id = c.id
-    GROUP  BY c.id
-    ORDER  BY c.created_at DESC
-  `).all();
-  res.json(rows);
+router.get('/', async (_req, res) => {
+  try {
+    const competitions = await models.Competition.findAll({
+      order: [['created_at', 'DESC']]
+    });
+    res.json(competitions);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -47,80 +45,76 @@ router.get('/', (_req, res) => {
 // ---------------------------------------------------------------------------
 
 // Allow tournament_id to be set if provided
-router.post('/', (req, res) => {
-  const { name, weapon, gender, tournament_id, date } = req.body;
+router.post('/', async (req, res) => {
+  const { name, weapon, gender, status, date } = req.body;
 
   if (!name || !name.trim())             return res.status(400).json({ error: 'name is required' });
   if (!VALID_WEAPONS.includes(weapon))   return res.status(400).json({ error: 'weapon must be foil, epee or sabre' });
   if (!VALID_GENDERS.includes(gender))   return res.status(400).json({ error: 'gender must be M, F or X' });
 
-  let result;
-  if (tournament_id || date) {
-    result = db.prepare(
-      `INSERT INTO competitions (name, weapon, gender, tournament_id, date) VALUES (?, ?, ?, ?, ?)`
-    ).run(name.trim(), weapon, gender, tournament_id || null, date || null);
-  } else {
-    result = db.prepare(
-      `INSERT INTO competitions (name, weapon, gender) VALUES (?, ?, ?)`
-    ).run(name.trim(), weapon, gender);
+  try {
+    const competition = await models.Competition.create({
+      name: name.trim(),
+      weapon,
+      gender,
+      status: status || 'draft',
+      date: date || null
+    });
+    res.status(201).json({ id: competition.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-
-  res.status(201).json({ id: result.lastInsertRowid });
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/competitions/:id — single competition with phases + competitor count
+// GET /api/competitions/:id — single competition detail
 // ---------------------------------------------------------------------------
-router.get('/:id', (req, res) => {
-  const comp = db.prepare(`SELECT * FROM competitions WHERE id = ?`).get(req.params.id);
-  if (!comp) return res.status(404).json({ error: 'Competition not found' });
-
-  const phases = db.prepare(
-    `SELECT * FROM phases WHERE competition_id = ? ORDER BY phase_order`
-  ).all(comp.id);
-
-  const count = db.prepare(
-    `SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active'`
-  ).get(comp.id).n;
-
-  res.json({ ...comp, phases, competitor_count: count });
+router.get('/:id', async (req, res) => {
+  try {
+    const comp = await models.Competition.findByPk(req.params.id);
+    if (!comp) return res.status(404).json({ error: 'Competition not found' });
+    // Optionally, add related data here (e.g., phases, competitor count) if migrated to Sequelize
+    res.json(comp);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
 // PATCH /api/competitions/:id — update status or name
 // ---------------------------------------------------------------------------
-router.patch('/:id', (req, res) => {
-  const comp = db.prepare(`SELECT * FROM competitions WHERE id = ?`).get(req.params.id);
-  if (!comp) return res.status(404).json({ error: 'Competition not found' });
+router.patch('/:id', async (req, res) => {
+  try {
+    const comp = await models.Competition.findByPk(req.params.id);
+    if (!comp) return res.status(404).json({ error: 'Competition not found' });
 
-  const { name, status, tournament_id, date } = req.body;
+    const { name, status, date } = req.body;
+    if (status && !VALID_STATUSES.includes(status))
+      return res.status(400).json({ error: 'Invalid status' });
 
-  if (status && !VALID_STATUSES.includes(status))
-    return res.status(400).json({ error: 'Invalid status' });
-
-  db.prepare(
-    `UPDATE competitions SET name = ?, status = ?, tournament_id = ?, date = ? WHERE id = ?`
-  ).run(
-    name ?? comp.name,
-    status ?? comp.status,
-    tournament_id === undefined ? comp.tournament_id : (tournament_id === '' || tournament_id === null ? null : tournament_id),
-    date === undefined ? comp.date : (date === '' ? null : date),
-    comp.id
-  );
-
-  res.json({ ok: true });
+    if (name !== undefined) comp.name = name;
+    if (status !== undefined) comp.status = status;
+    if (date !== undefined) comp.date = date;
+    await comp.save();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
 // DELETE /api/competitions/:id — only allowed when draft
 // ---------------------------------------------------------------------------
-router.delete('/:id', (req, res) => {
-  const comp = db.prepare(`SELECT * FROM competitions WHERE id = ?`).get(req.params.id);
-  if (!comp) return res.status(404).json({ error: 'Competition not found' });
-  if (comp.status !== 'draft' && comp.status !== 'finished') return res.status(409).json({ error: 'Only draft or finished competitions can be deleted' });
-
-  db.prepare(`DELETE FROM competitions WHERE id = ?`).run(comp.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    const comp = await models.Competition.findByPk(req.params.id);
+    if (!comp) return res.status(404).json({ error: 'Competition not found' });
+    if (comp.status !== 'draft' && comp.status !== 'finished') return res.status(409).json({ error: 'Only draft or finished competitions can be deleted' });
+    await comp.destroy();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

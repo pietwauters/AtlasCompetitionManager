@@ -329,11 +329,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <template x-for="f in filtered" :key="f.id">
+                        <template x-for="f in filtered" :key="f.fencerId">
                             <tr>
                                 <td>
-                                    <input type="checkbox" :checked="selected.has(f.id)"
-                                        @change="toggleOne(f.id, $event.target.checked)">
+                                    <input type="checkbox" :checked="selected.has(f.fencerId)"
+                                        @change="toggleOne(f.fencerId, $event.target.checked)">
                                 </td>
                                 <td x-text="f.initial_seed ?? '—'" style="color:#888"></td>
                                 <td x-text="f.display_name"></td>
@@ -429,26 +429,30 @@
                 },
 
                 toggleAll(checked) {
-                    this.selected = checked ? new Set(this.filtered.map(f => f.id)) : new Set();
+                    this.selected = checked ? new Set(this.filtered.map(f => f.fencerId ?? f.id)) : new Set();
                 },
 
                 allChecked() {
-                    return this.filtered.length > 0 && this.filtered.every(f => this.selected.has(f.id));
+                    return this.filtered.length > 0 && this.filtered.every(f => this.selected.has(f.fencerId ?? f.id));
                 },
 
                 // ---- Single status cycle (click on badge) ----
                 async cycleStatus(fencer) {
                     const next = STATUS_CYCLE[fencer.status] ?? 'active';
-                    await this._applyStatus([{ id: fencer.id, status: next }]);
+                    await this._applyStatus([{ id: fencer.fencerId ?? fencer.id, status: next }]);
                     fencer.status = next;
                 },
 
                 // ---- Bulk status change ----
                 async bulkStatus(status) {
-                    const updates = [...this.selected].map(id => ({ id, status }));
+                    const updates = [...this.selected].map(id => {
+                        // Find the fencer object to get fencerId if needed
+                        const f = this.fencers.find(f => f.id === id || f.fencerId === id);
+                        return { id: f?.fencerId ?? id, status };
+                    });
                     await this._applyStatus(updates);
                     for (const f of this.fencers) {
-                        if (this.selected.has(f.id)) f.status = status;
+                        if (this.selected.has(f.fencerId ?? f.id)) f.status = status;
                     }
                     this.selected = new Set();
                 },

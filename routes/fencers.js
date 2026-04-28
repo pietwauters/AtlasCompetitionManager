@@ -2,80 +2,129 @@
 
 const express             = require('express');
 const router              = express.Router({ mergeParams: true });   // inherits :compId from parent
-const db                  = require('../db/db');
+const models              = require('../models');
 const { deriveCategory }  = require('../lib/categories');
 
 // ---------------------------------------------------------------------------
 // GET /api/competitions/:compId/fencers — list competitors in a competition
 // ---------------------------------------------------------------------------
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { compId } = req.params;
-  if (!db.prepare(`SELECT 1 FROM competitions WHERE id = ?`).get(compId))
-    return res.status(404).json({ error: 'Competition not found' });
-
-  const compYear = new Date().getFullYear();
-  const rows = db.prepare(`
-    SELECT * FROM competitors
-    WHERE  competition_id = ?
-    ORDER  BY initial_seed ASC, name ASC
-  `).all(compId).map(r => ({
-    ...r,
-    display_name: r.first_name ? `${r.first_name} ${r.last_name || ''}`.trim() : r.name,
-    weapons: r.weapons ? JSON.parse(r.weapons) : [],
-    category: deriveCategory(r.date_of_birth, compYear),
-  }));
-
-  res.json(rows);
+  // TODO: Check competition existence with Sequelize if needed
+  try {
+    const { compId } = req.params;
+    const entries = await models.CompetitionFencer.findAll({
+      where: { competitionId: compId },
+      include: [{
+        model: models.Fencer,
+        include: [{
+          model: models.Person,
+          include: [models.Club, models.NOC]
+        }]
+      }],
+      order: [[models.Fencer, models.Person, 'lastName', 'ASC']]
+    });
+    const compYear = new Date().getFullYear();
+    const rows = entries.map(entry => {
+      const f = entry.Fencer;
+      const p = f.Person;
+      return {
+        id: entry.id,
+        fencerId: f.id,
+        personId: p.id,
+        name: p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : '',
+        first_name: p.firstName,
+        last_name: p.lastName,
+        date_of_birth: p.birthdate,
+        club: p.Club ? p.Club.name : null,
+        nationality: p.nationality,
+        nationality_name: p.NOC ? p.NOC.country : null,
+        global_ranking: f.ranking,
+        weapons: f.weapons,
+        gender: p.gender,
+        licence: f.licence,
+        handedness: f.handedness,
+        // Competition-specific fields:
+        seed: entry.seed,
+        status: entry.status,
+        state: entry.state,
+        final_rank: entry.final_rank,
+        display_name: p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : '',
+        category: deriveCategory(p.birthdate, compYear)
+      };
+    });
+    console.log(`[DEBUG] GET /api/competitions/${compId}/fencers -> ${rows.length} rows`, rows);
+    res.json(rows);
+  } catch (e) {
+    console.error('[ERROR] GET /api/competitions/:compId/fencers', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/competitions/:compId/fencers — add a single competitor
 // ---------------------------------------------------------------------------
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { compId } = req.params;
-  if (!db.prepare(`SELECT 1 FROM competitions WHERE id = ?`).get(compId))
-    return res.status(404).json({ error: 'Competition not found' });
-
   const { name, first_name, last_name, date_of_birth, gender, weapons,
-          licence, handedness, national_ranking,
-          club, nationality, initial_seed } = req.body;
+    licence, handedness, national_ranking,
+    club, nationality, initial_seed } = req.body;
 
-  // Need at least a display name
-  const resolvedName = name?.trim() || (first_name ? `${first_name} ${last_name || ''}`.trim() : '');
+  // Parse first_name and last_name from name if not provided
+  let fn = first_name, ln = last_name;
+  if (!fn && name) {
+    const parts = name.trim().split(/\s+/);
+    fn = parts[0] || '';
+    ln = parts.slice(1).join(' ') || '';
+  }
+  const resolvedName = name?.trim() || (fn ? `${fn} ${ln || ''}`.trim() : '');
   if (!resolvedName) return res.status(400).json({ error: 'name or first_name is required' });
-
   if (nationality && !/^[A-Za-z]{3}$/.test(nationality))
     return res.status(400).json({ error: 'nationality must be a 3-letter NOC code' });
-
   if (gender && !['M','F'].includes(gender))
     return res.status(400).json({ error: 'gender must be M or F' });
 
-  const weaponsJson = weapons ? JSON.stringify(
-    (Array.isArray(weapons) ? weapons : [weapons]).map(w => w.toLowerCase())
-  ) : null;
-
-  const result = db.prepare(`
-    INSERT INTO competitors
-      (competition_id, name, first_name, last_name, date_of_birth, gender,
-       weapons, licence, handedness, national_ranking, club, nationality, initial_seed)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    Number(compId),
-    resolvedName,
-    first_name?.trim()  || null,
-    last_name?.trim()   || null,
-    date_of_birth       || null,
-    gender              || null,
-    weaponsJson,
-    licence?.trim()     || null,
-    handedness          || null,
-    national_ranking != null ? Number(national_ranking) : null,
-    club?.trim()        || null,
-    nationality?.toUpperCase() || null,
-    initial_seed != null ? Number(initial_seed) : null
-  );
-
-  res.status(201).json({ id: result.lastInsertRowid });
+  try {
+    // Find or create club
+    let clubInstance = null;
+    if (club) {
+      [clubInstance] = await models.Club.findOrCreate({ where: { name: club.trim() } });
+    }
+    // Find or create person
+    let person = await models.Person.findOne({ where: { firstName: fn, lastName: ln } });
+    if (!person) {
+      person = await models.Person.create({
+        firstName: fn,
+        lastName: ln,
+        birthdate: date_of_birth,
+        clubId: clubInstance ? clubInstance.id : null,
+        nationality: nationality?.toUpperCase() || null
+      });
+    }
+    // Find or create fencer (global profile)
+    let fencer = await models.Fencer.findOne({ where: { personId: person.id } });
+    if (!fencer) {
+      fencer = await models.Fencer.create({
+        personId: person.id,
+        ranking: national_ranking != null ? Number(national_ranking) : null,
+        weapons: weapons ? JSON.stringify(Array.isArray(weapons) ? weapons : [weapons]) : null,
+        licence: licence || null,
+        handedness: handedness || null
+      });
+    }
+    // Register fencer for this competition
+    const entry = await models.CompetitionFencer.create({
+      competitionId: compId,
+      fencerId: fencer.id,
+      seed: initial_seed != null ? Number(initial_seed) : null,
+      status: 'registered',
+      state: null,
+      final_rank: null
+    });
+    res.status(201).json({ id: entry.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -83,56 +132,78 @@ router.post('/', (req, res) => {
 // Body: { fencers: [ {name, club, nationality, initial_seed}, ... ] }
 // Useful for CSV import pre-processing on the client side
 // ---------------------------------------------------------------------------
-router.post('/bulk', (req, res) => {
-  const { compId } = req.params;
-  if (!db.prepare(`SELECT 1 FROM competitions WHERE id = ?`).get(compId))
-    return res.status(404).json({ error: 'Competition not found' });
-
+router.post('/bulk', async (req, res) => {
   const { fencers } = req.body;
   if (!Array.isArray(fencers) || fencers.length === 0)
     return res.status(400).json({ error: 'fencers array is required' });
-
-  const insert = db.prepare(`
-    INSERT INTO competitors
-      (competition_id, name, first_name, last_name, date_of_birth, gender,
-       weapons, licence, handedness, national_ranking, club, nationality, initial_seed)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const insertMany = db.transaction((rows) => {
-    for (const f of rows) {
-      const resolvedName = f.name?.trim() || (f.first_name ? `${f.first_name} ${f.last_name || ''}`.trim() : '');
-      if (!resolvedName) continue;     // skip blank entries
-      if (f.nationality && !/^[A-Za-z]{3}$/.test(f.nationality))
-        throw Object.assign(new Error('Invalid NOC code: ' + f.nationality), { status: 400 });
-
-      const weaponsJson = f.weapons ? JSON.stringify(
-        (Array.isArray(f.weapons) ? f.weapons : [f.weapons]).map(w => w.toLowerCase())
-      ) : null;
-
-      insert.run(
-        Number(compId),
-        resolvedName,
-        f.first_name?.trim()  || null,
-        f.last_name?.trim()   || null,
-        f.date_of_birth       || null,
-        f.gender              || null,
-        weaponsJson,
-        f.licence?.trim()     || null,
-        f.handedness          || null,
-        f.national_ranking != null ? Number(f.national_ranking) : null,
-        f.club?.trim()        || null,
-        f.nationality?.toUpperCase() || null,
-        f.initial_seed != null ? Number(f.initial_seed) : null
-      );
-    }
-  });
-
+  let count = 0;
   try {
-    insertMany(fencers);
-    res.json({ ok: true, count: fencers.length });
+    const { compId } = req.params;
+    for (const f of fencers) {
+      const resolvedName = f.name?.trim() || (f.first_name ? `${f.first_name} ${f.last_name || ''}`.trim() : '');
+      if (!resolvedName) continue;
+      if (f.nationality && !/^[A-Za-z]{3}$/.test(f.nationality)) continue;
+      let clubInstance = null;
+      if (f.club) {
+        [clubInstance] = await models.Club.findOrCreate({ where: { name: f.club.trim() } });
+      }
+      // Always uppercase nationality if present
+      const nationality = f.nationality ? f.nationality.toUpperCase() : null;
+      // Find or create person
+      let person = await models.Person.findOne({ where: { firstName: f.first_name, lastName: f.last_name } });
+      if (!person) {
+        person = await models.Person.create({
+          firstName: f.first_name,
+          lastName: f.last_name,
+          birthdate: f.date_of_birth,
+          clubId: clubInstance ? clubInstance.id : null,
+          nationality,
+          gender: f.gender || null
+        });
+      } else {
+        // Update nationality or gender if missing or different
+        let changed = false;
+        if (nationality && person.nationality !== nationality) {
+          person.nationality = nationality;
+          changed = true;
+        }
+        if (f.gender && person.gender !== f.gender) {
+          person.gender = f.gender;
+          changed = true;
+        }
+        if (changed) await person.save();
+      }
+      // Find or create fencer (global profile)
+      let fencer = await models.Fencer.findOne({ where: { personId: person.id } });
+      if (!fencer) {
+        fencer = await models.Fencer.create({
+          personId: person.id,
+          ranking: f.national_ranking != null ? Number(f.national_ranking) : null,
+          weapons: f.weapons ? JSON.stringify(Array.isArray(f.weapons) ? f.weapons : [f.weapons]) : null,
+          licence: f.licence || null,
+          handedness: f.handledness || null
+        });
+      } else {
+        // Update weapons if provided
+        if (f.weapons) {
+          fencer.weapons = JSON.stringify(Array.isArray(f.weapons) ? f.weapons : [f.weapons]);
+          await fencer.save();
+        }
+      }
+      // Register fencer for this competition
+      await models.CompetitionFencer.create({
+        competitionId: compId,
+        fencerId: fencer.id,
+        seed: f.initial_seed != null ? Number(f.initial_seed) : null,
+        status: f.status || 'registered',
+        state: null,
+        final_rank: f.final_rank != null ? Number(f.final_rank) : null
+      });
+      count++;
+    }
+    res.json({ ok: true, count });
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -142,94 +213,66 @@ router.post('/bulk', (req, res) => {
 // IMPORTANT: must be registered before PATCH /:id to avoid "bulk-status" being
 // treated as an id parameter.
 // ---------------------------------------------------------------------------
-router.patch('/bulk-status', (req, res) => {
-  const { compId } = req.params;
-  if (!db.prepare(`SELECT 1 FROM competitions WHERE id = ?`).get(compId))
-    return res.status(404).json({ error: 'Competition not found' });
-
+router.patch('/bulk-status', async (req, res) => {
   const VALID_STATUS = ['active', 'withdrawn', 'dns'];
   const { updates } = req.body;
   if (!Array.isArray(updates) || updates.length === 0)
     return res.status(400).json({ error: 'updates array is required' });
-
-  const stmt = db.prepare(
-    `UPDATE competitors SET status = ? WHERE id = ? AND competition_id = ?`
-  );
-
-  const run = db.transaction(() => {
-    for (const u of updates) {
-      if (!VALID_STATUS.includes(u.status))
-        throw Object.assign(new Error('Invalid status: ' + u.status), { status: 400 });
-      stmt.run(u.status, u.id, compId);
-    }
-  });
-
   try {
-    run();
-    res.json({ ok: true, count: updates.length });
+    const { compId } = req.params;
+    let updated = 0;
+    for (const u of updates) {
+      if (!VALID_STATUS.includes(u.status)) continue;
+      // Update CompetitionFencer status for this competition and fencer
+      const [count] = await models.CompetitionFencer.update(
+        { status: u.status },
+        { where: { competitionId: compId, fencerId: u.id } }
+      );
+      if (count > 0) updated++;
+    }
+    res.json({ ok: true, count: updated });
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
 // ---------------------------------------------------------------------------
 // PATCH /api/competitions/:compId/fencers/:id — update a competitor
 // ---------------------------------------------------------------------------
-router.patch('/:id', (req, res) => {
-  const { compId, id } = req.params;
-  const row = db.prepare(
-    `SELECT * FROM competitors WHERE id = ? AND competition_id = ?`
-  ).get(id, compId);
-  if (!row) return res.status(404).json({ error: 'Competitor not found' });
-
-  const { name, first_name, last_name, date_of_birth, gender, weapons,
-          licence, handedness, national_ranking,
-          club, nationality, initial_seed, status } = req.body;
-
-  if (nationality && !/^[A-Za-z]{3}$/.test(nationality))
-    return res.status(400).json({ error: 'nationality must be a 3-letter NOC code' });
-
-  if (gender && !['M','F'].includes(gender))
-    return res.status(400).json({ error: 'gender must be M or F' });
-
-  const weaponsJson = weapons !== undefined
-    ? JSON.stringify((Array.isArray(weapons) ? weapons : [weapons]).map(w => w.toLowerCase()))
-    : row.weapons;
-
-  // Recompute display name if first/last provided
-  let resolvedName = row.name;
-  if (first_name !== undefined || last_name !== undefined) {
-    const fn = (first_name ?? row.first_name ?? '').trim();
-    const ln = (last_name  ?? row.last_name  ?? '').trim();
-    resolvedName = fn ? `${fn} ${ln}`.trim() : row.name;
-  } else if (name !== undefined) {
-    resolvedName = name.trim() || row.name;
+router.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { first_name, last_name, date_of_birth, club, nationality, national_ranking, status } = req.body;
+  try {
+    const fencer = await models.Fencer.findByPk(id, { include: [models.Person] });
+    if (!fencer) return res.status(404).json({ error: 'Fencer not found' });
+    // Update person fields
+    let clubInstance = null;
+    if (club) {
+      [clubInstance] = await models.Club.findOrCreate({ where: { name: club.trim() } });
+    }
+    await fencer.Person.update({
+      firstName: first_name ?? fencer.Person.firstName,
+      lastName: last_name ?? fencer.Person.lastName,
+      birthdate: date_of_birth ?? fencer.Person.birthdate,
+      clubId: clubInstance ? clubInstance.id : fencer.Person.clubId,
+      nationality: nationality?.toUpperCase() ?? fencer.Person.nationality
+    });
+    // Update fencer fields
+    await fencer.update({
+      ranking: national_ranking != null ? Number(national_ranking) : fencer.ranking
+    });
+    // If status is provided, update CompetitionFencer for this competition
+    if (status) {
+      const { compId } = req.params;
+      await models.CompetitionFencer.update(
+        { status },
+        { where: { competitionId: compId, fencerId: fencer.id } }
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-
-  db.prepare(`
-    UPDATE competitors
-    SET    name = ?, first_name = ?, last_name = ?, date_of_birth = ?, gender = ?,
-           weapons = ?, licence = ?, handedness = ?, national_ranking = ?,
-           club = ?, nationality = ?, initial_seed = ?, status = ?
-    WHERE  id = ?
-  `).run(
-    resolvedName,
-    first_name?.trim()  ?? row.first_name,
-    last_name?.trim()   ?? row.last_name,
-    date_of_birth       ?? row.date_of_birth,
-    gender              ?? row.gender,
-    weaponsJson,
-    licence?.trim()     ?? row.licence,
-    handedness          ?? row.handedness,
-    national_ranking != null ? Number(national_ranking) : row.national_ranking,
-    club?.trim()        ?? row.club,
-    nationality?.toUpperCase() ?? row.nationality,
-    initial_seed != null ? Number(initial_seed) : row.initial_seed,
-    status              ?? row.status,
-    row.id
-  );
-
-  res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -261,15 +304,16 @@ router.get('/export.csv', (req, res) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/competitions/:compId/fencers/:id — remove a competitor
 // ---------------------------------------------------------------------------
-router.delete('/:id', (req, res) => {
-  const { compId, id } = req.params;
-  const row = db.prepare(
-    `SELECT * FROM competitors WHERE id = ? AND competition_id = ?`
-  ).get(id, compId);
-  if (!row) return res.status(404).json({ error: 'Competitor not found' });
-
-  db.prepare(`DELETE FROM competitors WHERE id = ?`).run(row.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const fencer = await models.Fencer.findByPk(id);
+    if (!fencer) return res.status(404).json({ error: 'Fencer not found' });
+    await fencer.destroy();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;
