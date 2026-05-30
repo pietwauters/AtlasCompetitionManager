@@ -27,6 +27,7 @@ app.use('/api/phases', require('./routes/phasesById'));
 app.use('/api/pools',  require('./routes/pools'));
 app.use('/api/bouts',  require('./routes/bouts'));
 app.use('/api/rules',  require('./routes/rules'));
+app.use('/api/strips', require('./routes/strips'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -1,119 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>Manage Strips</title>
-    <link rel="stylesheet" href="/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Strips</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table{width:100%;border-collapse:collapse;font-size:.9rem}
+    th{text-align:left;padding:.5rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd}
+    td{padding:.5rem .75rem;border-bottom:1px solid #eee;vertical-align:middle}
+    tr:hover td{background:#f9f9f9}
+    .toolbar{display:flex;gap:.75rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+    .form-row{display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px solid #eee}
+    .form-row label{display:flex;flex-direction:column;gap:.2rem;font-size:.85rem}
+    .form-row input{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem;width:8rem}
+    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600}
+    .badge-idle{background:#d6d8db;color:#383d41}
+    .badge-assigned{background:#d4edda;color:#155724}
+    .badge-maintenance{background:#fde8e8;color:#922b21}
+    .badge-online{background:#d4edda;color:#155724}
+    .badge-offline{background:#d6d8db;color:#383d41}
+    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
+    .notice-ok{background:#d5f5e3;color:#1e5631}
+    .notice-err{background:#fde8e8;color:#922b21}
+  </style>
 </head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
-<body>
-    <header>
-        <h1>Strips Management</h1>
-        <a href="/">Back to Home</a>
-    </header>
-    <main>
-        <section>
-            <h2>Add New Strip</h2>
-            <form id="add-strip-form">
-                <label>
-                    Strip Number (unique):
-                    <input type="number" name="strip_number" required min="1">
-                </label>
-                <label>
-                    Friendly Name (optional):
-                    <input type="text" name="name" maxlength="64">
-                </label>
-                <button type="submit">Add Strip</button>
-                <span id="form-msg" style="color:red;"></span>
-            </form>
-        </section>
-        <!-- MQTT Broker Configuration moved to System Administration page -->
-        <section>
-            <h2>Existing Strips</h2>
-            <div id="strips-list"></div>
-        </section>
-    </main>
-    <script>
-        // MQTT Broker Hostname Resolution Logic
-        const resolveBtn = document.getElementById('resolve-broker');
-        if (resolveBtn) {
-            resolveBtn.onclick = async function () {
-                const hostInput = document.getElementById('mqtt-broker-host');
-                const ipInput = document.getElementById('mqtt-broker-ip');
-                const msg = document.getElementById('broker-msg');
-                msg.textContent = '';
-                const host = hostInput.value.trim();
-                if (!host) {
-                    msg.style.color = 'red';
-                    msg.textContent = 'Please enter a hostname.';
-                    return;
-                }
-                msg.style.color = 'black';
-                msg.textContent = 'Resolving...';
-                try {
-                    // Try mDNS/Bonjour first
-                    let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
-                    let data = await res.json();
-                    if (res.ok && data.ip) {
-                        ipInput.value = data.ip;
-                        msg.style.color = 'green';
-                        msg.textContent = `Resolved (mDNS): ${data.ip}`;
-                        return;
-                    }
-                    // If mDNS fails, try DNS
-                    res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
-                    data = await res.json();
-                    if (res.ok && data.ip) {
-                        ipInput.value = data.ip;
-                        msg.style.color = 'green';
-                        msg.textContent = `Resolved (DNS): ${data.ip}`;
-                    } else {
-                        msg.style.color = 'red';
-                        msg.textContent = data.error || 'Could not resolve hostname.';
-                    }
-                } catch (e) {
-                    msg.style.color = 'red';
-                    msg.textContent = 'Error resolving hostname.';
-                }
-            };
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;flex:1">Pistes / Strips</h2>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Status</th><th>Network</th><th></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="s in strips" :key="s.id">
+          <tr>
+            <td x-text="s.strip_number"></td>
+            <td>
+              <input style="border:none;background:transparent;font-size:.9rem;width:100%;padding:0"
+                     :value="s.name||''"
+                     @change="rename(s, $event.target.value)"
+                     placeholder="— no name —">
+            </td>
+            <td><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
+            <td><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
+            <td>
+              <button class="danger" @click="deleteStrip(s)">Delete</button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="strips.length===0">
+          <td colspan="5" style="text-align:center;color:#999;padding:1.5rem">No strips yet. Add one below.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Add form -->
+    <div class="form-row">
+      <label>Strip number *
+        <input type="number" x-model="newNumber" placeholder="1" min="1">
+      </label>
+      <label>Name (optional)
+        <input x-model="newName" placeholder="Piste 1">
+      </label>
+      <button class="primary" @click="addStrip()" style="align-self:flex-end">+ Add strip</button>
+      <button @click="addMultiple()" style="align-self:flex-end" title="Add strips numbered 1 to N">Add strips 1 to N…</button>
+    </div>
+  </div>
+</main>
+<script>
+function app() {
+  return {
+    strips: [],
+    newNumber: '', newName: '',
+    notice: {text:'',error:false},
+
+    async init() { await this.load(); },
+
+    async load() {
+      this.strips = await fetch('/api/strips').then(r=>r.json());
+    },
+
+    async addStrip() {
+      if(!this.newNumber){this.showNotice('Strip number is required',true);return;}
+      const r = await fetch('/api/strips',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({strip_number:Number(this.newNumber), name:this.newName||null})
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Add failed',true);return;}
+      this.showNotice('Strip '+data.strip_number+' added');
+      this.newNumber=''; this.newName='';
+      await this.load();
+    },
+
+    async addMultiple() {
+      const n = Number(prompt('Add strips numbered 1 to:'));
+      if(!n||n<1)return;
+      const existing = new Set(this.strips.map(s=>s.strip_number));
+      for(let i=1;i<=n;i++){
+        if(!existing.has(i)){
+          await fetch('/api/strips',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({strip_number:i,name:'Piste '+i})});
         }
-        async function fetchStrips() {
-            const res = await fetch('/api/strips');
-            const strips = await res.json();
-            const list = document.getElementById('strips-list');
-            if (!strips.length) {
-                list.innerHTML = '<p>No strips defined yet.</p>';
-                return;
-            }
-            list.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>State</th><th>Network</th></tr></thead><tbody>` +
-                strips.map(s => `<tr><td>${s.strip_number}</td><td>${s.name || ''}</td><td>${s.status}</td><td>${s.state}</td><td>${s.network_state}</td></tr>`).join('') +
-                '</tbody></table>';
-        }
-        document.getElementById('add-strip-form').onsubmit = async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const data = {
-                strip_number: form.strip_number.valueAsNumber,
-                name: form.name.value.trim() || null
-            };
-            const msg = document.getElementById('form-msg');
-            msg.textContent = '';
-            const res = await fetch('/api/strips', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (res.ok) {
-                form.reset();
-                await fetchStrips();
-            } else {
-                const err = await res.json();
-                msg.textContent = err.error || 'Failed to add strip.';
-            }
-        };
-        fetchStrips();
-    </script>
+      }
+      this.showNotice('Strips 1–'+n+' ready');
+      await this.load();
+    },
+
+    async rename(s, name) {
+      await fetch('/api/strips/'+s.id,{
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: name||null})
+      });
+      await this.load();
+    },
+
+    async deleteStrip(s) {
+      if(!confirm('Delete strip '+s.strip_number+'?'))return;
+      const r = await fetch('/api/strips/'+s.id,{method:'DELETE'});
+      if(!r.ok){this.showNotice('Delete failed — strip may be in use',true);return;}
+      this.showNotice('Deleted');
+      await this.load();
+    },
+
+    showNotice(text,error=false){
+      this.notice={text,error};
+      setTimeout(()=>{this.notice={text:'',error:false};},3000);
+    },
+  };
+}
+</script>
+<script src="/js/alpinejs.min.js"></script>
 </body>
-
 </html>

@@ -1,29 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas Competition Manager</title>
-  <script src="/js/htmx.min.js"></script>
-  <script src="/js/alpinejs.min.js" defer></script>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .dashboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.25rem;margin-top:1.5rem}
+    .tile{background:#fff;border-radius:8px;padding:1.5rem 1.25rem;box-shadow:0 2px 6px rgba(0,0,0,.08);
+          text-decoration:none;color:#1a1a2e;display:flex;flex-direction:column;gap:.4rem;
+          border-left:4px solid #1a6bab;transition:box-shadow .15s,transform .1s}
+    .tile:hover{box-shadow:0 4px 14px rgba(0,0,0,.14);transform:translateY(-2px)}
+    .tile-icon{font-size:1.6rem;line-height:1}
+    .tile-title{font-size:1rem;font-weight:700}
+    .tile-desc{font-size:.82rem;color:#666;line-height:1.4}
+    .tile-green{border-left-color:#1e8449}
+    .tile-purple{border-left-color:#8e44ad}
+    .tile-orange{border-left-color:#e67e22}
+    .status-bar{background:#fff;border-radius:8px;padding:.75rem 1.25rem;
+                box-shadow:0 2px 6px rgba(0,0,0,.08);font-size:.85rem;color:#555;
+                display:flex;gap:2rem;flex-wrap:wrap;align-items:center}
+    .status-dot{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;
+                background:#1e8449;margin-right:.35rem;vertical-align:middle}
+    .status-dot.err{background:#e74c3c}
+    h1{margin:.5rem 0 0;color:#fff}
+    header{background:#1a1a2e;color:#fff;padding:1rem 2rem;display:flex;align-items:center;gap:1rem}
+    header a{color:#aad4f5;text-decoration:none;font-size:.9rem}
+  </style>
 </head>
-
 <body>
-  <h1>Atlas Competition Manager</h1>
-  <div class="card">
-    <p>Welcome. Use the navigation links below.</p>
-    <ul>
-      <li><a href="/competitions">Competitions</a></li>
-      <li><a href="/tournaments">Tournaments</a></li>
-      <li><a href="/resources">Resources (Strips &amp; Referees)</a></li>
-      <li><a href="/admin">System Administration</a></li>
-    </ul>
-  </div>
-  <div class="card">
-    <small>Server health: <span hx-get="/health" hx-trigger="load" hx-swap="innerHTML">checking…</span></small>
-  </div>
-</body>
+<header>
+  <strong style="font-size:1.1rem">Atlas</strong>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+</header>
+<main style="max-width:900px;margin:2rem auto;padding:0 1rem">
 
+  <h2 style="margin-top:0">Competition Manager</h2>
+
+  <!-- Status bar -->
+  <div class="status-bar" id="status-bar">
+    <span><span class="status-dot" id="health-dot"></span> Server: <strong id="health-text">checking…</strong></span>
+    <span id="db-stats" style="color:#888"></span>
+  </div>
+
+  <!-- Navigation tiles -->
+  <div class="dashboard">
+
+    <a href="/people.html" class="tile">
+      <span class="tile-icon">👤</span>
+      <span class="tile-title">People</span>
+      <span class="tile-desc">Manage fencers, referees and club members. Import from CSV.</span>
+    </a>
+
+    <a href="/tournaments.html" class="tile tile-green">
+      <span class="tile-icon">🏆</span>
+      <span class="tile-title">Events</span>
+      <span class="tile-desc">Create tournaments and competitions. Set up age categories and weapon.</span>
+    </a>
+
+    <a href="/strips.html" class="tile tile-orange">
+      <span class="tile-icon">⚔️</span>
+      <span class="tile-title">Strips / Pistes</span>
+      <span class="tile-desc">Add and manage pistes. Assign to pools during competition.</span>
+    </a>
+
+  </div>
+
+  <!-- How it flows -->
+  <div class="card" style="margin-top:1.5rem;font-size:.88rem;color:#555;line-height:1.7">
+    <strong style="color:#1a1a2e">Typical workflow</strong><br>
+    <strong>1.</strong> <a href="/people.html">Add fencers</a> to the master list (or import a CSV).<br>
+    <strong>2.</strong> <a href="/tournaments.html">Create a competition</a> — set weapon, gender, age categories.<br>
+    <strong>3.</strong> Open the competition → select eligible fencers → auto-seed.<br>
+    <strong>4.</strong> Create a pool phase → choose a rule → pools and bout order are generated automatically.<br>
+    <strong>5.</strong> Open a pool scoresheet (tablet) → enter scores.<br>
+    <strong>6.</strong> Close the phase → rankings computed → eliminated fencers marked.
+  </div>
+
+</main>
+
+<script>
+(async () => {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    document.getElementById('health-dot').className = 'status-dot';
+    document.getElementById('health-text').textContent = 'online';
+  } catch {
+    document.getElementById('health-dot').className = 'status-dot err';
+    document.getElementById('health-text').textContent = 'unreachable';
+  }
+  try {
+    const [people, comps] = await Promise.all([
+      fetch('/api/people?role=fencer').then(r=>r.json()),
+      fetch('/api/competitions').then(r=>r.json()),
+    ]);
+    document.getElementById('db-stats').textContent =
+      people.length + ' fencers · ' + comps.length + ' competitions';
+  } catch {}
+})();
+</script>
+</body>
 </html>
