@@ -1,222 +1,229 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tournaments — Atlas</title>
-    <script src="/js/htmx.min.js"></script>
-    <script src="/js/alpinejs.min.js" defer></script>
-    <link rel="stylesheet" href="/css/style.css">
-    <style>
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
-        }
-
-        .form-row {
-            display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-            align-items: flex-end;
-        }
-
-        .form-row label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
-            font-size: 0.85rem;
-            font-weight: bold;
-        }
-
-        .form-row input,
-        .form-row select {
-            padding: 0.45rem 0.7rem;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 0.95rem;
-        }
-
-        .form-row input[name="name"] {
-            width: 200px;
-        }
-
-        .form-row input[name="city"] {
-            width: 140px;
-        }
-
-        .form-row input[name="country"] {
-            width: 70px;
-            text-transform: uppercase;
-        }
-
-        .form-row input[type="date"] {
-            width: 140px;
-        }
-
-        button.primary {
-            background: #1a6bab;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 0.5rem 1.2rem;
-            cursor: pointer;
-            font-size: 0.95rem;
-        }
-
-        button.primary:hover {
-            background: #155594;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.15rem 0.55rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .badge-open {
-            background: #e8ecf0;
-            color: #555;
-        }
-
-        .badge-closed {
-            background: #d4efdf;
-            color: #1e8449;
-        }
-
-        .badge-finished {
-            background: #eaf0fb;
-            color: #1a6bab;
-        }
-
-        .empty {
-            color: #888;
-            font-style: italic;
-            padding: 1rem 0;
-        }
-
-        .loading {
-            color: #888;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Tournaments & Competitions</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table { width:100%; border-collapse:collapse; font-size:.9rem; }
+    th { text-align:left; padding:.5rem .75rem; background:#f0f2f5; border-bottom:2px solid #ddd; }
+    td { padding:.5rem .75rem; border-bottom:1px solid #eee; vertical-align:middle; }
+    tr:hover td { background:#f9f9f9; }
+    .toolbar { display:flex; gap:.75rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+    .form-grid label { display:flex; flex-direction:column; gap:.2rem; font-size:.85rem; }
+    .form-grid input,.form-grid select { padding:.4rem .6rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; }
+    .form-grid .full { grid-column:1/-1; }
+    .form-actions { grid-column:1/-1; display:flex; gap:.5rem; margin-top:.5rem; }
+    .section-title { font-weight:600; color:#555; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; margin:.75rem 0 .3rem; grid-column:1/-1; }
+    .badge { display:inline-block; font-size:.72rem; padding:.15rem .5rem; border-radius:10px; font-weight:600; margin-right:.25rem; }
+    .badge-draft { background:#fef3cd; color:#856404; }
+    .badge-active { background:#d4edda; color:#155724; }
+    .badge-finished { background:#d6d8db; color:#383d41; }
+    .badge-open { background:#d4edda; color:#155724; }
+    .badge-closed { background:#d6d8db; color:#383d41; }
+    .notice-bar { padding:.6rem 1rem; border-radius:5px; margin-bottom:1rem; font-size:.9rem; }
+    .notice-ok { background:#d5f5e3; color:#1e5631; }
+    .notice-err { background:#fde8e8; color:#922b21; }
+    a.comp-link { color:#1a6bab; text-decoration:none; font-weight:600; }
+    a.comp-link:hover { text-decoration:underline; }
+    .tabs { display:flex; gap:0; border-bottom:2px solid #ddd; margin-bottom:1rem; }
+    .tab { padding:.5rem 1.2rem; cursor:pointer; border:none; background:none; font-size:.9rem; color:#555; border-bottom:3px solid transparent; margin-bottom:-2px; }
+    .tab.active { color:#1a6bab; border-bottom-color:#1a6bab; font-weight:600; }
+  </style>
 </head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text && !notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text &&  notice.error" x-text="notice.text"></div>
 
-<body>
-    <header>
-        <strong>Atlas Competition Manager</strong>
-        <a href="/">Home</a>
-        <a href="/competitions">Competitions</a>
-    </header>
-    <main>
-        <!-- Create tournament -->
-        <div class="card">
-            <h2>Tournaments</h2>
-            <form id="create-tournament-form" x-data="tournamentForm()" @submit.prevent="submit">
-                <div class="form-row">
-                    <label>Name<input name="name" x-model="name" required></label>
-                    <label>City<input name="city" x-model="city" required></label>
-                    <label>Country<input name="country" x-model="country" maxlength="3" required></label>
-                    <label>Start <input type="date" name="date_start" x-model="date_start"></label>
-                    <label>End <input type="date" name="date_end" x-model="date_end"></label>
-                    <label>Level
-                        <select name="level" x-model="level">
-                            <option value="">(none)</option>
-                            <option value="FIE">FIE</option>
-                            <option value="Zone">Zone</option>
-                            <option value="National">National</option>
-                            <option value="Local">Local</option>
-                        </select>
-                    </label>
-                    <button type="submit" class="primary" :disabled="loading">
-                        <span x-text="loading ? 'Creating…' : '+ Add Tournament'"></span>
-                    </button>
-                </div>
-                <div id="form-error" x-text="error"
-                    style="color:#c0392b;font-size:0.85rem;margin-top:0.5rem;min-height:1.2rem;"></div>
-            </form>
+  <div class="tabs">
+    <button class="tab" :class="{active:tab==='competitions'}" @click="tab='competitions'">Competitions</button>
+    <button class="tab" :class="{active:tab==='tournaments'}"  @click="tab='tournaments'">Tournaments</button>
+  </div>
+
+  <!-- COMPETITIONS -->
+  <div x-show="tab==='competitions'">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0;flex:1">Competitions</h2>
+        <button class="primary" @click="openCompForm()">+ New competition</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Age categories</th><th>Date</th><th>Tournament</th><th>Fencers</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <template x-for="c in competitions" :key="c.id">
+            <tr>
+              <td><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
+              <td x-text="c.weapon"></td>
+              <td x-text="c.gender"></td>
+              <td x-text="c.age_cats||'—'"></td>
+              <td x-text="c.date||'—'"></td>
+              <td x-text="c.tournament_name||'—'"></td>
+              <td x-text="c.competitor_count"></td>
+              <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+              <td>
+                <button @click="editComp(c)">Edit</button>
+                <button class="danger" @click="deleteComp(c)">Delete</button>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="competitions.length===0"><td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No competitions yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" x-show="compFormOpen">
+      <h2 x-text="compForm.id?'Edit competition':'New competition'"></h2>
+      <div class="form-grid">
+        <label class="full">Name * <input x-model="compForm.name" placeholder="U17 Foil Men"></label>
+        <label>Weapon * <select x-model="compForm.weapon"><option value="">—</option><option value="foil">Foil</option><option value="epee">Épée</option><option value="sabre">Sabre</option></select></label>
+        <label>Gender * <select x-model="compForm.gender"><option value="">—</option><option value="M">Male</option><option value="F">Female</option><option value="X">Mixed / Open</option></select></label>
+        <label>Date <input type="date" x-model="compForm.date"></label>
+        <label>Tournament (optional) <select x-model="compForm.tournament_id"><option value="">— Standalone —</option><template x-for="t in tournaments" :key="t.id"><option :value="t.id" x-text="t.name"></option></template></select></label>
+        <div class="section-title">Age categories</div>
+        <div class="full" style="display:flex;flex-wrap:wrap;gap:.5rem">
+          <template x-for="ac in ageCategories" :key="ac.id">
+            <label style="flex-direction:row;align-items:center;gap:.3rem;cursor:pointer;font-size:.9rem">
+              <input type="checkbox" :checked="compForm.age_category_ids.includes(ac.id)" @change="toggleAgeCat(ac.id,$event.target.checked)">
+              <span x-text="ac.label + (ac.max_age?' (≤'+ac.max_age+'yr)':'') + (ac.min_age?' (≥'+ac.min_age+'yr)':'')"></span>
+            </label>
+          </template>
         </div>
-        <!-- Tournament list -->
-        <div class="card">
-            <div id="tournament-list" hx-get="/api/tournaments" hx-trigger="load, refresh-tournaments from:body"
-                hx-swap="innerHTML">
-                <span class="loading">Loading…</span>
-            </div>
+        <div class="form-actions">
+          <button class="primary" @click="saveComp()">Save</button>
+          <button @click="compFormOpen=false">Cancel</button>
         </div>
-    </main>
-    <script>
-        function tournamentForm() {
-            return {
-                name: '', city: '', country: '', date_start: '', date_end: '', level: '', loading: false, error: '',
-                async submit() {
-                    this.loading = true; this.error = '';
-                    try {
-                        const r = await fetch('/api/tournaments', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: this.name, city: this.city, country: this.country, date_start: this.date_start, date_end: this.date_end, level: this.level })
-                        });
-                        const data = await r.json();
-                        if (!r.ok) { this.error = data.error || 'Error creating tournament'; return; }
-                        this.name = this.city = this.country = this.date_start = this.date_end = this.level = '';
-                        document.body.dispatchEvent(new Event('refresh-tournaments'));
-                    } catch (e) {
-                        this.error = 'Network error';
-                    } finally {
-                        this.loading = false;
-                    }
-                }
-            };
-        }
-        // Render tournament table from JSON
-        document.body.addEventListener('htmx:beforeSwap', (evt) => {
-            if (evt.detail.target.id !== 'tournament-list') return;
-            try {
-                const data = JSON.parse(evt.detail.serverResponse);
-                evt.detail.serverResponse = renderTournamentTable(data);
-            } catch (_) { /* leave raw if not JSON */ }
-        });
-        function renderTournamentTable(rows) {
-            if (!rows.length) return `<p class='empty'>No tournaments yet. Create one above.</p>`;
-            const badgeClass = { open: 'badge-open', closed: 'badge-closed', finished: 'badge-finished' };
-            return `<table><thead><tr><th>Name</th><th>City</th><th>Country</th><th>Dates</th><th>Level</th><th>Status</th><th>Actions</th></tr></thead><tbody>` +
-                rows.map(t => `<tr>
-                    <td><a class="row-link" href="/tournaments-detail.html?tournament=${t.id}">${esc(t.name)}</a></td>
-                    <td>${esc(t.city)}</td>
-                    <td>${esc(t.country)}</td>
-                    <td>${t.date_start || ''} ${t.date_end ? '– ' + t.date_end : ''}</td>
-                    <td>${t.level || ''}</td>
-                    <td><span class="badge ${badgeClass[t.status] || ''}">${t.status}</span></td>
-                    <td><button class="danger" onclick="deleteTournament(${t.id})">Delete</button></td>
-                </tr>`).join('') + '</tbody></table>';
-        }
-        // Delete tournament logic with prompt for linked competitions
-        async function deleteTournament(id) {
-            if (!confirm('Delete this tournament? This cannot be undone.')) return;
-            // First, check if there are linked competitions
-            let r = await fetch(`/api/tournaments/${id}`);
-            let t = await r.json();
-            if (r.ok && t.competitions && t.competitions.length > 0) {
-                // Tournament has competitions, prompt user
-                let msg = `This tournament has ${t.competitions.length} linked competition(s).\nDelete tournament and ALL its competitions? This cannot be undone.`;
-                if (!confirm(msg)) return;
-                // Proceed with deletion, including competitions
-                r = await fetch(`/api/tournaments/${id}?delete_competitions=true`, { method: 'DELETE' });
-            } else {
-                // No competitions or not found, proceed with normal delete
-                r = await fetch(`/api/tournaments/${id}`, { method: 'DELETE' });
-            }
-            const d = await r.json();
-            if (!r.ok) { alert(d.error || 'Error deleting tournament'); return; }
-            document.body.dispatchEvent(new Event('refresh-tournaments'));
-        }
-        function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-    </script>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOURNAMENTS -->
+  <div x-show="tab==='tournaments'">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0;flex:1">Tournaments</h2>
+        <button class="primary" @click="openTournForm()">+ New tournament</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>City</th><th>Dates</th><th>Level</th><th>Competitions</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <template x-for="t in tournaments" :key="t.id">
+            <tr>
+              <td x-text="t.name"></td>
+              <td x-text="t.city||'—'"></td>
+              <td x-text="formatDates(t)"></td>
+              <td x-text="t.level||'—'"></td>
+              <td x-text="t.competition_count"></td>
+              <td><span class="badge" :class="'badge-'+t.status" x-text="t.status"></span></td>
+              <td>
+                <button @click="editTourn(t)">Edit</button>
+                <button class="danger" @click="deleteTourn(t)">Delete</button>
+              </td>
+            </tr>
+          </template>
+          <tr x-show="tournaments.length===0"><td colspan="7" style="text-align:center;color:#999;padding:1.5rem">No tournaments yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" x-show="tournFormOpen">
+      <h2 x-text="tournForm.id?'Edit tournament':'New tournament'"></h2>
+      <div class="form-grid">
+        <label class="full">Name * <input x-model="tournForm.name" placeholder="Spring Cup 2026"></label>
+        <label>City <input x-model="tournForm.city" placeholder="Brussels"></label>
+        <label>Country <input x-model="tournForm.country" placeholder="BEL"></label>
+        <label>Start date <input type="date" x-model="tournForm.date_start"></label>
+        <label>End date <input type="date" x-model="tournForm.date_end"></label>
+        <label>Organizer <input x-model="tournForm.organizer"></label>
+        <label>Level <input x-model="tournForm.level" placeholder="Regional, National…"></label>
+        <div class="form-actions">
+          <button class="primary" @click="saveTourn()">Save</button>
+          <button @click="tournFormOpen=false">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+function app() {
+  return {
+    tab:'competitions', competitions:[], tournaments:[], ageCategories:[],
+    notice:{text:'',error:false},
+    compFormOpen:false, compForm:{id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]},
+    tournFormOpen:false, tournForm:{id:null,name:'',city:'',country:'',date_start:'',date_end:'',organizer:'',level:''},
+
+    async init() { await Promise.all([this.loadComps(),this.loadTourns(),this.loadAgeCats()]); },
+
+    async loadComps() {
+      const list = await fetch('/api/competitions').then(r=>r.json());
+      this.competitions = await Promise.all(list.map(async c => {
+        const full = await fetch('/api/competitions/'+c.id).then(r=>r.json());
+        return {...c, age_cats: full.age_categories?.map(a=>a.code).join(', ')||''};
+      }));
+    },
+    async loadTourns() { this.tournaments = await fetch('/api/tournaments').then(r=>r.json()); },
+    async loadAgeCats() { this.ageCategories = await fetch('/api/age-categories').then(r=>r.json()); },
+
+    openCompForm() { this.compForm={id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]}; this.compFormOpen=true; },
+    async editComp(c) {
+      const full = await fetch('/api/competitions/'+c.id).then(r=>r.json());
+      this.compForm={id:c.id,name:c.name,weapon:c.weapon,gender:c.gender,date:c.date||'',tournament_id:c.tournament_id||'',age_category_ids:full.age_categories?.map(a=>a.id)||[]};
+      this.compFormOpen=true;
+    },
+    toggleAgeCat(id,checked) {
+      if(checked){if(!this.compForm.age_category_ids.includes(id))this.compForm.age_category_ids.push(id);}
+      else{this.compForm.age_category_ids=this.compForm.age_category_ids.filter(x=>x!==id);}
+    },
+    async saveComp() {
+      const body={name:this.compForm.name,weapon:this.compForm.weapon,gender:this.compForm.gender,date:this.compForm.date||null,tournament_id:this.compForm.tournament_id||null,age_category_ids:this.compForm.age_category_ids};
+      const url=this.compForm.id?'/api/competitions/'+this.compForm.id:'/api/competitions';
+      const method=this.compForm.id?'PATCH':'POST';
+      const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await r.json();
+      if(!r.ok){this.showNotice(data.error||'Save failed',true);return;}
+      this.showNotice('Saved: '+data.name);
+      this.compFormOpen=false;
+      await this.loadComps();
+    },
+    async deleteComp(c) {
+      if(!confirm('Delete "'+c.name+'"? This removes all competitors and phases.'))return;
+      const r=await fetch('/api/competitions/'+c.id,{method:'DELETE'});
+      if(!r.ok){this.showNotice('Delete failed',true);return;}
+      this.showNotice('Deleted '+c.name); await this.loadComps();
+    },
+
+    openTournForm() { this.tournForm={id:null,name:'',city:'',country:'',date_start:'',date_end:'',organizer:'',level:''}; this.tournFormOpen=true; },
+    editTourn(t) { this.tournForm={id:t.id,name:t.name,city:t.city||'',country:t.country||'',date_start:t.date_start||'',date_end:t.date_end||'',organizer:t.organizer||'',level:t.level||''}; this.tournFormOpen=true; },
+    async saveTourn() {
+      const url=this.tournForm.id?'/api/tournaments/'+this.tournForm.id:'/api/tournaments';
+      const method=this.tournForm.id?'PATCH':'POST';
+      const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(this.tournForm)});
+      const data=await r.json();
+      if(!r.ok){this.showNotice(data.error||'Save failed',true);return;}
+      this.showNotice('Saved: '+data.name); this.tournFormOpen=false;
+      await Promise.all([this.loadTourns(),this.loadComps()]);
+    },
+    async deleteTourn(t) {
+      if(!confirm('Delete "'+t.name+'"? Competitions will become standalone.'))return;
+      const r=await fetch('/api/tournaments/'+t.id,{method:'DELETE'});
+      if(!r.ok){this.showNotice('Delete failed',true);return;}
+      this.showNotice('Deleted '+t.name); await Promise.all([this.loadTourns(),this.loadComps()]);
+    },
+
+    formatDates(t) {
+      if(!t.date_start&&!t.date_end)return'—';
+      if(t.date_start===t.date_end||!t.date_end)return t.date_start;
+      return t.date_start+' → '+t.date_end;
+    },
+    showNotice(text,error=false){ this.notice={text,error}; setTimeout(()=>{this.notice={text:'',error:false};},4000); },
+  };
+}
+</script>
+<script src="/js/alpinejs.min.js"></script>
 </body>
-
 </html>

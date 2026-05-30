@@ -15,9 +15,13 @@ app.use(express.text({ type: ['text/csv', 'text/plain'] }));  // for CSV import
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API routes
-app.use('/api/people', require('./routes/people'));
-app.use('/api/clubs',  require('./routes/clubs'));
-app.use('/api/nocs',   require('./routes/nocs'));
+app.use('/api/people',       require('./routes/people'));
+app.use('/api/clubs',        require('./routes/clubs'));
+app.use('/api/nocs',         require('./routes/nocs'));
+app.use('/api/age-categories', require('./routes/ageCategories'));
+app.use('/api/tournaments',  require('./routes/tournaments'));
+app.use('/api/competitions', require('./routes/competitions'));
+app.use('/api/competitions/:compId/competitors', require('./routes/competitors'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -1,0 +1,56 @@
+'use strict';
+const express     = require('express');
+const Competition = require('../services/competitions');
+const Competitor  = require('../services/competitors');
+const AgeCategory = require('../services/ageCategories');
+
+const router = express.Router();
+
+router.get('/', (req, res) => {
+  res.json(Competition.findAll({ tournament_id: req.query.tournament_id }));
+});
+
+router.get('/:id', (req, res) => {
+  const c = Competition.findById(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Competition not found' });
+  res.json(c);
+});
+
+router.post('/', (req, res) => {
+  try {
+    const c = Competition.create(req.body);
+    res.status(201).json(c);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.patch('/:id', (req, res) => {
+  const c = Competition.update(req.params.id, req.body);
+  if (!c) return res.status(404).json({ error: 'Competition not found' });
+  res.json(c);
+});
+
+router.delete('/:id', (req, res) => {
+  const result = Competition.delete(req.params.id);
+  if (!result.changes) return res.status(404).json({ error: 'Competition not found' });
+  res.json({ ok: true });
+});
+
+// Replace age categories: PUT /api/competitions/:id/age-categories
+// Body: { category_ids: [1, 3] }
+router.put('/:id/age-categories', (req, res) => {
+  const c = Competition.findById(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Competition not found' });
+  Competition.setAgeCategories(req.params.id, req.body.category_ids || []);
+  res.json(Competition.findById(req.params.id));
+});
+
+// Eligible fencers for a competition (filtered by gender, weapon, age).
+router.get('/:id/eligible-fencers', (req, res) => {
+  const c = Competition.findById(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Competition not found' });
+  res.json(Competitor.findEligible(req.params.id));
+});
+
+module.exports = router;
