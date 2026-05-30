@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — People</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th    { text-align: left; padding: 0.5rem 0.75rem; background: #f0f2f5;
+            border-bottom: 2px solid #ddd; }
+    td    { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+    tr:hover td { background: #f9f9f9; }
+
+    .badge { display: inline-block; font-size: 0.72rem; padding: 0.15rem 0.5rem;
+             border-radius: 10px; font-weight: 600; margin-right: 0.25rem; }
+    .badge-fencer  { background: #d6eaf8; color: #1a6bab; }
+    .badge-referee { background: #d5f5e3; color: #1e8449; }
+
+    .toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .toolbar input[type=search] { flex: 1; min-width: 180px; padding: 0.45rem 0.75rem;
+                                  border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
+    .toolbar select { padding: 0.45rem 0.75rem; border: 1px solid #ccc;
+                      border-radius: 5px; font-size: 0.9rem; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-grid label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; }
+    .form-grid input, .form-grid select { padding: 0.4rem 0.6rem; border: 1px solid #ccc;
+                                          border-radius: 4px; font-size: 0.9rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .section-title { font-weight: 600; color: #555; font-size: 0.8rem; text-transform: uppercase;
+                     letter-spacing: 0.05em; margin: 1rem 0 0.5rem; grid-column: 1/-1; }
+    .form-actions  { grid-column: 1/-1; display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+    .notice-bar { padding: 0.6rem 1rem; border-radius: 5px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .notice-ok  { background: #d5f5e3; color: #1e5631; }
+    .notice-err { background: #fde8e8; color: #922b21; }
+
+    .import-area textarea { width: 100%; box-sizing: border-box; font-family: monospace;
+                             font-size: 0.8rem; padding: 0.5rem; border: 1px solid #ccc;
+                             border-radius: 4px; resize: vertical; }
+    .import-hint { font-size: 0.78rem; color: #777; margin-top: 0.25rem; }
+    details summary { cursor: pointer; font-weight: 600; color: #1a6bab; user-select: none; }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+</header>
+
+<main>
+
+  <!-- Notification bar -->
+  <div class="notice-bar notice-ok" x-show="notice.text && !notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text && notice.error"  x-text="notice.text"></div>
+
+  <!-- ── People list ─────────────────────────────────── -->
+  <div class="card">
+    <h2>People</h2>
+
+    <div class="toolbar">
+      <input type="search" placeholder="Search by name…"
+             x-model="search" @input.debounce.300ms="load()">
+      <select x-model="roleFilter" @change="load()">
+        <option value="">All roles</option>
+        <option value="fencer">Fencers only</option>
+        <option value="referee">Referees only</option>
+      </select>
+      <button class="primary" @click="openForm()">+ Add person</button>
+      <a href="/api/people/export?role=fencer" class="success" download>↓ Export CSV</a>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>DOB</th>
+          <th>Gender</th>
+          <th>Nationality</th>
+          <th>Club</th>
+          <th>Roles</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="p in people" :key="p.id">
+          <tr>
+            <td x-text="p.last_name + ', ' + p.first_name"></td>
+            <td x-text="p.date_of_birth || '—'"></td>
+            <td x-text="p.gender || '—'"></td>
+            <td x-text="p.nationality || '—'"></td>
+            <td x-text="p.club_name || '—'"></td>
+            <td>
+              <span class="badge badge-fencer"  x-show="p.is_fencer">fencer</span>
+              <span class="badge badge-referee" x-show="p.is_referee">referee</span>
+            </td>
+            <td>
+              <button @click="editPerson(p)">Edit</button>
+              <button class="danger" @click="deletePerson(p)">Delete</button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="people.length === 0">
+          <td colspan="7" style="text-align:center;color:#999;padding:1.5rem">No people found.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Add / Edit form ────────────────────────────── -->
+  <div class="card" x-show="formOpen">
+    <h2 x-text="form.id ? 'Edit person' : 'Add person'"></h2>
+
+    <div class="form-grid">
+      <div class="section-title">Personal details</div>
+
+      <label>First name *
+        <input x-model="form.first_name" placeholder="Alice">
+      </label>
+      <label>Last name *
+        <input x-model="form.last_name" placeholder="Dupont">
+      </label>
+      <label>Date of birth
+        <input type="date" x-model="form.date_of_birth">
+      </label>
+      <label>Gender
+        <select x-model="form.gender">
+          <option value="">—</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="X">Other</option>
+        </select>
+      </label>
+      <label>Nationality
+        <select x-model="form.nationality">
+          <option value="">—</option>
+          <template x-for="n in nocs" :key="n.code">
+            <option :value="n.code" x-text="n.code + ' — ' + n.country"></option>
+          </template>
+        </select>
+      </label>
+      <label>Club
+        <select x-model="form.club_id">
+          <option value="">—</option>
+          <template x-for="c in clubs" :key="c.id">
+            <option :value="c.id" x-text="c.name"></option>
+          </template>
+        </select>
+      </label>
+
+      <div class="section-title">Fencer profile (leave blank if not a fencer)</div>
+
+      <label>Licence
+        <input x-model="form.fencer.licence" placeholder="BEL-001">
+      </label>
+      <label>Handedness
+        <select x-model="form.fencer.handedness">
+          <option value="">—</option>
+          <option value="R">Right</option>
+          <option value="L">Left</option>
+        </select>
+      </label>
+      <label>Weapons (comma-separated)
+        <input x-model="form.fencer.weapons_raw" placeholder="foil, epee">
+      </label>
+      <label>Ranking
+        <input type="number" x-model="form.fencer.ranking" placeholder="42">
+      </label>
+
+      <div class="form-actions">
+        <button class="primary" @click="savePerson()">Save</button>
+        <button @click="closeForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CSV import ─────────────────────────────────── -->
+  <div class="card">
+    <details>
+      <summary>Import fencers from CSV</summary>
+      <div class="import-area" style="margin-top:1rem">
+        <p class="import-hint">
+          Required columns: <code>first_name, last_name</code> —
+          Optional: <code>date_of_birth, gender, nationality, club, licence, weapons, handedness, ranking</code><br>
+          Existing records are updated by licence (if set) or by name + date of birth.
+        </p>
+        <textarea x-model="csvText" rows="8"
+          placeholder="first_name,last_name,date_of_birth,gender,nationality,club,licence,weapons,handedness,ranking
+Alice,Dupont,2007-04-12,F,BEL,Club Namur,BEL-001,foil,R,15"></textarea>
+        <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center">
+          <button class="primary" @click="importCsv()">Import</button>
+          <span x-show="importResult" x-text="importResult" style="font-size:0.85rem"></span>
+        </div>
+      </div>
+    </details>
+  </div>
+
+</main>
+
+<script src="/js/alpinejs.min.js"></script>
+<script>
+function app() {
+  return {
+    people:      [],
+    clubs:       [],
+    nocs:        [],
+    search:      '',
+    roleFilter:  '',
+    formOpen:    false,
+    notice:      { text: '', error: false },
+    csvText:     '',
+    importResult: '',
+    form: {
+      id: null, first_name: '', last_name: '', date_of_birth: '',
+      gender: '', nationality: '', club_id: '',
+      fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+    },
+
+    async init() {
+      await Promise.all([this.load(), this.loadClubs(), this.loadNocs()]);
+    },
+
+    async load() {
+      const params = new URLSearchParams({ search: this.search, role: this.roleFilter });
+      const r = await fetch('/api/people?' + params);
+      this.people = await r.json();
+    },
+
+    async loadClubs() {
+      const r = await fetch('/api/clubs');
+      this.clubs = await r.json();
+    },
+
+    async loadNocs() {
+      const r = await fetch('/api/nocs');
+      this.nocs = await r.json();
+    },
+
+    openForm() {
+      this.form = {
+        id: null, first_name: '', last_name: '', date_of_birth: '',
+        gender: '', nationality: '', club_id: '',
+        fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+      };
+      this.formOpen = true;
+    },
+
+    editPerson(p) {
+      this.form = {
+        id:            p.id,
+        first_name:    p.first_name,
+        last_name:     p.last_name,
+        date_of_birth: p.date_of_birth || '',
+        gender:        p.gender        || '',
+        nationality:   p.nationality   || '',
+        club_id:       p.club_id       || '',
+        fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+      };
+      // Load existing fencer profile if present
+      if (p.is_fencer) {
+        fetch('/api/people/' + p.id).then(r => r.json()).then(full => {
+          if (full.fencer) {
+            this.form.fencer = {
+              licence:      full.fencer.licence    || '',
+              handedness:   full.fencer.handedness || '',
+              weapons_raw:  (full.fencer.weapons || []).join(', '),
+              ranking:      full.fencer.ranking    || '',
+            };
+          }
+        });
+      }
+      this.formOpen = true;
+    },
+
+    async savePerson() {
+      const hasFencer = this.form.fencer.licence || this.form.fencer.weapons_raw;
+      const fencerPayload = hasFencer ? {
+        licence:    this.form.fencer.licence || null,
+        handedness: this.form.fencer.handedness || null,
+        weapons:    this.form.fencer.weapons_raw
+                      ? this.form.fencer.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
+                      : [],
+        ranking:    this.form.fencer.ranking ? Number(this.form.fencer.ranking) : null,
+      } : null;
+
+      const body = {
+        first_name:    this.form.first_name,
+        last_name:     this.form.last_name,
+        date_of_birth: this.form.date_of_birth || null,
+        gender:        this.form.gender        || null,
+        nationality:   this.form.nationality   || null,
+        club_id:       this.form.club_id       || null,
+        ...(fencerPayload && !this.form.id ? { fencer: fencerPayload } : {}),
+      };
+
+      const url    = this.form.id ? '/api/people/' + this.form.id : '/api/people';
+      const method = this.form.id ? 'PATCH' : 'POST';
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json();
+
+      if (!r.ok) { this.showNotice(data.error || 'Save failed', true); return; }
+
+      // Update fencer profile separately on edit
+      if (this.form.id && fencerPayload) {
+        await fetch('/api/people/' + this.form.id + '/fencer', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fencerPayload)
+        });
+      }
+
+      this.showNotice('Saved: ' + data.last_name + ', ' + data.first_name);
+      this.closeForm();
+      await this.load();
+      await this.loadClubs();
+    },
+
+    async deletePerson(p) {
+      if (!confirm('Delete ' + p.first_name + ' ' + p.last_name + '?')) return;
+      const r = await fetch('/api/people/' + p.id, { method: 'DELETE' });
+      if (!r.ok) { this.showNotice('Delete failed', true); return; }
+      this.showNotice('Deleted ' + p.first_name + ' ' + p.last_name);
+      await this.load();
+    },
+
+    async importCsv() {
+      this.importResult = 'Importing…';
+      const r = await fetch('/api/people/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: this.csvText
+      });
+      const data = await r.json();
+      if (!r.ok) { this.importResult = 'Error: ' + data.error; return; }
+      this.importResult = `Done — created: ${data.created}, updated: ${data.updated}, errors: ${data.errors.length}`;
+      await this.load();
+      await this.loadClubs();
+    },
+
+    closeForm()  { this.formOpen = false; },
+    showNotice(text, error = false) {
+      this.notice = { text, error };
+      setTimeout(() => { this.notice = { text: '', error: false }; }, 4000);
+    },
+  };
+}
+</script>
+</body>
+</html>
