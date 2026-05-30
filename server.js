@@ -22,6 +22,11 @@ app.use('/api/age-categories', require('./routes/ageCategories'));
 app.use('/api/tournaments',  require('./routes/tournaments'));
 app.use('/api/competitions', require('./routes/competitions'));
 app.use('/api/competitions/:compId/competitors', require('./routes/competitors'));
+app.use('/api/competitions/:compId/phases',    require('./routes/phases'));
+app.use('/api/phases', require('./routes/phasesById'));
+app.use('/api/pools',  require('./routes/pools'));
+app.use('/api/bouts',  require('./routes/bouts'));
+app.use('/api/rules',  require('./routes/rules'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

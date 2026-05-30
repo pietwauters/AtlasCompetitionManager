@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Pool</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body{background:#1a1a2e;color:#fff;font-family:Arial,sans-serif}
+    header{background:#0d0d1f;padding:.6rem 1.5rem;display:flex;align-items:center;gap:1rem}
+    header a{color:#aad4f5;text-decoration:none;font-size:.9rem}
+    .pool-header{padding:1rem 1.5rem;background:#16213e;display:flex;gap:2rem;align-items:center;flex-wrap:wrap}
+    .pool-header h2{margin:0;font-size:1.2rem}
+    .meta{font-size:.82rem;color:#aaa}
+    .scoresheet{padding:1rem 1.5rem}
+    .bout-row{background:#fff;color:#1a1a2e;border-radius:6px;margin-bottom:.6rem;display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+    .bout-row.finished{background:#f0faf5}
+    .bout-row.active{background:#fffbf0;border-left:3px solid #e67e22}
+    .bout-num{font-size:.75rem;color:#888;width:1.8rem;text-align:center;flex-shrink:0}
+    .fencer-name{flex:1;font-size:.92rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fencer-name.winner{color:#1e8449}
+    .score-input{width:2.8rem;height:2.4rem;text-align:center;font-size:1.1rem;font-weight:700;border:2px solid #ccc;border-radius:5px;background:#fff;color:#1a1a2e}
+    .score-input:focus{outline:none;border-color:#1a6bab}
+    .separator{font-size:1rem;color:#999;padding:0 .2rem}
+    .btn-undo{background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;flex-shrink:0}
+    .btn-undo:hover{background:#c0392b}
+    .tie-picker{font-size:.78rem;background:#fef3cd;border-radius:4px;padding:.2rem .4rem}
+    .tie-picker select{border:none;background:transparent;font-size:.78rem;cursor:pointer}
+    .progress{padding:.5rem 1.5rem;font-size:.85rem;color:#aad4f5}
+    .btn-close-pool{display:block;margin:1.5rem auto;padding:.6rem 2rem;background:#1e8449;color:#fff;border:none;border-radius:6px;font-size:.95rem;cursor:pointer}
+    .btn-close-pool:hover{background:#196b3c}
+    .competitor-list{padding:.5rem 1.5rem 0;display:flex;flex-wrap:wrap;gap:.5rem}
+    .comp-chip{background:#16213e;border:1px solid #2a3a5e;border-radius:4px;padding:.2rem .6rem;font-size:.78rem;color:#aad4f5}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a :href="pool?'/phase.html?id='+pool.phase_id:'#'">← Phase overview</a>
+  <span style="color:#aad4f5;margin-left:auto" x-text="pool?'Pool '+pool.pool_number+' | '+(pool.strip_name||'No strip'):''"></span>
+</header>
+
+<div class="pool-header" x-show="pool">
+  <div>
+    <h2 x-text="'Pool ' + (pool?.pool_number||'')"></h2>
+    <div class="meta">
+      <span x-show="pool?.strip_name">📍 <span x-text="pool?.strip_name"></span> &nbsp;</span>
+      <span x-show="pool?.ref_last">👤 <span x-text="(pool?.ref_first||'')+' '+(pool?.ref_last||'')"></span></span>
+    </div>
+  </div>
+  <div style="margin-left:auto;font-size:.9rem">
+    <span x-text="bouts.filter(b=>b.status==='finished').length"></span>
+    /
+    <span x-text="bouts.length"></span>
+    bouts complete
+  </div>
+</div>
+
+<!-- Competitors in pool -->
+<div class="competitor-list" x-show="pool">
+  <template x-for="c in pool?.competitors||[]" :key="c.competitor_id">
+    <span class="comp-chip" x-text="c.last_name+', '+c.first_name+(c.initial_seed?' ['+c.initial_seed+']':'')"></span>
+  </template>
+</div>
+
+<div class="progress" x-show="notice.text" :style="notice.error?'color:#e74c3c':''" x-text="notice.text"></div>
+
+<div class="scoresheet">
+  <template x-for="bout in bouts" :key="bout.id">
+    <div class="bout-row" :class="bout.status">
+      <span class="bout-num" x-text="bout.bout_order"></span>
+
+      <span class="fencer-name" :class="{winner: bout.winner_id===bout.left_id}"
+            x-text="bout.left_last+', '+bout.left_first"></span>
+
+      <input class="score-input" type="number" min="0" max="99"
+             :value="bout.left_score??''"
+             @change="saveScore(bout, $event.target.value, null)"
+             @focus="$event.target.select()"
+             :style="bout.winner_id===bout.left_id?'border-color:#1e8449':''">
+
+      <span class="separator">:</span>
+
+      <input class="score-input" type="number" min="0" max="99"
+             :value="bout.right_score??''"
+             @change="saveScore(bout, null, $event.target.value)"
+             @focus="$event.target.select()"
+             :style="bout.winner_id===bout.right_id?'border-color:#1e8449':''">
+
+      <span class="fencer-name" :class="{winner: bout.winner_id===bout.right_id}"
+            style="text-align:right"
+            x-text="bout.right_last+', '+bout.right_first"></span>
+
+      <!-- Tie picker: shown when both scores equal and no winner yet -->
+      <span class="tie-picker"
+            x-show="bout.left_score!==null && bout.right_score!==null && bout.left_score===bout.right_score && !bout.winner_id">
+        Winner:
+        <select @change="setWinner(bout, $event.target.value)">
+          <option value="">pick…</option>
+          <option :value="bout.left_id"  x-text="bout.left_last"></option>
+          <option :value="bout.right_id" x-text="bout.right_last"></option>
+        </select>
+      </span>
+
+      <button class="btn-undo" @click="undo(bout)" title="Undo last score entry">↩</button>
+    </div>
+  </template>
+</div>
+
+<script>
+function app() {
+  const poolId = new URLSearchParams(window.location.search).get('id');
+  return {
+    poolId, pool:null, bouts:[],
+    notice:{text:'',error:false},
+    pending:{},  // boutId → {ls, rs} buffered inputs
+
+    async init() {
+      if(!poolId){this.showNotice('No pool ID in URL',true);return;}
+      await this.load();
+      // Auto-refresh every 30 seconds (for multi-tablet use)
+      setInterval(()=>this.load(),30000);
+    },
+
+    async load() {
+      const r = await fetch('/api/pools/'+poolId);
+      if(!r.ok){this.showNotice('Pool not found',true);return;}
+      this.pool  = await r.json();
+      this.bouts = this.pool.bouts||[];
+      document.title = 'Atlas — Pool '+(this.pool.pool_number||'');
+    },
+
+    async saveScore(bout, leftVal, rightVal) {
+      // Buffer both scores so we only save when both are filled
+      if(!this.pending[bout.id]) this.pending[bout.id] = { ls: bout.left_score, rs: bout.right_score };
+      if(leftVal  !== null) this.pending[bout.id].ls = leftVal  === '' ? null : Number(leftVal);
+      if(rightVal !== null) this.pending[bout.id].rs = rightVal === '' ? null : Number(rightVal);
+
+      const {ls, rs} = this.pending[bout.id];
+      // Send when both scores are present (or when explicitly clearing)
+      if(ls !== null && rs !== null) {
+        await this._patch(bout.id, ls, rs, null);
+        delete this.pending[bout.id];
+      }
+    },
+
+    async setWinner(bout, winnerId) {
+      if(!winnerId) return;
+      await this._patch(bout.id, bout.left_score, bout.right_score, winnerId);
+    },
+
+    async undo(bout) {
+      const r = await fetch('/api/bouts/'+bout.id+'/undo', {method:'POST'});
+      if(!r.ok){this.showNotice('Nothing to undo',true);return;}
+      const updated = await r.json();
+      this.bouts = this.bouts.map(b=>b.id===bout.id?{...b,...updated}:b);
+      this.showNotice('Undone',false);
+    },
+
+    async _patch(boutId, ls, rs, winnerId) {
+      const r = await fetch('/api/bouts/'+boutId, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({left_score:ls, right_score:rs, winner_id:winnerId||null})
+      });
+      if(!r.ok){this.showNotice('Save failed',true);return;}
+      const updated = await r.json();
+      this.bouts = this.bouts.map(b=>b.id===boutId?{...b,...updated}:b);
+    },
+
+    showNotice(text,error=false) {
+      this.notice={text,error};
+      if(!error) setTimeout(()=>{this.notice={text:'',error:false};},2000);
+    },
+  };
+}
+</script>
+<script src="/js/alpinejs.min.js"></script>
+</body>
+</html>

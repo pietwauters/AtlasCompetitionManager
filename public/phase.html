@@ -1,364 +1,256 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phase — Atlas</title>
-    <script src="/js/htmx.min.js"></script>
-    <script src="/js/alpinejs.min.js" defer></script>
-    <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f0f2f5;
-            color: #1a1a2e;
-        }
-
-        header {
-            background: #1a1a2e;
-            color: #fff;
-            padding: 0.8rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        header a {
-            color: #aad4f5;
-            text-decoration: none;
-            font-size: .9rem;
-        }
-
-        main {
-            max-width: 1100px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
-        }
-
-        h2,
-        h3,
-        h4 {
-            margin-top: 0;
-        }
-
-        .meta {
-            display: flex;
-            gap: 2rem;
-            font-size: .9rem;
-            color: #555;
-            margin-bottom: 1rem;
-        }
-
-        .meta span strong {
-            color: #1a1a2e;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: .15rem .55rem;
-            border-radius: 999px;
-            font-size: .75rem;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .badge-pending {
-            background: #e8ecf0;
-            color: #555;
-        }
-
-        .badge-active {
-            background: #d4efdf;
-            color: #1e8449;
-        }
-
-        .badge-finished {
-            background: #eaf0fb;
-            color: #1a6bab;
-        }
-
-        /* Pool grid */
-        .pools-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 1.2rem;
-        }
-
-        .pool-card {
-            background: #fff;
-            border: 1px solid #e0e6ee;
-            border-radius: 8px;
-            padding: 1.1rem 1.2rem;
-        }
-
-        .pool-card h4 {
-            margin-bottom: .7rem;
-            color: #1a1a2e;
-            font-size: 1rem;
-        }
-
-        /* Fencer list in a pool */
-        .fencer-list {
-            list-style: none;
-            margin: 0 0 1rem 0;
-            padding: 0;
-        }
-
-        .fencer-list li {
-            display: flex;
-            gap: .5rem;
-            padding: .25rem 0;
-            font-size: .88rem;
-            border-bottom: 1px solid #f0f2f5;
-        }
-
-        .fencer-list li:last-child {
-            border-bottom: none;
-        }
-
-        .fencer-list .seed {
-            width: 1.6rem;
-            text-align: right;
-            color: #888;
-            flex-shrink: 0;
-        }
-
-        .fencer-list .nat {
-            width: 2.2rem;
-            text-align: right;
-            color: #888;
-            flex-shrink: 0;
-            font-size: .78rem;
-        }
-
-        /* Bout table */
-        .bouts-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: .82rem;
-            margin-top: .5rem;
-        }
-
-        .bouts-table th {
-            background: #f0f2f5;
-            text-align: left;
-            padding: .3rem .5rem;
-            font-weight: 600;
-        }
-
-        .bouts-table td {
-            padding: .3rem .5rem;
-            border-bottom: 1px solid #f0f2f5;
-        }
-
-        .bouts-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .bouts-table .score {
-            text-align: center;
-            font-weight: bold;
-            color: #1a6bab;
-            white-space: nowrap;
-        }
-
-        .status-pill {
-            display: inline-block;
-            padding: .1rem .45rem;
-            border-radius: 999px;
-            font-size: .72rem;
-            font-weight: bold;
-            text-transform: uppercase;
-            background: #e8ecf0;
-            color: #555;
-        }
-
-        .empty {
-            color: #888;
-            font-style: italic;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Phase</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table{width:100%;border-collapse:collapse;font-size:.9rem}
+    th{text-align:left;padding:.5rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd}
+    td{padding:.5rem .75rem;border-bottom:1px solid #eee;vertical-align:middle}
+    tr:hover td{background:#f9f9f9}
+    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600;margin-right:.2rem}
+    .badge-pending{background:#fef3cd;color:#856404}
+    .badge-active{background:#d4edda;color:#155724}
+    .badge-finished{background:#d6d8db;color:#383d41}
+    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
+    .notice-ok{background:#d5f5e3;color:#1e5631}
+    .notice-err{background:#fde8e8;color:#922b21}
+    .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:1.5rem}
+    .pool-card{background:#fff;border-radius:8px;padding:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid #ddd}
+    .pool-card.active{border-left-color:#1e8449}
+    .pool-card.finished{border-left-color:#1a6bab}
+    .pool-card h3{margin:0 0 .5rem;font-size:1rem}
+    .pool-meta{font-size:.8rem;color:#666;margin-bottom:.5rem}
+    .progress-bar{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin:.4rem 0}
+    .progress-fill{height:100%;background:#1e8449;transition:width .3s}
+    .pool-actions{margin-top:.75rem;display:flex;gap:.5rem}
+    .rank-pos{font-weight:700;color:#1a6bab;width:2rem;text-align:center}
+    .adv{color:#1e8449;font-weight:600}
+    .elim{color:#c0392b}
+    .vr{font-family:monospace}
+    select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+  </style>
 </head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
-<body>
-    <header>
-        <strong>Atlas</strong>
-        <a href="/">Home</a>
-        <a href="/competitions">Competitions</a>
-        <a id="back-link" href="#">Competition</a>
-        <span id="header-sub" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
-    </header>
+  <!-- Phase header -->
+  <div class="card">
+    <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+      <h2 style="margin:0" x-text="'Pool phase — ' + (phase?.rule_doc||'')"></h2>
+      <span class="badge" :class="'badge-'+(phase?.status||'')" x-text="phase?.status"></span>
+      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
+    </div>
+    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+      <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate phase</button>
+      <template x-if="phase?.status==='active'">
+        <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <button @click="loadRankings()" style="background:#f0f2f5">⟳ Refresh rankings</button>
+          <span style="font-size:.85rem;color:#666" x-text="allBoutsComplete?'All bouts complete — ready to close':'Bouts remaining: '+boutsRemaining"></span>
+          <template x-if="allBoutsComplete">
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <label style="font-size:.85rem">Advance method:
+                <select x-model="closeMethod">
+                  <option value="rule">From rule document</option>
+                  <option value="percentage">Percentage %</option>
+                  <option value="count">Exact count</option>
+                  <option value="multiple">Multiple of N</option>
+                </select>
+              </label>
+              <input x-show="closeMethod!=='rule'" type="number" x-model="closeValue"
+                     style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
+                     placeholder="value">
+              <button class="success" @click="closePhase()">✓ Close phase</button>
+            </div>
+          </template>
+        </span>
+      </template>
+    </div>
+  </div>
 
-    <main>
-        <div class="card" id="phase-card">
-            <div style="color:#888">Loading…</div>
+  <!-- Pool cards -->
+  <div class="pool-grid">
+    <template x-for="pool in pools" :key="pool.id">
+      <div class="pool-card" :class="pool.status">
+        <h3 x-text="'Pool ' + pool.pool_number"></h3>
+        <div class="pool-meta">
+          <span x-show="pool.strip_name">📍 <span x-text="pool.strip_name"></span></span>
+          <span x-show="!pool.strip_name" style="color:#aaa">No strip assigned</span>
+          <br>
+          <span x-show="pool.ref_last">👤 <span x-text="(pool.ref_first||'')+' '+(pool.ref_last||'')"></span></span>
+          <span x-show="!pool.ref_last" style="color:#aaa">No referee assigned</span>
         </div>
-        <div class="pools-grid" id="pools-grid"></div>
-    </main>
+        <div style="font-size:.82rem;color:#555" x-text="pool.bouts_complete+' / '+pool.bouts_total+' bouts complete'"></div>
+        <div class="progress-bar">
+          <div class="progress-fill" :style="'width:'+(pool.bouts_total>0?Math.round(pool.bouts_complete/pool.bouts_total*100):0)+'%'"></div>
+        </div>
+        <div class="pool-actions">
+          <a :href="'/pool.html?id='+pool.id" class="primary" style="display:inline-block;padding:.4rem .9rem;border-radius:5px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.85rem">Open scoresheet</a>
+          <button @click="assignResources(pool)" style="font-size:.82rem">Assign strip/ref</button>
+        </div>
+      </div>
+    </template>
+  </div>
 
-    <script>
-        // Alpine.js row state for each bout, by ID
-        function boutRowDataById(boutId, compId, phaseId) {
-            const bout = window._boutsById[boutId];
-            return {
-                left: bout.left_score ?? '',
-                right: bout.right_score ?? '',
-                winner: bout.winner_id ?? '',
-                saving: false,
-                error: '',
-                origLeft: bout.left_score ?? '',
-                origRight: bout.right_score ?? '',
-                origWinner: bout.winner_id ?? '',
-                async saveResult() {
-                    if (this.saving) return;
-                    this.error = '';
-                    this.saving = true;
-                    try {
-                        let body = { left_score: this.left, right_score: this.right };
-                        // If tie, allow winner selection
-                        if (this.left !== '' && this.right !== '' && Number(this.left) === Number(this.right)) {
-                            if (this.winner) body.winner_id = this.winner;
-                        }
-                        const resp = await fetch(`/api/competitions/${compId}/phases/${phaseId}/bouts/${bout.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(body)
-                        });
-                        if (!resp.ok) {
-                            const data = await resp.json();
-                            this.error = data.error || 'Error';
-                        } else {
-                            this.origLeft = this.left;
-                            this.origRight = this.right;
-                            this.origWinner = this.winner;
-                            this.error = '';
-                        }
-                    } catch (e) {
-                        this.error = 'Network error';
-                    } finally {
-                        this.saving = false;
-                    }
-                }
-            };
-        }
-        const parts = location.pathname.split('/');
-        const compId = parts[2];
-        const phaseId = parts[4];
+  <!-- Assign strip/referee modal -->
+  <div class="card" x-show="assignOpen" style="max-width:400px">
+    <h3 style="margin-top:0">Assign resources — Pool <span x-text="assignPool?.pool_number"></span></h3>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <label style="font-size:.85rem">Strip
+        <select x-model="assignStripId">
+          <option value="">— None —</option>
+          <template x-for="s in strips" :key="s.id">
+            <option :value="s.id" x-text="s.name||'Strip '+s.strip_number"></option>
+          </template>
+        </select>
+      </label>
+      <label style="font-size:.85rem">Referee
+        <select x-model="assignRefId">
+          <option value="">— None —</option>
+          <template x-for="r in referees" :key="r.referee_id">
+            <option :value="r.referee_id" x-text="r.last_name+', '+r.first_name"></option>
+          </template>
+        </select>
+      </label>
+      <div style="display:flex;gap:.5rem">
+        <button class="primary" @click="saveAssignment()">Save</button>
+        <button @click="assignOpen=false">Cancel</button>
+      </div>
+    </div>
+  </div>
 
-        document.getElementById('back-link').href = `/competitions/${compId}`;
+  <!-- Live rankings -->
+  <div class="card" x-show="rankings.length>0">
+    <h2 style="margin-top:0">
+      Rankings
+      <span style="font-size:.8rem;color:#888;font-weight:400" x-show="phase?.status!=='finished'"> (live — not saved yet)</span>
+    </h2>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Club</th>
+        <th title="Victories">V</th>
+        <th title="Matches">M</th>
+        <th title="Victory ratio">V/M</th>
+        <th title="Indicator">Ind</th>
+        <th title="Touches scored">TS</th>
+        <th title="Touches received">TR</th>
+      </tr></thead>
+      <tbody>
+        <template x-for="r in rankings" :key="r.competitor_id">
+          <tr :class="r.advanced?'adv':(r.advanced===0?'elim':'')">
+            <td class="rank-pos" x-text="r.position"></td>
+            <td x-text="r.last_name+', '+r.first_name"></td>
+            <td x-text="r.club_name||'—'"></td>
+            <td x-text="r.victories"></td>
+            <td x-text="r.matches"></td>
+            <td class="vr" x-text="r.matches>0?(r.victories/r.matches).toFixed(3):'—'"></td>
+            <td x-text="(r.indicator>0?'+':'')+r.indicator"></td>
+            <td x-text="r.touches_scored"></td>
+            <td x-text="r.touches_received"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</main>
+<script>
+function app() {
+  const phaseId = new URLSearchParams(window.location.search).get('id');
+  return {
+    phaseId, phase:null, comp:null, pools:[], rankings:[],
+    strips:[], referees:[],
+    notice:{text:'',error:false},
+    closeMethod:'rule', closeValue:'',
+    assignOpen:false, assignPool:null, assignStripId:'', assignRefId:'',
 
-        // Redirect to the EJS HTML page if loaded directly
-        if (!window.location.pathname.endsWith('/view')) {
-            window.location.pathname = `/competitions/${compId}/phases/${phaseId}/view`;
-        }
+    get allBoutsComplete() {
+      return this.pools.length>0 && this.pools.every(p=>p.bouts_complete===p.bouts_total && p.bouts_total>0);
+    },
+    get boutsRemaining() {
+      return this.pools.reduce((s,p)=>s+(p.bouts_total-p.bouts_complete),0);
+    },
 
-        function render(phase) {
-            document.title = `Phase ${phase.phase_order} — Atlas`;
-            document.getElementById('header-sub').textContent = `Phase ${phase.phase_order}`;
+    async init() {
+      if(!phaseId){this.showNotice('No phase ID in URL',true);return;}
+      await Promise.all([this.loadPhase(),this.loadStrips(),this.loadReferees()]);
+      if(this.phase?.status!=='pending') await this.loadRankings();
+    },
 
-            document.getElementById('phase-card').innerHTML = `
-                <h2>Phase ${phase.phase_order}
-                    <span class="badge badge-${phase.status}">${phase.status}</span>
-                </h2>
-                <div class="meta">
-                    <span><strong>Rule:</strong> ${esc(phase.rule_doc)}</span>
-                    <span><strong>Type:</strong> ${esc(phase.type)}</span>
-                    <span><strong>Pools:</strong> ${phase.pools.length}</span>
-                </div>
-            `;
+    async loadPhase() {
+      this.phase = await fetch('/api/competitions/0/phases/'+phaseId).then(r=>r.json()).catch(()=>null);
+      // Fall back: direct DB lookup via phase route
+      this.phase = await fetch('/api/phases/'+phaseId).then(r=>r.ok?r.json():null).catch(()=>null)
+                || this.phase;
+      if(!this.phase) return;
+      if(this.phase.competition_id) {
+        this.comp = await fetch('/api/competitions/'+this.phase.competition_id).then(r=>r.json());
+        document.title = 'Atlas — '+(this.comp?.name||'Phase');
+      }
+      this.pools = await fetch('/api/phases/'+phaseId+'/pools').then(r=>r.json());
+    },
 
-            const grid = document.getElementById('pools-grid');
-            if (!phase.pools.length) {
-                grid.innerHTML = '<p class="empty">No pools generated yet.</p>';
-                return;
-            }
+    async loadRankings() {
+      const r = await fetch('/api/phases/'+phaseId+'/rankings');
+      if(r.ok) this.rankings = await r.json();
+    },
 
-            grid.innerHTML = phase.pools.map(pool => renderPool(pool)).join('');
-        }
+    async loadStrips()   { this.strips   = await fetch('/api/strips').then(r=>r.json()).catch(()=>[]); },
+    async loadReferees() { this.referees = await fetch('/api/people?role=referee').then(r=>r.json()).catch(()=>[]); },
 
-        function renderPool(pool) {
-            // Only one valid implementation, no stray tags
-            const isWin = (id, winnerId) => id === winnerId ? 'font-weight:bold' : '';
-            // Make bouts globally accessible for Alpine lookup
-            if (!window._boutsById) window._boutsById = {};
-            pool.bouts.forEach(b => { window._boutsById[b.id] = b; });
-            const boutRows = pool.bouts.map(b => {
-                // Always editable
-                // For tie-winner dropdown
-                const tie = b.left_score !== null && b.right_score !== null && b.left_score === b.right_score;
-                // Escape names for HTML
-                const leftName = esc(b.left_name);
-                const rightName = esc(b.right_name);
-                return [
-                    '<tr x-data="boutRowDataById(' + b.id + ', compId, phaseId)">',
-                    '  <td style="' + isWin(b.left_id, b.winner_id) + '">' + leftName + '</td>',
-                    '  <td class="score">',
-                    '    <span>',
-                    '      <input type="number" min="0" max="99" x-model="left" style="width:2.5em;text-align:right;" :disabled="saving" @keydown.enter.prevent="saveResult()"> — ',
-                    '      <input type="number" min="0" max="99" x-model="right" style="width:2.5em;text-align:right;" :disabled="saving" @keydown.enter.prevent="saveResult()">',
-                    // Tie-winner dropdown
-                    '      <template x-if="left !== '' && right !== '' && Number(left) === Number(right)">',
-                    '        <select x-model="winner" style="margin-left:.5em;" :disabled="saving">',
-                    '          <option value="">-- Winner --</option>',
-                    '          <option :value="' + b.left_id + '">' + leftName + '</option>',
-                    '          <option :value="' + b.right_id + '">' + rightName + '</option>',
-                    '        </select>',
-                    '      </template>',
-                    '      <button type="button" @click="saveResult()" :disabled="saving || (left === origLeft && right === origRight && winner === origWinner)" style="margin-left:.5em;font-size:.9em">Save</button>',
-                    '      <span x-show="saving" style="margin-left:.3em;color:#888">Saving…</span>',
-                    '      <span x-show="error" style="color:#b00;margin-left:.5em" x-text="error"></span>',
-                    '    </span>',
-                    '  </td>',
-                    '  <td style="' + isWin(b.right_id, b.winner_id) + '">' + rightName + '</td>',
-                    '  <td><span class="status-pill">' + b.status + '</span></td>',
-                    '</tr>'
-                ].join('');
-            }).join('');
+    async activate() {
+      const r = await fetch('/api/phases/'+phaseId+'/activate',{method:'POST'});
+      if(!r.ok){this.showNotice('Activate failed',true);return;}
+      this.showNotice('Phase activated');
+      await this.loadPhase();
+    },
 
-            // fencerRows, strip, referee must be defined in the parent scope
-            return [
-                '<div class="pool-card">',
-                `  <h4>Pool ${pool.pool_number} ${typeof strip !== 'undefined' ? strip : ''}${typeof referee !== 'undefined' ? referee : ''}</h4>`,
-                `  <ul class="fencer-list">${typeof fencerRows !== 'undefined' ? fencerRows : ''}</ul>`,
-                '  <details>',
-                '    <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">',
-                `      Bouts (${pool.bouts.length})`,
-                '    </summary>',
-                '    <table class="bouts-table">',
-                '      <thead>',
-                '        <tr>',
-                '          <th>Left</th>',
-                '          <th style="text-align:center">Score</th>',
-                '          <th>Right</th>',
-                '          <th>Status</th>',
-                '        </tr>',
-                '      </thead>',
-                `      <tbody>${boutRows}</tbody>`,
-                '    </table>',
-                '  </details>',
-                '</div>'
-            ].join('');
-        }
+    async closePhase() {
+      let body = null;
+      if(this.closeMethod!=='rule') {
+        body = { method: this.closeMethod, value: Number(this.closeValue)||0,
+                 multipleOf: Number(this.closeValue)||0 };
+      }
+      const r = await fetch('/api/phases/'+phaseId+'/close',{
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Close failed',true);return;}
+      this.showNotice('Phase closed — advanced: '+data.advanced+', eliminated: '+data.eliminated);
+      await Promise.all([this.loadPhase(), this.loadRankings()]);
+    },
 
-        function esc(s) {
-            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-    </script>
+    assignResources(pool) {
+      this.assignPool = pool;
+      this.assignStripId = pool.strip_id||'';
+      this.assignRefId   = pool.referee_id||'';
+      this.assignOpen    = true;
+    },
+
+    async saveAssignment() {
+      const r = await fetch('/api/pools/'+this.assignPool.id,{
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ strip_id: this.assignStripId||null, referee_id: this.assignRefId||null })
+      });
+      if(!r.ok){this.showNotice('Save failed',true);return;}
+      this.showNotice('Resources assigned');
+      this.assignOpen = false;
+      await this.loadPhase();
+    },
+
+    showNotice(text,error=false){ this.notice={text,error}; setTimeout(()=>{this.notice={text:'',error:false};},4000); },
+  };
+}
+</script>
+<script src="/js/alpinejs.min.js"></script>
 </body>
-
 </html>

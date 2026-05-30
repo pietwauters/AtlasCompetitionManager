@@ -28,6 +28,11 @@
     .elig-row.registered td{color:#aaa}
     .panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
     @media(max-width:720px){.panel-grid{grid-template-columns:1fr}}
+    .phase-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid #eee;flex-wrap:wrap}
+    .phase-row:last-child{border-bottom:none}
+    .badge-pending{background:#fef3cd;color:#856404}
+    .badge-finished{background:#d6d8db;color:#383d41}
+    select.inline{padding:.35rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -57,6 +62,60 @@
       <button @click="autoSeed()">⚡ Auto-seed by ranking</button>
       <button class="success" x-show="comp?.status==='draft'" @click="setStatus('active')">▶ Start competition</button>
       <button x-show="comp?.status==='active'" @click="setStatus('draft')">⏸ Back to draft</button>
+    </div>
+  </div>
+
+  <!-- ── Phases ───────────────────────────────────── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+      <h2 style="margin:0;flex:1">Phases</h2>
+      <button class="primary" @click="phaseFormOpen=!phaseFormOpen" x-show="comp?.status!=='finished'">+ New phase</button>
+    </div>
+
+    <!-- Existing phases -->
+    <div x-show="phases.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No phases yet.</div>
+    <template x-for="ph in phases" :key="ph.id">
+      <div class="phase-row">
+        <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
+        <span style="font-weight:600;font-size:.9rem" x-text="ph.rule_doc.replace('.json','')"></span>
+        <span style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
+        <a :href="'/phase.html?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
+        <button class="danger" style="font-size:.8rem" @click="deletePhase(ph)">Delete</button>
+      </div>
+    </template>
+
+    <!-- New phase form -->
+    <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
+      <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+        <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Rule document
+          <select class="inline" x-model="newRuleDoc" @change="poolOptions=null;chosenSizes=null">
+            <option value="">— choose —</option>
+            <template x-for="r in rules" :key="r.filename">
+              <option :value="r.filename" x-text="r.description+' ('+r.filename+')'"></option>
+            </template>
+          </select>
+        </label>
+        <button @click="fetchPoolOptions()" :disabled="!newRuleDoc">Calculate pool options</button>
+      </div>
+
+      <!-- Pool options -->
+      <div x-show="poolOptions" style="margin-top:.75rem">
+        <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
+             x-text="'For '+(poolOptions?.fencerCount||0)+' active competitors:'"></div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
+            <button
+              :class="chosenSizes===opt?'primary':''"
+              @click="chosenSizes=opt"
+              x-text="formatOption(opt) + (i===poolOptions?.recommended?' (recommended)':'')"
+              style="font-size:.85rem">
+            </button>
+          </template>
+        </div>
+        <div style="margin-top:.75rem">
+          <button class="success" :disabled="!chosenSizes" @click="createPhase()">Create pools</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -130,6 +189,7 @@ function app() {
   const compId = new URLSearchParams(window.location.search).get('id');
   return {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[], eligSearch:'',
+    phases:[], rules:[], phaseFormOpen:false, newRuleDoc:'', poolOptions:null, chosenSizes:null,
     notice:{text:'',error:false},
 
     get filteredEligible() {
@@ -140,7 +200,7 @@ function app() {
 
     async init() {
       if(!compId){this.showNotice('No competition ID in URL',true);return;}
-      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible()]);
+      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules()]);
     },
 
     async loadComp() {
@@ -195,6 +255,43 @@ function app() {
     toggleSelectAll(checked){ this.selectedIds=checked?this.filteredEligible.filter(f=>!f.is_registered).map(f=>f.fencer_id):[]; },
     allEligibleSelected() { const u=this.filteredEligible.filter(f=>!f.is_registered); return u.length>0&&u.every(f=>this.selectedIds.includes(f.fencer_id)); },
     calcAge(dob){ if(!dob)return'—'; return new Date().getFullYear()-new Date(dob).getFullYear(); },
+    async loadPhases() {
+      this.phases = await fetch('/api/competitions/'+compId+'/phases').then(r=>r.json()).catch(()=>[]);
+    },
+    async loadRules() {
+      this.rules = await fetch('/api/rules?type=pool').then(r=>r.json()).catch(()=>[]);
+    },
+    async fetchPoolOptions() {
+      this.poolOptions=null; this.chosenSizes=null;
+      const r = await fetch('/api/competitions/'+compId+'/phases/pool-options?rule_doc='+encodeURIComponent(this.newRuleDoc));
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Failed',true);return;}
+      this.poolOptions = data;
+      this.chosenSizes = data.options[data.recommended];
+    },
+    async createPhase() {
+      const r = await fetch('/api/competitions/'+compId+'/phases',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({rule_doc:this.newRuleDoc, chosen_sizes:this.chosenSizes})
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}
+      this.showNotice('Phase created with '+this.chosenSizes.length+' pools');
+      this.phaseFormOpen=false; this.poolOptions=null; this.chosenSizes=null; this.newRuleDoc='';
+      await this.loadPhases();
+    },
+    async deletePhase(ph) {
+      if(!confirm('Delete this phase and all its pools and bouts?'))return;
+      const r = await fetch('/api/competitions/'+compId+'/phases/'+ph.id,{method:'DELETE'});
+      if(!r.ok){this.showNotice('Delete failed',true);return;}
+      this.showNotice('Phase deleted'); await this.loadPhases();
+    },
+    formatOption(opt) {
+      const counts={};
+      for(const s of opt) counts[s]=(counts[s]||0)+1;
+      return Object.entries(counts).map(([s,n])=>n+'×'+s).join(' + ');
+    },
+
     showNotice(text,error=false){ this.notice={text,error}; setTimeout(()=>{this.notice={text:'',error:false};},4000); },
   };
 }
