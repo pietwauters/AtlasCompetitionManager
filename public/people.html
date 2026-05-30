@@ -151,24 +151,50 @@
         </select>
       </label>
 
-      <div class="section-title">Fencer profile (leave blank if not a fencer)</div>
+      <!-- Roles -->
+      <div class="section-title">Roles</div>
+      <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer">
+        <input type="checkbox" x-model="form.isFencer"> Fencer
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer">
+        <input type="checkbox" x-model="form.isReferee"> Referee
+      </label>
 
-      <label>Licence
-        <input x-model="form.fencer.licence" placeholder="BEL-001">
-      </label>
-      <label>Handedness
-        <select x-model="form.fencer.handedness">
-          <option value="">—</option>
-          <option value="R">Right</option>
-          <option value="L">Left</option>
-        </select>
-      </label>
-      <label>Weapons (comma-separated)
-        <input x-model="form.fencer.weapons_raw" placeholder="foil, epee">
-      </label>
-      <label>Ranking
-        <input type="number" x-model="form.fencer.ranking" placeholder="42">
-      </label>
+      <!-- Fencer profile -->
+      <template x-if="form.isFencer">
+        <div class="form-grid full" style="padding:0">
+          <div class="section-title">Fencer profile</div>
+          <label>Licence
+            <input x-model="form.fencer.licence" placeholder="BEL-001">
+          </label>
+          <label>Handedness
+            <select x-model="form.fencer.handedness">
+              <option value="">—</option>
+              <option value="R">Right</option>
+              <option value="L">Left</option>
+            </select>
+          </label>
+          <label>Weapons (comma-separated)
+            <input x-model="form.fencer.weapons_raw" placeholder="foil, epee">
+          </label>
+          <label>Ranking
+            <input type="number" x-model="form.fencer.ranking" placeholder="42">
+          </label>
+        </div>
+      </template>
+
+      <!-- Referee profile -->
+      <template x-if="form.isReferee">
+        <div class="form-grid full" style="padding:0">
+          <div class="section-title">Referee profile</div>
+          <label>Licence
+            <input x-model="form.referee.licence" placeholder="REF-001">
+          </label>
+          <label>Level
+            <input x-model="form.referee.level" placeholder="National, International…">
+          </label>
+        </div>
+      </template>
 
       <div class="form-actions">
         <button class="primary" @click="savePerson()">Save</button>
@@ -215,7 +241,9 @@ function app() {
     form: {
       id: null, first_name: '', last_name: '', date_of_birth: '',
       gender: '', nationality: '', club_id: '',
-      fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+      isFencer: false, isReferee: false,
+      fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+      referee: { licence: '', level: '' },
     },
 
     async init() {
@@ -242,7 +270,9 @@ function app() {
       this.form = {
         id: null, first_name: '', last_name: '', date_of_birth: '',
         gender: '', nationality: '', club_id: '',
-        fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+        isFencer: false, isReferee: false,
+        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+        referee: { licence: '', level: '' },
       };
       this.formOpen = true;
     },
@@ -256,64 +286,100 @@ function app() {
         gender:        p.gender        || '',
         nationality:   p.nationality   || '',
         club_id:       p.club_id       || '',
-        fencer: { licence: '', handedness: '', weapons_raw: '', ranking: '' }
+        isFencer:      !!p.is_fencer,
+        isReferee:     !!p.is_referee,
+        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+        referee: { licence: '', level: '' },
       };
-      // Load existing fencer profile if present
-      if (p.is_fencer) {
-        fetch('/api/people/' + p.id).then(r => r.json()).then(full => {
-          if (full.fencer) {
-            this.form.fencer = {
-              licence:      full.fencer.licence    || '',
-              handedness:   full.fencer.handedness || '',
-              weapons_raw:  (full.fencer.weapons || []).join(', '),
-              ranking:      full.fencer.ranking    || '',
-            };
-          }
-        });
-      }
+      // Load full profiles from the detail endpoint
+      fetch('/api/people/' + p.id).then(r => r.json()).then(full => {
+        if (full.fencer) {
+          this.form.fencer = {
+            licence:     full.fencer.licence    || '',
+            handedness:  full.fencer.handedness || '',
+            weapons_raw: (full.fencer.weapons || []).join(', '),
+            ranking:     full.fencer.ranking    || '',
+          };
+        }
+        if (full.referee) {
+          this.form.referee = {
+            licence: full.referee.licence || '',
+            level:   full.referee.level   || '',
+          };
+        }
+      });
       this.formOpen = true;
     },
 
     async savePerson() {
-      const hasFencer = this.form.fencer.licence || this.form.fencer.weapons_raw;
-      const fencerPayload = hasFencer ? {
-        licence:    this.form.fencer.licence || null,
-        handedness: this.form.fencer.handedness || null,
-        weapons:    this.form.fencer.weapons_raw
-                      ? this.form.fencer.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
-                      : [],
-        ranking:    this.form.fencer.ranking ? Number(this.form.fencer.ranking) : null,
-      } : null;
-
-      const body = {
+      // 1. Save person fields
+      const personBody = {
         first_name:    this.form.first_name,
         last_name:     this.form.last_name,
         date_of_birth: this.form.date_of_birth || null,
         gender:        this.form.gender        || null,
         nationality:   this.form.nationality   || null,
         club_id:       this.form.club_id       || null,
-        ...(fencerPayload && !this.form.id ? { fencer: fencerPayload } : {}),
       };
 
-      const url    = this.form.id ? '/api/people/' + this.form.id : '/api/people';
-      const method = this.form.id ? 'PATCH' : 'POST';
-      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await r.json();
+      const isNew  = !this.form.id;
+      const url    = isNew ? '/api/people' : '/api/people/' + this.form.id;
+      const method = isNew ? 'POST' : 'PATCH';
 
+      // On create, embed profiles so they're saved in one go
+      if (isNew) {
+        if (this.form.isFencer)  personBody.fencer  = this._fencerPayload();
+        if (this.form.isReferee) personBody.referee = this._refereePayload();
+      }
+
+      const r    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(personBody) });
+      const data = await r.json();
       if (!r.ok) { this.showNotice(data.error || 'Save failed', true); return; }
 
-      // Update fencer profile separately on edit
-      if (this.form.id && fencerPayload) {
-        await fetch('/api/people/' + this.form.id + '/fencer', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fencerPayload)
-        });
+      // 2. On edit, sync fencer profile (add, update, or remove)
+      if (!isNew) {
+        if (this.form.isFencer) {
+          await fetch('/api/people/' + data.id + '/fencer', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this._fencerPayload()),
+          });
+        } else {
+          await fetch('/api/people/' + data.id + '/fencer', { method: 'DELETE' });
+        }
+
+        // 3. Sync referee profile
+        if (this.form.isReferee) {
+          await fetch('/api/people/' + data.id + '/referee', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this._refereePayload()),
+          });
+        } else {
+          await fetch('/api/people/' + data.id + '/referee', { method: 'DELETE' });
+        }
       }
 
       this.showNotice('Saved: ' + data.last_name + ', ' + data.first_name);
       this.closeForm();
       await this.load();
       await this.loadClubs();
+    },
+
+    _fencerPayload() {
+      return {
+        licence:    this.form.fencer.licence    || null,
+        handedness: this.form.fencer.handedness || null,
+        weapons:    this.form.fencer.weapons_raw
+                      ? this.form.fencer.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
+                      : [],
+        ranking:    this.form.fencer.ranking ? Number(this.form.fencer.ranking) : null,
+      };
+    },
+
+    _refereePayload() {
+      return {
+        licence: this.form.referee.licence || null,
+        level:   this.form.referee.level   || null,
+      };
     },
 
     async deletePerson(p) {
