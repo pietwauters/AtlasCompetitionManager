@@ -1,7 +1,0 @@
-nohup: ignoring input
-AtlasCompetitionManager running on http://localhost:3000
-[PHASE GENERATE] Phase not found { compId: '17', phaseId: '48' }
-[PHASE GENERATE] Pool formation success { phaseId: '49', chosenSizes: [ 7, 7, 6, 6, 6 ] }
-Simulate endpoint hit for compId: 17 phaseId: 49
-[PHASE GENERATE] Pool formation success { phaseId: '50', chosenSizes: [ 7, 7, 6, 6, 6 ] }
-Simulate endpoint hit for compId: 17 phaseId: 50

@@ -1,26 +1,20 @@
 {
-  "name": "AtlasCompetitionManager",
-  "version": "1.0.0",
-  "description": "Fencing competition management system",
-  "main": "index.js",
+  "name": "atlas-competition-manager",
+  "version": "0.1.0",
+  "description": "Fencing competition management system — part of the OpenPiste ecosystem",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["fencing", "competition", "openpiste"],
+  "author": "piet.wauters@gmail.com",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^8.4.0",
     "bonjour": "^3.5.1",
-    "ejs": "^5.0.2",
     "express": "^5.2.1",
-    "express-session": "^1.19.0",
-    "sequelize": "^6.37.8",
-    "sqlite3": "^6.0.1"
-  },
-  "devDependencies": {
-    "sequelize-cli": "^6.6.5"
+    "express-session": "^1.19.0"
   }
 }
