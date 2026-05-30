@@ -56,18 +56,33 @@ mkdir -p "$APP_DIR/data"
 chown "$APP_USER":"$APP_USER" "$APP_DIR/data"
 
 # ---------------------------------------------------------------------------
-# 4. Initialise database (idempotent — safe to re-run)
+# 4. Initialise / migrate database (idempotent — safe to re-run)
 # ---------------------------------------------------------------------------
 echo "==> Initialising database"
-if [ ! -f "$APP_DIR/data/atlas.db" ]; then
-  sudo -u "$APP_USER" sqlite3 "$APP_DIR/data/atlas.db" < "$APP_DIR/db/schema.sql"
-  echo "    Database created at $APP_DIR/data/atlas.db"
+sudo -u "$APP_USER" node -e "require('./db/migrator').migrate(); console.log('    DB ready.');" 2>&1
+
+# ---------------------------------------------------------------------------
+# 5. Create .env file from template if it does not already exist
+# ---------------------------------------------------------------------------
+echo "==> Checking .env"
+if [ ! -f "$APP_DIR/.env" ]; then
+  cat > "$APP_DIR/.env" << 'EOF'
+# Atlas Competition Manager — environment variables
+# Copy this file to .env and fill in the values.
+
+PORT=3000
+
+# Required in production. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+SESSION_SECRET=change-me-before-going-to-production
+EOF
+  chown "$APP_USER":"$APP_USER" "$APP_DIR/.env"
+  echo "    Created .env — set SESSION_SECRET before going to production"
 else
-  echo "    Database already exists, skipping creation"
+  echo "    .env already exists, skipping"
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Install PM2 globally (process manager)
+# 6. Install PM2 globally (process manager)
 # ---------------------------------------------------------------------------
 echo "==> Installing PM2"
 if ! command -v pm2 &>/dev/null; then
@@ -75,7 +90,7 @@ if ! command -v pm2 &>/dev/null; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Set up systemd service via PM2
+# 7. Set up systemd service via PM2
 # ---------------------------------------------------------------------------
 echo "==> Configuring PM2 startup for user $APP_USER"
 HOME_DIR="$(eval echo ~"${APP_USER}")"
