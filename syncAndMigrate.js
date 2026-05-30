@@ -224,7 +224,7 @@ async function main() {
   // Setup Sequelize (adjust DB path as needed)
   const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: './db/database.sqlite',
+    storage: './data/atlas.db',
     logging: false
   });
 
@@ -256,7 +256,7 @@ async function main() {
   // Example: read old data and insert into new tables.
   // You may need to adjust table/column names below.
   try {
-    const oldDbPath = path.join(__dirname, 'db', 'database.sqlite');
+    const oldDbPath = path.join(__dirname, 'data', 'atlas.db');
     const oldSequelize = new Sequelize({
       dialect: 'sqlite',
       storage: oldDbPath,

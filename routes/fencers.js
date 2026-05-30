@@ -14,15 +14,15 @@ router.get('/', async (req, res) => {
   try {
     const { compId } = req.params;
     const entries = await models.CompetitionFencer.findAll({
-      where: { competitionId: compId },
+      where: { competition_id: compId },
       include: [{
         model: models.Fencer,
         include: [{
           model: models.Person,
-          include: [models.Club, models.NOC]
+          include: [models.NOC, models.Club]
         }]
       }],
-      order: [[models.Fencer, models.Person, 'lastName', 'ASC']]
+      order: [[models.Fencer, models.Person, 'last_name', 'ASC']]
     });
     const compYear = new Date().getFullYear();
     const rows = entries.map(entry => {
@@ -30,13 +30,13 @@ router.get('/', async (req, res) => {
       const p = f.Person;
       return {
         id: entry.id,
-        fencerId: f.id,
-        personId: p.id,
-        name: p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : '',
-        first_name: p.firstName,
-        last_name: p.lastName,
-        date_of_birth: p.birthdate,
-        club: p.Club ? p.Club.name : null,
+        fencer_id: f.id,
+        person_id: p.id,
+        name: p.first_name ? `${p.first_name} ${p.last_name || ''}`.trim() : '',
+        first_name: p.first_name,
+        last_name: p.last_name,
+        date_of_birth: p.date_of_birth,
+        club: p.Club ? { id: p.Club.id, name: p.Club.name, city: p.Club.city, country: p.Club.country } : null,
         nationality: p.nationality,
         nationality_name: p.NOC ? p.NOC.country : null,
         global_ranking: f.ranking,
@@ -49,11 +49,11 @@ router.get('/', async (req, res) => {
         status: entry.status,
         state: entry.state,
         final_rank: entry.final_rank,
-        display_name: p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : '',
-        category: deriveCategory(p.birthdate, compYear)
+        display_name: p.first_name ? `${p.first_name} ${p.last_name || ''}`.trim() : '',
+        category: deriveCategory(p.date_of_birth, compYear)
       };
     });
-    console.log(`[DEBUG] GET /api/competitions/${compId}/fencers -> ${rows.length} rows`, rows);
+    // console.log(`[DEBUG] GET /api/competitions/${compId}/fencers -> ${rows.length} rows`, rows); // Disabled verbose debug output
     res.json(rows);
   } catch (e) {
     console.error('[ERROR] GET /api/competitions/:compId/fencers', e);
@@ -91,21 +91,21 @@ router.post('/', async (req, res) => {
       [clubInstance] = await models.Club.findOrCreate({ where: { name: club.trim() } });
     }
     // Find or create person
-    let person = await models.Person.findOne({ where: { firstName: fn, lastName: ln } });
+    let person = await models.Person.findOne({ where: { first_name: fn, last_name: ln } });
     if (!person) {
       person = await models.Person.create({
-        firstName: fn,
-        lastName: ln,
-        birthdate: date_of_birth,
-        clubId: clubInstance ? clubInstance.id : null,
+        first_name: fn,
+        last_name: ln,
+        date_of_birth,
+        club_id: clubInstance ? clubInstance.id : null,
         nationality: nationality?.toUpperCase() || null
       });
     }
     // Find or create fencer (global profile)
-    let fencer = await models.Fencer.findOne({ where: { personId: person.id } });
+    let fencer = await models.Fencer.findOne({ where: { person_id: person.id } });
     if (!fencer) {
       fencer = await models.Fencer.create({
-        personId: person.id,
+        person_id: person.id,
         ranking: national_ranking != null ? Number(national_ranking) : null,
         weapons: weapons ? JSON.stringify(Array.isArray(weapons) ? weapons : [weapons]) : null,
         licence: licence || null,
@@ -114,8 +114,8 @@ router.post('/', async (req, res) => {
     }
     // Register fencer for this competition
     const entry = await models.CompetitionFencer.create({
-      competitionId: compId,
-      fencerId: fencer.id,
+      competition_id: compId,
+      fencer_id: fencer.id,
       seed: initial_seed != null ? Number(initial_seed) : null,
       status: 'registered',
       state: null,
@@ -150,13 +150,13 @@ router.post('/bulk', async (req, res) => {
       // Always uppercase nationality if present
       const nationality = f.nationality ? f.nationality.toUpperCase() : null;
       // Find or create person
-      let person = await models.Person.findOne({ where: { firstName: f.first_name, lastName: f.last_name } });
+      let person = await models.Person.findOne({ where: { first_name: f.first_name, last_name: f.last_name } });
       if (!person) {
         person = await models.Person.create({
-          firstName: f.first_name,
-          lastName: f.last_name,
-          birthdate: f.date_of_birth,
-          clubId: clubInstance ? clubInstance.id : null,
+          first_name: f.first_name,
+          last_name: f.last_name,
+          date_of_birth: f.date_of_birth,
+          club_id: clubInstance ? clubInstance.id : null,
           nationality,
           gender: f.gender || null
         });
@@ -174,14 +174,14 @@ router.post('/bulk', async (req, res) => {
         if (changed) await person.save();
       }
       // Find or create fencer (global profile)
-      let fencer = await models.Fencer.findOne({ where: { personId: person.id } });
+      let fencer = await models.Fencer.findOne({ where: { person_id: person.id } });
       if (!fencer) {
         fencer = await models.Fencer.create({
-          personId: person.id,
+          person_id: person.id,
           ranking: f.national_ranking != null ? Number(f.national_ranking) : null,
           weapons: f.weapons ? JSON.stringify(Array.isArray(f.weapons) ? f.weapons : [f.weapons]) : null,
           licence: f.licence || null,
-          handedness: f.handledness || null
+          handedness: f.handedness || null
         });
       } else {
         // Update weapons if provided
@@ -192,8 +192,8 @@ router.post('/bulk', async (req, res) => {
       }
       // Register fencer for this competition
       await models.CompetitionFencer.create({
-        competitionId: compId,
-        fencerId: fencer.id,
+        competition_id: compId,
+        fencer_id: fencer.id,
         seed: f.initial_seed != null ? Number(f.initial_seed) : null,
         status: f.status || 'registered',
         state: null,
@@ -278,17 +278,16 @@ router.patch('/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/competitions/:compId/fencers/export.csv — download fencer list as CSV
 // ---------------------------------------------------------------------------
-router.get('/export.csv', (req, res) => {
+router.get('/export.csv', async (req, res) => {
   const { compId } = req.params;
-  const comp = db.prepare('SELECT name FROM competitions WHERE id = ?').get(compId);
+  const comp = await models.Competition.findByPk(compId, { attributes: ['name'] });
   if (!comp) return res.status(404).json({ error: 'Competition not found' });
 
-  const rows = db.prepare(`
-    SELECT initial_seed, name, club, nationality, status
-    FROM   competitors
-    WHERE  competition_id = ?
-    ORDER  BY initial_seed ASC, name ASC
-  `).all(compId);
+  const rows = await models.Competitor.findAll({
+    where: { competition_id: compId },
+    order: [ ['initial_seed', 'ASC'], ['name', 'ASC'] ],
+    attributes: ['initial_seed', 'name', 'club', 'nationality', 'status']
+  });
 
   const escape = v => (v == null ? '' : '"' + String(v).replace(/"/g, '""') + '"');
   const header = 'initial_seed,name,club,nationality,status';

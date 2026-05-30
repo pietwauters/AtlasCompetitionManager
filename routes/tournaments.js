@@ -7,26 +7,30 @@ const db      = require('../db/db');
 // ---------------------------------------------------------------------------
 // GET /api/tournaments — list all tournaments
 // ---------------------------------------------------------------------------
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`
-    SELECT * FROM tournaments
-    ORDER BY date_start DESC, id DESC
-  `).all();
-  res.json(rows);
+
+router.get('/', async (req, res) => {
+  const models = req.app.get('models');
+  try {
+    const rows = await models.Tournament.findAll({
+      order: [['date_start', 'DESC'], ['id', 'DESC']]
+    });
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments — create a tournament
 // ---------------------------------------------------------------------------
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, city, country, date_start, date_end, organizer, description, level, status } = req.body;
   if (!name || !city || !country) return res.status(400).json({ error: 'name, city, country required' });
   try {
-    const result = db.prepare(
-      `INSERT INTO tournaments (name, city, country, date_start, date_end, organizer, description, level, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(name, city, country, date_start, date_end, organizer, description, level, status ?? 'open');
-    res.status(201).json({ id: result.lastInsertRowid });
+    const t = await req.app.get('models').Tournament.create({
+      name, city, country, date_start, date_end, organizer, description, level, status: status ?? 'open'
+    });
+    res.status(201).json({ id: t.id });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -35,50 +39,54 @@ router.post('/', (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/tournaments/:id — get tournament detail
 // ---------------------------------------------------------------------------
-router.get('/:id', (req, res) => {
-  const t = db.prepare(`SELECT * FROM tournaments WHERE id = ?`).get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const models = req.app.get('models');
+  const t = await models.Tournament.findByPk(req.params.id);
   if (!t) return res.status(404).json({ error: 'Tournament not found' });
   // List competitions for this tournament
-  const competitions = db.prepare(`SELECT * FROM competitions WHERE tournament_id = ?`).all(t.id);
-  res.json({ ...t, competitions });
+  const competitions = await models.Competition.findAll({ where: { tournament_id: t.id } });
+  res.json({ ...t.toJSON(), competitions });
 });
 
 // ---------------------------------------------------------------------------
 // PATCH /api/tournaments/:id — update tournament
 // ---------------------------------------------------------------------------
-router.patch('/:id', (req, res) => {
-  const t = db.prepare(`SELECT * FROM tournaments WHERE id = ?`).get(req.params.id);
+router.patch('/:id', async (req, res) => {
+  const models = req.app.get('models');
+  const t = await models.Tournament.findByPk(req.params.id);
   if (!t) return res.status(404).json({ error: 'Tournament not found' });
   const { name, city, country, date_start, date_end, organizer, description, level, status, archived } = req.body;
-  db.prepare(`
-    UPDATE tournaments SET
-      name = ?, city = ?, country = ?, date_start = ?, date_end = ?,
-      organizer = ?, description = ?, level = ?, status = ?, archived = ?
-    WHERE id = ?
-  `).run(
-    name ?? t.name, city ?? t.city, country ?? t.country, date_start ?? t.date_start, date_end ?? t.date_end,
-    organizer ?? t.organizer, description ?? t.description, level ?? t.level, status ?? t.status, archived ?? t.archived, t.id
-  );
+  await t.update({
+    name: name ?? t.name,
+    city: city ?? t.city,
+    country: country ?? t.country,
+    date_start: date_start ?? t.date_start,
+    date_end: date_end ?? t.date_end,
+    organizer: organizer ?? t.organizer,
+    description: description ?? t.description,
+    level: level ?? t.level,
+    status: status ?? t.status,
+    archived: archived ?? t.archived
+  });
   res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
 // DELETE /api/tournaments/:id — delete tournament
 // ---------------------------------------------------------------------------
-router.delete('/:id', (req, res) => {
-  const t = db.prepare(`SELECT * FROM tournaments WHERE id = ?`).get(req.params.id);
+router.delete('/:id', async (req, res) => {
+  const models = req.app.get('models');
+  const t = await models.Tournament.findByPk(req.params.id);
   if (!t) return res.status(404).json({ error: 'Tournament not found' });
-  const competitions = db.prepare(`SELECT id FROM competitions WHERE tournament_id = ?`).all(t.id);
+  const competitions = await models.Competition.findAll({ where: { tournament_id: t.id }, attributes: ['id'] });
   if (competitions.length > 0) {
-    // Check for explicit delete_competitions flag
     const deleteComps = req.query.delete_competitions === 'true' || req.body?.delete_competitions === true;
     if (!deleteComps) {
       return res.status(409).json({ error: 'Tournament has linked competitions', competitions: competitions.map(c => c.id) });
     }
-    // Delete all competitions for this tournament
-    db.prepare(`DELETE FROM competitions WHERE tournament_id = ?`).run(t.id);
+    await models.Competition.destroy({ where: { tournament_id: t.id } });
   }
-  db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(t.id);
+  await t.destroy();
   res.json({ ok: true });
 });
 

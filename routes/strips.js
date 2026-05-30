@@ -6,9 +6,13 @@ const router = express.Router();
 
 
 // Get all strips
-router.get('/', (req, res) => {
+
+router.get('/', async (req, res) => {
     try {
-        const strips = db.prepare('SELECT id, strip_number, name, status, state, network_state FROM strips ORDER BY strip_number').all();
+        const strips = await req.app.get('models').Strip.findAll({
+            attributes: ['id', 'strip_number', 'name', 'status', 'state', 'network_state'],
+            order: [['strip_number', 'ASC']]
+        });
         res.json(strips);
     } catch (e) {
         res.status(500).json({ error: 'Failed to fetch strips.' });
@@ -16,18 +20,19 @@ router.get('/', (req, res) => {
 });
 
 // Add a new strip
-router.post('/', (req, res) => {
-    console.log('POST /api/strips body:', req.body);
+router.post('/', async (req, res) => {
     const { strip_number, name } = req.body;
     if (!strip_number || strip_number < 1) {
-        console.log('Invalid strip_number:', strip_number);
         return res.status(400).json({ error: 'Strip number is required and must be >= 1.' });
     }
     try {
-        db.prepare('INSERT INTO strips (strip_number, name, status) VALUES (?, ?, ?)').run(strip_number, name || null, 'idle');
+        await req.app.get('models').Strip.create({
+            strip_number,
+            name: name || null,
+            status: 'idle'
+        });
         res.status(201).json({ success: true });
     } catch (e) {
-        console.error('Error inserting strip:', e);
         if (e.message && e.message.includes('UNIQUE')) {
             res.status(400).json({ error: 'Strip number must be unique.' });
         } else {

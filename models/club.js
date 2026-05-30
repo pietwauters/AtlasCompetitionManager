@@ -9,9 +9,12 @@ module.exports = (sequelize) => {
     },
     city: DataTypes.STRING,
     country: DataTypes.STRING
+  }, {
+    tableName: 'clubs',
+    timestamps: false
   });
   Club.associate = models => {
-    Club.hasMany(models.Person, { foreignKey: 'clubId' });
+    Club.hasMany(models.Person, { foreignKey: 'club_id' });
     // No direct association to Fencer; Fencer is always a Person
   };
   return Club;

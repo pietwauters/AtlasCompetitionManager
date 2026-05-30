@@ -14,7 +14,7 @@
         <strong>Atlas</strong>
         <a href="/">Home</a>
         <a href="/competitions">Competitions</a>
-        <a href="/competitions/<%= compId %>">Competition</a>
+        <a href="/competitions/<%= comp_id %>">Competition</a>
         <span style="margin-left:auto;opacity:.7;font-size:.9rem">Phase <%= phase.phase_order %></span>
     </header>
     <main>
@@ -122,7 +122,7 @@
                             </label>
                             <button type="submit">Assign</button>
                         </form>
-                        <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
+                        <a href="/competitions/<%= comp_id %>/phases/<%= phase.id %>/pools/<%= pool.id %>/view"
                             class="primary" style="margin-bottom:0.5em;display:inline-block">Enter results for this
                             pool</a>
                     <script>

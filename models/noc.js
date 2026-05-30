@@ -11,6 +11,9 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     }
+  }, {
+    tableName: 'nocs',
+    timestamps: false
   });
   NOC.associate = models => {
     NOC.hasMany(models.Person, { foreignKey: 'nationality' });

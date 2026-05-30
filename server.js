@@ -12,7 +12,10 @@ const PORT        = process.env.PORT        || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-me-in-production';
 
 
+
+const models = require('./models');
 const app = express();
+app.set('models', models);
 
 // Set up EJS as the view engine
 app.set('view engine', 'ejs');

@@ -13,8 +13,8 @@
         <strong>Atlas</strong>
         <a href="/">Home</a>
         <a href="/competitions">Competitions</a>
-        <a href="/competitions/<%= compId %>">Competition</a>
-        <a href="/competitions/<%= compId %>/phases/<%= phase.id %>/view">Back to Phase</a>
+        <a href="/competitions/<%= comp_id %>">Competition</a>
+        <a href="/competitions/<%= comp_id %>/phases/<%= phase.id %>/view">Back to Phase</a>
         <span style="margin-left:auto;opacity:.7;font-size:.9rem">Phase <%= phase.phase_order %>, Pool <%=
                     pool.pool_number %></span>
     </header>
@@ -41,7 +41,7 @@
                 <summary style="cursor:pointer;font-size:.85rem;color:#1a6bab;margin-bottom:.4rem">
                     Bouts (<%= pool.bouts.length %>)
                 </summary>
-                <form method="post" action="/competitions/<%= compId %>/phases/<%= phase.id %>/bouts/update"
+                <form method="post" action="/competitions/<%= comp_id %>/phases/<%= phase.id %>/bouts/update"
                     id="bouts-form">
                     <input type="hidden" name="focus" id="focus-field" value="">
                     <table class="bouts-table">

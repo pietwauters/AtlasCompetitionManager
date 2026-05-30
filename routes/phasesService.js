@@ -19,8 +19,9 @@ function loadRule(filename) {
 }
 
 // Calculate pool rankings for a phase
-function calculatePoolRankings(phaseId) {
-  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
+
+async function calculatePoolRankings(phaseId, models) {
+  const phase = await models.Phase.findByPk(phaseId);
   if (!phase) return [];
   let rule = {};
   try { rule = loadRule(phase.rule_doc); } catch (e) {}
@@ -33,21 +34,23 @@ function calculatePoolRankings(phaseId) {
     'name_asc'
   ];
 
-  // Level pool logic: if rule.levelPools is true, rank by pool order, then by pool-internal ranking
   if (rule.levelPools) {
-    const pools = db.prepare('SELECT id FROM pools WHERE phase_id = ? ORDER BY pool_number ASC').all(phaseId);
+    const pools = await models.Pool.findAll({ where: { phase_id: phaseId }, order: [['pool_number', 'ASC']] });
     let ranked = [];
     let pos = 1;
     for (const pool of pools) {
-      const fencers = db.prepare(`
-        SELECT c.id, c.name, c.initial_seed
-        FROM pool_competitors pc
-        JOIN competitors c ON c.id = pc.competitor_id
-        WHERE pc.pool_id = ?
-      `).all(pool.id);
-      const bouts = db.prepare(`
-        SELECT * FROM bouts WHERE pool_id = ? AND left_score IS NOT NULL AND right_score IS NOT NULL
-      `).all(pool.id);
+      const poolFencers = await models.PoolCompetitor.findAll({
+        where: { pool_id: pool.id },
+        include: [{ model: models.Competitor }]
+      });
+      const fencers = poolFencers.map(pc => pc.Competitor);
+      const bouts = await models.Bout.findAll({
+        where: {
+          pool_id: pool.id,
+          left_score: { [models.Sequelize.Op.not]: null },
+          right_score: { [models.Sequelize.Op.not]: null }
+        }
+      });
       const stats = {};
       for (const f of fencers) {
         stats[f.id] = {
@@ -115,18 +118,20 @@ function calculatePoolRankings(phaseId) {
   }
 
   // Default: classic pool ranking across all pools
-  const fencers = db.prepare(`
-    SELECT c.id, c.name, c.initial_seed
-    FROM pool_competitors pc
-    JOIN competitors c ON c.id = pc.competitor_id
-    JOIN pools p ON p.id = pc.pool_id
-    WHERE p.phase_id = ?
-  `).all(phaseId);
-
-  const bouts = db.prepare(`
-    SELECT * FROM bouts WHERE phase_id = ? AND left_score IS NOT NULL AND right_score IS NOT NULL
-  `).all(phaseId);
-
+  const poolFencers = await models.PoolCompetitor.findAll({
+    include: [
+      { model: models.Competitor },
+      { model: models.Pool, where: { phase_id: phaseId } }
+    ]
+  });
+  const fencers = poolFencers.map(pc => pc.Competitor);
+  const bouts = await models.Bout.findAll({
+    where: {
+      phase_id: phaseId,
+      left_score: { [models.Sequelize.Op.not]: null },
+      right_score: { [models.Sequelize.Op.not]: null }
+    }
+  });
   const stats = {};
   for (const f of fencers) {
     stats[f.id] = {
@@ -140,7 +145,6 @@ function calculatePoolRankings(phaseId) {
       touches_received: 0
     };
   }
-
   for (const bout of bouts) {
     if (stats[bout.left_id]) {
       stats[bout.left_id].touches_scored += bout.left_score;
@@ -155,12 +159,10 @@ function calculatePoolRankings(phaseId) {
       if (bout.winner_id === bout.right_id) stats[bout.right_id].victories += 1;
     }
   }
-
   for (const s of Object.values(stats)) {
     s.indicator = s.touches_scored - s.touches_received;
     s.victory_ratio = s.matches > 0 ? s.victories / s.matches : 0;
   }
-
   function compare(a, b) {
     for (const crit of criteria) {
       switch (crit) {
@@ -189,7 +191,6 @@ function calculatePoolRankings(phaseId) {
     }
     return 0;
   }
-
   const ranked = Object.values(stats).sort(compare);
   ranked.forEach((s, i) => { s.position = i + 1; });
   return ranked;

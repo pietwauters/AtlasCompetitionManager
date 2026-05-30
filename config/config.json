@@ -1,4 +1,4 @@
 {
-  "mqttBroker": "CyranoBroker.local",
+  "mqttBroker": "openpiste.local",
   "mqttBrokerIp": "10.154.1.129"
 }

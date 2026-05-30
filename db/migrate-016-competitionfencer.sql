@@ -1,5 +1,5 @@
 -- Migration: Create Competition and CompetitionFencer tables
-CREATE TABLE IF NOT EXISTS Competitions (
+CREATE TABLE IF NOT EXISTS competitions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
   date DATETIME,
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS Competitions (
   updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS CompetitionFencers (
+CREATE TABLE IF NOT EXISTS competition_fencers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   competitionId INTEGER NOT NULL,
   fencerId INTEGER NOT NULL,
@@ -17,6 +17,6 @@ CREATE TABLE IF NOT EXISTS CompetitionFencers (
   final_rank INTEGER,
   createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (competitionId) REFERENCES Competitions(id) ON DELETE CASCADE,
-  FOREIGN KEY (fencerId) REFERENCES Fencers(id) ON DELETE CASCADE
+  FOREIGN KEY (competitionId) REFERENCES competitions(id) ON DELETE CASCADE,
+  FOREIGN KEY (fencerId) REFERENCES fencers(id) ON DELETE CASCADE
 );

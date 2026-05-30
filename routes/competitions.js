@@ -11,17 +11,19 @@ const VALID_STATUSES = ['draft', 'active', 'finished'];
 // ---------------------------------------------------------------------------
 // POST /api/competitions/:id/finish — finish the competition, mark all active as finished
 // ---------------------------------------------------------------------------
-router.post('/:id/finish', (req, res) => {
+router.post('/:id/finish', async (req, res) => {
   const compId = req.params.id;
   // Mark all active competitors as finished
-  const active = db.prepare('SELECT id FROM competitors WHERE competition_id = ? AND status = ?').all(compId, 'active');
+  const active = await models.Competitor.findAll({
+    where: { competition_id: compId, status: 'active' },
+    order: [['id', 'ASC']]
+  });
   let nextRank = 1;
   for (const f of active) {
-    db.prepare('UPDATE competitors SET status = ?, final_rank = ? WHERE id = ?')
-      .run('finished', nextRank, f.id);
+    await f.update({ status: 'finished', final_rank: nextRank });
     nextRank++;
   }
-  db.prepare('UPDATE competitions SET status = ? WHERE id = ?').run('finished', compId);
+  await models.Competition.update({ status: 'finished' }, { where: { id: compId } });
   res.json({ finished: true, competitors: active.length });
 });
 

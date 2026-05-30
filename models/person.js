@@ -2,30 +2,38 @@ const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const Person = sequelize.define('Person', {
-    firstName: DataTypes.STRING,
-    lastName: DataTypes.STRING,
-    birthdate: DataTypes.DATE,
-    clubId: {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    first_name: DataTypes.STRING,
+    last_name: DataTypes.STRING,
+    date_of_birth: DataTypes.DATE,
+    club_id: {
       type: DataTypes.INTEGER,
       references: {
-        model: 'Clubs',
+        model: 'clubs',
         key: 'id'
-      }
+      },
+      allowNull: true
     },
     nationality: {
       type: DataTypes.STRING(3),
       references: {
-        model: 'NOCs',
+        model: 'nocs',
         key: 'code'
       }
     },
     gender: DataTypes.STRING(1) // M or F
+  }, {
+    tableName: 'people',
+    timestamps: false
   });
   Person.associate = models => {
-    Person.hasMany(models.Fencer, { foreignKey: 'personId' });
+    Person.hasMany(models.Fencer, { foreignKey: 'person_id' });
     Person.belongsTo(models.NOC, { foreignKey: 'nationality', targetKey: 'code' });
-    Person.belongsTo(models.Club, { foreignKey: 'clubId' });
-    // Add other roles here as needed
+    Person.belongsTo(models.Club, { foreignKey: 'club_id' });
   };
   return Person;
 };

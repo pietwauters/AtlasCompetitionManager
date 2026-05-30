@@ -1,3 +1,39 @@
+-- ---------------------------------------------------------------------------
+-- NOCs (National Olympic Committees / country codes)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nocs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  country TEXT NOT NULL
+);
+-- ---------------------------------------------------------------------------
+-- Tournaments (master table for multi-competition events)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tournaments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  city TEXT,
+  country TEXT,
+  date_start DATE,
+  date_end DATE,
+  organizer TEXT,
+  description TEXT,
+  level TEXT,
+  status TEXT DEFAULT 'open',
+  archived BOOLEAN DEFAULT 0
+);
+-- ---------------------------------------------------------------------------
+-- People (master table for all persons: fencers, referees, etc.)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS people (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  first_name TEXT,
+  last_name TEXT,
+  date_of_birth TEXT, -- ISO-8601: YYYY-MM-DD
+  gender TEXT,        -- M | F | X
+  nationality TEXT,   -- 3-letter NOC code
+  club TEXT
+);
 -- AtlasCompetitionManager — SQLite schema
 -- Run via: sqlite3 data/atlas.db < db/schema.sql
 -- This file is the single source of truth for the database structure.
@@ -47,9 +83,6 @@ CREATE TABLE IF NOT EXISTS competitions (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
--- ---------------------------------------------------------------------------
--- Competitors (per competition)
--- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS competitors (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   competition_id   INTEGER NOT NULL REFERENCES competitions(id) ON DELETE CASCADE,
@@ -69,6 +102,21 @@ CREATE TABLE IF NOT EXISTS competitors (
   initial_seed     INTEGER,
   status           TEXT    NOT NULL DEFAULT 'active',  -- active | withdrawn | dns
   final_rank       INTEGER  -- final ranking after elimination or competition end
+);
+
+-- ---------------------------------------------------------------------------
+-- Fencers (master list, not per competition)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fencers (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id        INTEGER REFERENCES people(id),
+  ranking          INTEGER,
+  status           TEXT DEFAULT 'active',
+  initial_seed     INTEGER,
+  weapons          TEXT,
+  licence          TEXT,
+  handedness       TEXT,
+  final_rank       INTEGER
 );
 
 -- ---------------------------------------------------------------------------
@@ -114,6 +162,23 @@ CREATE TABLE IF NOT EXISTS pool_competitors (
   pool_id       INTEGER NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
   competitor_id INTEGER NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
   PRIMARY KEY (pool_id, competitor_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- Competition Fencers (per competition, links fencers to competitions)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS competition_fencers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  competition_id INTEGER NOT NULL,
+  fencer_id INTEGER NOT NULL,
+  seed INTEGER,
+  status TEXT DEFAULT 'registered',
+  state TEXT,
+  final_rank INTEGER,
+  created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+  FOREIGN KEY (fencer_id) REFERENCES fencers(id) ON DELETE CASCADE
 );
 
 -- ---------------------------------------------------------------------------

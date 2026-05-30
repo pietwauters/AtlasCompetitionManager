@@ -448,17 +448,17 @@
         function renderTable(rows) {
             if (!rows.length) return `<p class="empty">No fencers yet. Add one above or import a CSV.</p>`;
             const rows_html = rows.map(f => `
-        <tr>
-          <td>${f.initial_seed ?? '—'}</td>
-          <td>${esc(f.name)}</td>
-          <td>${esc(f.club || '—')}</td>
-          <td>${f.nationality || '—'}</td>
-          <td class="badge-${f.status}">${f.status}</td>
-          <td>
-            <button class="sm" onclick='openEdit(${JSON.stringify(f)})'>Edit</button>
-            <button class="sm danger" onclick="deleteFencer(${f.fencerId})" style="margin-left:.3rem">Remove</button>
-          </td>
-        </tr>`).join('');
+                <tr>
+                    <td>${f.initial_seed ?? '—'}</td>
+                    <td>${esc(f.name)}</td>
+                    <td>${esc(f.club || '—')}</td>
+                    <td>${f.nationality || '—'}</td>
+                    <td class="badge-${f.status}">${f.status}</td>
+                    <td>
+                        <button class="sm" onclick='openEdit(${JSON.stringify(f)})'>Edit</button>
+                        <button class="sm danger" onclick="deleteFencer(${f.fencer_id})" style="margin-left:.3rem">Remove</button>
+                    </td>
+                </tr>`).join('');
             return `<table>
         <thead><tr>
           <th>Seed</th><th>Name</th><th>Club</th><th>NAT</th><th>Status</th><th></th>
@@ -562,7 +562,7 @@
         function openEdit(fencer) {
             const el = document.querySelector('[x-data]');
             const data = Alpine.$data(el);
-            data.id = fencer.id;
+            data.id = fencer.fencer_id || fencer.id;
             data.name = fencer.name;
             data.club = fencer.club || '';
             data.nationality = fencer.nationality || '';

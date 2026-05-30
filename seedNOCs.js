@@ -217,7 +217,7 @@ async function main() {
   // Setup Sequelize (adjust DB path as needed)
   const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: './db/database.sqlite',
+    storage: './data/atlas.db',
     logging: false
   });
 

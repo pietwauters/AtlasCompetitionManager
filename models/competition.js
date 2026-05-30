@@ -2,6 +2,11 @@ const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const Competition = sequelize.define('Competition', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false
@@ -24,7 +29,9 @@ module.exports = (sequelize) => {
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
-    date: DataTypes.DATE,
+    date: {
+      type: DataTypes.DATE
+    }
     // Add other competition fields as needed
   }, {
     tableName: 'competitions',
@@ -33,16 +40,16 @@ module.exports = (sequelize) => {
   Competition.associate = models => {
     Competition.belongsToMany(models.Fencer, {
       through: models.CompetitionFencer,
-      foreignKey: 'competitionId',
-      otherKey: 'fencerId'
+      foreignKey: 'competition_id',
+      otherKey: 'fencer_id'
     });
     models.Fencer.belongsToMany(Competition, {
       through: models.CompetitionFencer,
-      foreignKey: 'fencerId',
-      otherKey: 'competitionId'
+      foreignKey: 'fencer_id',
+      otherKey: 'competition_id'
     });
-    Competition.hasMany(models.CompetitionFencer, { foreignKey: 'competitionId' });
-    models.Fencer.hasMany(models.CompetitionFencer, { foreignKey: 'fencerId' });
+    Competition.hasMany(models.CompetitionFencer, { foreignKey: 'competition_id' });
+    models.Fencer.hasMany(models.CompetitionFencer, { foreignKey: 'fencer_id' });
   };
   return Competition;
 };
