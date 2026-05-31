@@ -107,6 +107,14 @@
               </template>
             </select>
           </label>
+          <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Separation
+            <select class="inline" x-model="poolSeparation">
+              <option value="club">Club (local competitions)</option>
+              <option value="nationality">Nationality (international)</option>
+              <option value="nationality,club">Nationality + Club (FIE standard)</option>
+              <option value="">None</option>
+            </select>
+          </label>
           <button @click="fetchPoolOptions()" :disabled="!newRuleDoc">Calculate pool options</button>
         </div>
         <div x-show="poolOptions" style="margin-top:.75rem">
@@ -224,7 +232,8 @@ function app() {
   return {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[], eligSearch:'',
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
-    newPhaseType:'pool', newRuleDoc:'', poolOptions:null, chosenSizes:null, deOptions:null,
+    newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club',
+    poolOptions:null, chosenSizes:null, deOptions:null,
     notice:{text:'',error:false},
 
     get filteredEligible() {
@@ -328,9 +337,10 @@ function app() {
       await this.loadPhases();
     },
     async createPhase() {
+      const sep = this.poolSeparation ? this.poolSeparation.split(',') : [];
       const r = await fetch('/api/competitions/'+compId+'/phases',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({rule_doc:this.newRuleDoc, chosen_sizes:this.chosenSizes})
+        body: JSON.stringify({rule_doc:this.newRuleDoc, chosen_sizes:this.chosenSizes, separation:sep})
       });
       const data = await r.json();
       if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}

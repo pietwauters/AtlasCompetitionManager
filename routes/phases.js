@@ -46,14 +46,14 @@ router.get('/:id', (req, res) => {
 });
 
 // Create pool phase.
-// Body: { rule_doc, chosen_sizes: [7, 7, 6] }
+// Body: { rule_doc, chosen_sizes: [7, 7, 6], separation?: ['club'] }
 router.post('/', (req, res) => {
-  const { rule_doc, chosen_sizes } = req.body;
+  const { rule_doc, chosen_sizes, separation } = req.body;
   if (!rule_doc || !chosen_sizes?.length) {
     return res.status(400).json({ error: 'rule_doc and chosen_sizes required' });
   }
   try {
-    const phase = Phase.create(req.params.compId, rule_doc, chosen_sizes);
+    const phase = Phase.create(req.params.compId, rule_doc, chosen_sizes, separation);
     res.status(201).json(phase);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

@@ -62,9 +62,12 @@ const Phase = {
   // ---------------------------------------------------------------------------
   // Create pool phase: insert phase + pools + pool_competitors + bouts.
   // chosenSizes: sorted-desc array, e.g. [7, 7, 6]
+  // separation: optional override array, e.g. ['club'] or ['nationality','club']
+  //             replaces the value from the rule JSON.
   // ---------------------------------------------------------------------------
-  create(compId, ruleDoc, chosenSizes) {
+  create(compId, ruleDoc, chosenSizes, separation) {
     const rule       = loadRule(ruleDoc);
+    if (Array.isArray(separation)) rule.poolFormation.separation = separation;
     const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
 
     if (!competitors.length) throw Object.assign(new Error('No active competitors.'), { status: 400 });
