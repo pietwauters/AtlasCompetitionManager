@@ -73,7 +73,12 @@
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
       <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate phase</button>
-      <span x-show="phase?.status==='active'" style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
+      <template x-if="phase?.status==='active'">
+        <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <span style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
+          <button @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
+        </span>
+      </template>
     </div>
   </div>
 
@@ -323,6 +328,15 @@ function app() {
       if (!r.ok) { this.showNotice((await r.json()).error || 'Activate failed', true); return; }
       this.showNotice('Phase activated');
       await this.load();
+    },
+
+    async simulate() {
+      const r = await fetch('/api/phases/' + phaseId + '/simulate', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Simulate failed', true); return; }
+      this.showNotice('Simulated ' + data.simulated + ' bout(s)');
+      this.selected = null;
+      await this.loadBouts();
     },
 
     async saveScore() {

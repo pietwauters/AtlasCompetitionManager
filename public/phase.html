@@ -58,6 +58,7 @@
       <template x-if="phase?.status==='active'">
         <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <button @click="loadRankings()" style="background:#f0f2f5">⟳ Refresh rankings</button>
+          <button @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
           <span style="font-size:.85rem;color:#666" x-text="allBoutsComplete?'All bouts complete — ready to close':'Bouts remaining: '+boutsRemaining"></span>
           <template x-if="allBoutsComplete">
             <div style="display:flex;gap:.5rem;align-items:center">
@@ -214,6 +215,14 @@ function app() {
       if(!r.ok){this.showNotice('Activate failed',true);return;}
       this.showNotice('Phase activated');
       await this.loadPhase();
+    },
+
+    async simulate() {
+      const r = await fetch('/api/phases/'+phaseId+'/simulate',{method:'POST'});
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Simulate failed',true);return;}
+      this.showNotice('Simulated '+data.simulated+' bout(s)');
+      await Promise.all([this.loadPools(), this.loadRankings()]);
     },
 
     async closePhase() {

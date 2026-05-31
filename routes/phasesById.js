@@ -33,4 +33,10 @@ router.post('/:id/close', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
+router.post('/:id/simulate', (req, res) => {
+  try {
+    res.json(Phase.simulate(req.params.id));
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
 module.exports = router;

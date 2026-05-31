@@ -397,6 +397,66 @@ const Phase = {
     return this.findById(phaseId);
   },
 
+  // ---------------------------------------------------------------------------
+  // Simulate: randomly score all pending bouts in the phase.
+  // Pool: scores every pending bout.
+  // DE: processes round by round so each winner is placed before the next
+  //     round is simulated.
+  // Returns count of bouts simulated.
+  // ---------------------------------------------------------------------------
+  simulate(phaseId) {
+    const phase = this.findById(phaseId);
+    if (!phase) throw Object.assign(new Error('Phase not found'), { status: 404 });
+    if (phase.status !== 'active') throw Object.assign(new Error('Phase must be active to simulate'), { status: 400 });
+
+    let touchTarget = phase.type === 'de' ? 15 : 5;
+    try {
+      const rule = loadRule(phase.rule_doc);
+      touchTarget = rule.bout?.touchTarget ?? touchTarget;
+    } catch {}
+
+    function randomScores(target) {
+      const winnerLeft = Math.random() < 0.5;
+      const loserScore = Math.floor(Math.random() * target);
+      return winnerLeft ? [target, loserScore] : [loserScore, target];
+    }
+
+    const Bout = require('./bouts');
+    let count = 0;
+
+    if (phase.type === 'pool') {
+      const pending = db.prepare(`
+        SELECT id FROM bouts
+        WHERE phase_id=? AND status='pending'
+          AND left_id IS NOT NULL AND right_id IS NOT NULL
+      `).all(phaseId);
+      for (const b of pending) {
+        const [ls, rs] = randomScores(touchTarget);
+        Bout.updateScore(b.id, ls, rs);
+        count++;
+      }
+    } else if (phase.type === 'de') {
+      const maxRound = db.prepare(
+        'SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=?'
+      ).get(phaseId).m || 1;
+
+      for (let r = 1; r <= maxRound; r++) {
+        const pending = db.prepare(`
+          SELECT id FROM bouts
+          WHERE phase_id=? AND de_round=? AND status='pending'
+            AND left_id IS NOT NULL AND right_id IS NOT NULL
+        `).all(phaseId, r);
+        for (const b of pending) {
+          const [ls, rs] = randomScores(touchTarget);
+          Bout.updateScore(b.id, ls, rs);
+          count++;
+        }
+      }
+    }
+
+    return { simulated: count };
+  },
+
   delete(id) {
     return db.prepare('DELETE FROM phases WHERE id = ?').run(id);
   },
