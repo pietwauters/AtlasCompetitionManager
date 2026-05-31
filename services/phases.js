@@ -72,13 +72,18 @@ const Phase = {
 
     if (!competitors.length) throw Object.assign(new Error('No active competitors.'), { status: 400 });
 
+    // If a previous pool phase exists, use its rankings as the seed order so
+    // that round 2 (and beyond) serpentine-seeds from the actual results of
+    // the preceding round rather than from the original pre-competition seed.
+    const prevRankings = this._getPrevPoolRankings(compId);
+
     // Map competitors to the shape expected by formPools / boutOrder
     const fencerInput = competitors.map(c => ({
-      id:            c.competitor_id,   // used internally by poolFormation
+      id:            c.competitor_id,
       competitor_id: c.competitor_id,
-      initial_seed:  c.initial_seed,
+      initial_seed:  prevRankings.get(c.competitor_id) ?? c.initial_seed,
       nationality:   c.nationality,
-      club:          c.club_name,       // separation field name in rule JSON
+      club:          c.club_name,
       first_name:    c.first_name,
       last_name:     c.last_name,
     }));
@@ -288,48 +293,138 @@ const Phase = {
   },
 
   // ---------------------------------------------------------------------------
-  // DE: preview — returns { N, tableauSize, byeCount, totalRounds }
+  // Returns a Map<competitor_id, rank> from the most recent finished pool phase.
+  // Used to seed a subsequent pool phase from real results rather than from the
+  // original pre-competition seed numbers.
   // ---------------------------------------------------------------------------
-  getDeOptions(compId) {
-    const rows = this._getDeSeeding(compId);
-    if (rows.length < 2) throw Object.assign(new Error('At least 2 active competitors required.'), { status: 400 });
-    const T = 2 ** Math.ceil(Math.log2(rows.length));
-    return { N: rows.length, tableauSize: T, byeCount: T - rows.length, totalRounds: Math.log2(T) };
-  },
-
-  // Returns competitors ranked for DE seeding. Uses rankings from the most
-  // recent finished pool phase (advanced only), falling back to active
-  // competitors ordered by initial_seed.
-  _getDeSeeding(compId) {
-    const lastPhase = db.prepare(`
+  _getPrevPoolRankings(compId) {
+    const prev = db.prepare(`
       SELECT id FROM phases
       WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
       ORDER BY phase_order DESC LIMIT 1
     `).get(compId);
+    if (!prev) return new Map();
+    const rows = db.prepare(
+      'SELECT competitor_id, position FROM rankings WHERE phase_id = ? AND advanced = 1'
+    ).all(prev.id);
+    return new Map(rows.map(r => [r.competitor_id, r.position]));
+  },
 
-    if (lastPhase) {
-      return db.prepare(`
-        SELECT r.competitor_id, r.position AS pool_rank
-        FROM rankings r
-        WHERE r.phase_id = ? AND r.advanced = 1
-        ORDER BY r.position
-      `).all(lastPhase.id);
+  // ---------------------------------------------------------------------------
+  // DE: preview — returns { N, tableauSize, byeCount, totalRounds, finishedPoolPhases }
+  // finishedPoolPhases: count of finished pool phases (drives the seeding selector)
+  // ---------------------------------------------------------------------------
+  getDeOptions(compId) {
+    const finishedPoolPhases = db.prepare(
+      "SELECT COUNT(*) AS n FROM phases WHERE competition_id=? AND type='pool' AND status='finished'"
+    ).get(compId).n;
+    const rows = this._getDeSeeding(compId, 'last');
+    if (rows.length < 2) throw Object.assign(new Error('At least 2 active competitors required.'), { status: 400 });
+    const T = 2 ** Math.ceil(Math.log2(rows.length));
+    return { N: rows.length, tableauSize: T, byeCount: T - rows.length, totalRounds: Math.log2(T), finishedPoolPhases };
+  },
+
+  // Returns an ordered array of { competitor_id } for DE seeding.
+  //
+  // seedingMethod:
+  //   'last'     — rank from the most recent finished pool phase (advanced only)
+  //   'combined' — aggregate stats across ALL finished pool phases, re-rank,
+  //                include all currently active competitors
+  //   (fallback) — active competitors sorted by initial_seed
+  _getDeSeeding(compId, seedingMethod = 'last') {
+    const finishedPhases = db.prepare(`
+      SELECT id FROM phases
+      WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
+      ORDER BY phase_order
+    `).all(compId);
+
+    if (finishedPhases.length === 0) {
+      return Competitor.findAll(compId)
+        .filter(c => c.competitor_status === 'active')
+        .sort((a, b) => (a.initial_seed || 9999) - (b.initial_seed || 9999))
+        .map(c => ({ competitor_id: c.competitor_id }));
     }
 
-    return Competitor.findAll(compId)
-      .filter(c => c.competitor_status === 'active')
-      .sort((a, b) => (a.initial_seed || 9999) - (b.initial_seed || 9999))
-      .map((c, i) => ({ competitor_id: c.competitor_id, pool_rank: i + 1 }));
+    if (seedingMethod === 'combined') {
+      return this._combinedSeeding(compId, finishedPhases);
+    }
+
+    // 'last': use only the most recent finished pool phase
+    const lastId = finishedPhases[finishedPhases.length - 1].id;
+    return db.prepare(`
+      SELECT r.competitor_id
+      FROM rankings r
+      WHERE r.phase_id = ? AND r.advanced = 1
+      ORDER BY r.position
+    `).all(lastId);
+  },
+
+  // Aggregate bout stats across every finished pool phase, re-rank using FIE
+  // criteria, and return all active competitors in that combined order.
+  _combinedSeeding(compId, finishedPhases) {
+    const phaseIds = finishedPhases.map(p => p.id);
+
+    // Collect all active competitors
+    const active = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+    const stats  = {};
+    for (const c of active) {
+      stats[c.competitor_id] = {
+        competitor_id:    c.competitor_id,
+        initial_seed:     c.initial_seed ?? 9999,
+        victories:        0, matches:          0,
+        touches_scored:   0, touches_received: 0,
+      };
+    }
+
+    // Sum bout stats across all finished pool phases
+    const placeholders = phaseIds.map(() => '?').join(',');
+    const bouts = db.prepare(`
+      SELECT left_id, right_id, left_score, right_score, winner_id
+      FROM bouts
+      WHERE phase_id IN (${placeholders}) AND left_score IS NOT NULL AND right_score IS NOT NULL
+    `).all(...phaseIds);
+
+    for (const b of bouts) {
+      if (stats[b.left_id]) {
+        stats[b.left_id].matches++;
+        stats[b.left_id].touches_scored   += b.left_score;
+        stats[b.left_id].touches_received += b.right_score;
+        if (b.winner_id === b.left_id) stats[b.left_id].victories++;
+      }
+      if (stats[b.right_id]) {
+        stats[b.right_id].matches++;
+        stats[b.right_id].touches_scored   += b.right_score;
+        stats[b.right_id].touches_received += b.left_score;
+        if (b.winner_id === b.right_id) stats[b.right_id].victories++;
+      }
+    }
+
+    const sorted = Object.values(stats).map(s => ({
+      ...s,
+      indicator:     s.touches_scored - s.touches_received,
+      victory_ratio: s.matches > 0 ? s.victories / s.matches : 0,
+    })).sort((a, b) => {
+      for (const [fn] of [
+        [() => b.victory_ratio   - a.victory_ratio],
+        [() => b.indicator       - a.indicator],
+        [() => b.touches_scored  - a.touches_scored],
+        [() => a.touches_received - b.touches_received],
+        [() => a.initial_seed    - b.initial_seed],
+      ]) {
+        const d = fn(); if (d !== 0) return d;
+      }
+      return 0;
+    });
+
+    return sorted.map(s => ({ competitor_id: s.competitor_id }));
   },
 
   // ---------------------------------------------------------------------------
   // Create DE phase: inserts phase + all bout slots for every round.
-  // Round 1 bouts get real competitor IDs (null for bye slots, auto-finished).
-  // Rounds 2+ are pre-created as empty placeholders; winners are filled in as
-  // bouts complete (see bouts.advanceDEWinner).
+  // seedingMethod: 'last' (default) or 'combined'
   // ---------------------------------------------------------------------------
-  createDE(compId, ruleDoc) {
-    const seeding     = this._getDeSeeding(compId);
+  createDE(compId, ruleDoc, seedingMethod = 'last') {
+    const seeding     = this._getDeSeeding(compId, seedingMethod);
     const competitors = seeding.map(r => ({ competitor_id: r.competitor_id }));
 
     const { tableauSize, totalRounds, r1Bouts } = buildDE(competitors);

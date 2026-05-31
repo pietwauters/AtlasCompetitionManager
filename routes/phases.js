@@ -29,10 +29,10 @@ router.get('/de-options', (req, res) => {
 });
 
 router.post('/create-de', (req, res) => {
-  const { rule_doc } = req.body;
+  const { rule_doc, seeding_method } = req.body;
   if (!rule_doc) return res.status(400).json({ error: 'rule_doc required' });
   try {
-    const phase = Phase.createDE(req.params.compId, rule_doc);
+    const phase = Phase.createDE(req.params.compId, rule_doc, seeding_method || 'last');
     res.status(201).json(phase);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

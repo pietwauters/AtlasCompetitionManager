@@ -149,6 +149,19 @@
           </label>
           <button @click="fetchDeOptions()" :disabled="!newRuleDoc">Preview bracket</button>
         </div>
+        <!-- Seeding method — only relevant when multiple pool phases exist -->
+        <div x-show="deOptions && deOptions.finishedPoolPhases > 1"
+             style="margin-top:.75rem;font-size:.85rem;display:flex;flex-direction:column;gap:.3rem">
+          <strong style="font-size:.85rem">DE seeding</strong>
+          <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+            <input type="radio" x-model="deSeedingMethod" value="last">
+            Use last pool phase ranking only
+          </label>
+          <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+            <input type="radio" x-model="deSeedingMethod" value="combined">
+            Combined ranking across all pool phases (aggregate V/M, indicator, touches)
+          </label>
+        </div>
         <div x-show="deOptions" style="margin-top:.75rem;font-size:.85rem;color:#555">
           <span x-text="deOptions?.N+' competitors → '+deOptions?.tableauSize+'-person tableau'"></span>
           <span x-show="deOptions?.byeCount>0" style="color:#856404;margin-left:.5rem"
@@ -233,7 +246,7 @@ function app() {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[], eligSearch:'',
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
     newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club',
-    poolOptions:null, chosenSizes:null, deOptions:null,
+    poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
     notice:{text:'',error:false},
 
     get filteredEligible() {
@@ -328,7 +341,7 @@ function app() {
     async createDE() {
       const r = await fetch('/api/competitions/'+compId+'/phases/create-de', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ rule_doc: this.newRuleDoc })
+        body: JSON.stringify({ rule_doc: this.newRuleDoc, seeding_method: this.deSeedingMethod })
       });
       const data = await r.json();
       if (!r.ok) { this.showNotice(data.error||'Create failed', true); return; }
