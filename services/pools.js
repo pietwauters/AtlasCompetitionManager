@@ -1,6 +1,7 @@
 'use strict';
 const db   = require('../db');
 const Bout = require('./bouts');
+const Strip = require('./strips');
 
 const Pool = {
   findById(poolId) {
@@ -59,15 +60,21 @@ const Pool = {
     return pools;
   },
 
-  update(poolId, { strip_id, referee_id }) {
+  update(poolId, data) {
     const current = db.prepare('SELECT * FROM pools WHERE id = ?').get(poolId);
     if (!current) return null;
-    db.prepare(`
-      UPDATE pools
-      SET strip_id   = COALESCE(@strip_id,   strip_id),
-          referee_id = COALESCE(@referee_id, referee_id)
-      WHERE id = @id
-    `).run({ id: Number(poolId), strip_id: strip_id ?? null, referee_id: referee_id ?? null });
+    const newStripId = 'strip_id'   in data ? (data.strip_id   ?? null) : current.strip_id;
+    const newRefId   = 'referee_id' in data ? (data.referee_id ?? null) : current.referee_id;
+    db.prepare('UPDATE pools SET strip_id = ?, referee_id = ? WHERE id = ?')
+      .run(newStripId, newRefId, Number(poolId));
+
+    // Keep strip status in sync: mark newly assigned strip as 'assigned',
+    // and free the previously assigned strip back to 'idle' if it changed.
+    if (newStripId !== current.strip_id) {
+      if (current.strip_id) Strip.update(current.strip_id, { status: 'idle' });
+      if (newStripId)       Strip.update(newStripId,       { status: 'assigned' });
+    }
+
     return this.findById(poolId);
   },
 };
