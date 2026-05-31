@@ -52,6 +52,7 @@
       <h2 x-text="comp?.name"></h2>
       <span class="badge" :class="'badge-'+(comp?.status||'')" x-text="comp?.status"></span>
       <a href="/tournaments.html" style="font-size:.85rem;color:#888">← Back to events</a>
+      <a :href="'/results.html?id='+compId" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
     </div>
     <div class="comp-meta">
       <span x-text="{foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||comp?.weapon"></span>

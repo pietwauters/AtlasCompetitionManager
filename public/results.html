@@ -1,123 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>Competition Results</title>
-    <link rel="stylesheet" href="/bouts-table.css">
-    <style>
-        body {
-            font-family: system-ui, sans-serif;
-            background: #f8f9fa;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px #0001;
-            margin: 2rem auto;
-            max-width: 900px;
-            padding: 2rem;
-        }
-
-        h2 {
-            margin-top: 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1.5rem;
-        }
-
-        th,
-        td {
-            padding: .5rem .7rem;
-            border: 1px solid #e0e0e0;
-            text-align: left;
-        }
-
-        th {
-            background: #f0f4fa;
-        }
-
-        .eliminated {
-            color: #c0392b;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Results</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table{width:100%;border-collapse:collapse;font-size:.9rem}
+    th{text-align:left;padding:.5rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd}
+    td{padding:.5rem .75rem;border-bottom:1px solid #eee;vertical-align:middle}
+    tr:hover td{background:#f9f9f9}
+    .place{font-weight:700;font-size:1rem;min-width:4rem;color:#1a6bab}
+    .place-1{color:#c9a000}
+    .place-2{color:#777}
+    .place-34{color:#b87333}
+    .note{font-size:.8rem;color:#888}
+    .pool-row td{color:#aaa}
+  </style>
 </head>
-
-<body>
-    <header style="background:#222;color:#fff;padding:.7rem 2rem;display:flex;align-items:center;gap:1.5rem">
-        <strong style="font-weight:700">Atlas</strong>
-        <a href="/" style="color:#fff;text-decoration:none;">Home</a>
-        <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
-        <a id="header-comp-link" href="#" style="color:#aad4f5;text-decoration:none;display:none">Current
-            Competition</a>
-        <span id="header-name" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
-    </header>
-    <div class="card">
-        <h2>Competition Results</h2>
-        <div id="results-placeholder">No results yet. Results will appear here after each phase.</div>
-        <table id="results-table" style="display:none">
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Name</th>
-                    <th>Club</th>
-                    <th>Status</th>
-                    <th>Eliminated After</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+  <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+</header>
+<main>
+  <div class="card">
+    <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+      <h2 style="margin:0" x-text="(comp?.name||'Competition')+' — Final Results'"></h2>
+      <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Back to competition</a>
     </div>
-    <script>
-        // Set competition name in header and enable Current Competition link
-        (function () {
-            const compId = location.pathname.split('/')[2];
-            fetch(`/api/competitions/${compId}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data && data.name) {
-                        document.getElementById('header-name').textContent = data.name;
-                        document.title = `${data.name} — Results`;
-                        const compLink = document.getElementById('header-comp-link');
-                        compLink.href = `/competitions/${compId}`;
-                        compLink.style.display = '';
-                    }
-                });
-        })();
-        // Placeholder: will be filled by backend data
-        // Example fetch: /api/competitions/:id/results
-        const compId = location.pathname.split('/')[2];
-        fetch(`/api/competitions/${compId}/results`).then(r => r.json()).then(data => {
-            if (!data || !data.length) return;
-            document.getElementById('results-placeholder').style.display = 'none';
-            const table = document.getElementById('results-table');
-            table.style.display = '';
-            const tbody = table.querySelector('tbody');
-            // Sort: non-eliminated (Active/Finished) by rank, then eliminated by rank
-            data.sort((a, b) => {
-                const aElim = a.status === 'Eliminated';
-                const bElim = b.status === 'Eliminated';
-                if (aElim !== bElim) return aElim ? 1 : -1; // Eliminated go after
-                // Both same elimination status: sort by rank ascending
-                return (a.rank ?? 9999) - (b.rank ?? 9999);
-            });
-            data.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${row.rank ?? ''}</td>
-                    <td>${row.name ?? ''}</td>
-                    <td>${row.club ?? ''}</td>
-                    <td class="${row.status === 'Eliminated' ? 'eliminated' : ''}">${row.status ?? ''}</td>
-                    <td>${row.eliminated_after ?? ''}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        });
-    </script>
-</body>
+    <div style="margin-top:.3rem;font-size:.85rem;color:#666"
+         x-text="({foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||'') + ' · ' + ({M:'Men',F:'Women',X:'Mixed'}[comp?.gender]||'')">
+    </div>
+  </div>
 
+  <div class="card" x-show="results.length === 0" style="color:#999">
+    No results available yet.
+  </div>
+
+  <div class="card" x-show="results.length > 0">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:5rem">Place</th>
+          <th>Name</th>
+          <th>Club</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="r in results" :key="r.competitor_id">
+          <tr :class="r.note?.startsWith('Pool') ? 'pool-row' : ''">
+            <td>
+              <span class="place"
+                :class="r.place===1?'place-1':r.place===2?'place-2':r.place<=4?'place-34':''"
+                x-text="r.place_label">
+              </span>
+            </td>
+            <td x-text="r.last_name+', '+r.first_name"></td>
+            <td x-text="r.club||'—'"></td>
+            <td class="note" x-text="r.note||''"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</main>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  const compId = new URLSearchParams(window.location.search).get('id');
+  return {
+    compId, comp: null, results: [],
+
+    async init() {
+      if (!compId) return;
+      [this.comp, this.results] = await Promise.all([
+        fetch('/api/competitions/' + compId).then(r => r.json()),
+        fetch('/api/competitions/' + compId + '/results').then(r => r.json()),
+      ]);
+      document.title = 'Atlas — ' + (this.comp?.name || '') + ' Results';
+    },
+  };
+}
+</script>
+</body>
 </html>

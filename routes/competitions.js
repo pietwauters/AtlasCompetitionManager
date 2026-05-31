@@ -3,6 +3,7 @@ const express     = require('express');
 const Competition = require('../services/competitions');
 const Competitor  = require('../services/competitors');
 const AgeCategory = require('../services/ageCategories');
+const Results     = require('../services/results');
 
 const router = express.Router();
 
@@ -51,6 +52,14 @@ router.get('/:id/eligible-fencers', (req, res) => {
   const c = Competition.findById(req.params.id);
   if (!c) return res.status(404).json({ error: 'Competition not found' });
   res.json(Competitor.findEligible(req.params.id));
+});
+
+router.get('/:id/results', (req, res) => {
+  try {
+    res.json(Results.getCompetitionResults(req.params.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

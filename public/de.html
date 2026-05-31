@@ -70,6 +70,7 @@
       <h2 style="margin:0" x-text="'Direct Elimination — '+(phase?.rule_doc||'').replace('.json','')"></h2>
       <span class="badge" :class="'badge-'+(phase?.status||'')" x-text="phase?.status"></span>
       <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
+      <a :href="'/results.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
       <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate phase</button>
