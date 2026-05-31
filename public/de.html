@@ -187,11 +187,15 @@
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function buildSeedPositions(T) {
-  let slots = [1, 2];
-  while (slots.length < T) {
-    const size = slots.length * 2;
+  let slots = [1, 2], cur = 2;
+  while (cur < T) {
+    cur *= 2;
     const next = [];
-    for (const s of slots) next.push(s, size + 1 - s);
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (i % 2 === 0) next.push(s, cur + 1 - s);
+      else             next.push(cur + 1 - s, s);
+    }
     slots = next;
   }
   return slots;
