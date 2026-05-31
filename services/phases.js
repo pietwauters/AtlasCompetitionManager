@@ -49,12 +49,10 @@ const Phase = {
 
     const options = calcPoolOptions(N, rule.poolFormation);
 
-    // Recommended: equal-size pool divisible by 7 or 6, otherwise first option
-    let recommended = 0;
-    if (N % 7 === 0 || N % 6 === 0) {
-      const idx = options.findIndex(o => o.every(s => s === o[0]));
-      if (idx >= 0) recommended = idx;
-    }
+    // Recommended: first uniform (equal-size) option if one exists, otherwise index 0.
+    // calcPoolOptions already sorts uniform before mixed, so index 0 is usually best.
+    const recIdx = options.findIndex(o => o.every(s => s === o[0]));
+    const recommended = recIdx >= 0 ? recIdx : 0;
 
     return { options, recommended, fencerCount: N, ruleDoc };
   },

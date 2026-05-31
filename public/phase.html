@@ -59,23 +59,21 @@
         <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <button @click="loadRankings()" style="background:#f0f2f5">⟳ Refresh rankings</button>
           <button @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
-          <span style="font-size:.85rem;color:#666" x-text="allBoutsComplete?'All bouts complete — ready to close':'Bouts remaining: '+boutsRemaining"></span>
-          <template x-if="allBoutsComplete">
-            <div style="display:flex;gap:.5rem;align-items:center">
-              <label style="font-size:.85rem">Advance method:
-                <select x-model="closeMethod">
-                  <option value="rule">From rule document</option>
-                  <option value="percentage">Percentage %</option>
-                  <option value="count">Exact count</option>
-                  <option value="multiple">Multiple of N</option>
-                </select>
-              </label>
-              <input x-show="closeMethod!=='rule'" type="number" x-model="closeValue"
-                     style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
-                     placeholder="value">
-              <button class="success" @click="closePhase()">✓ Close phase</button>
-            </div>
-          </template>
+          <span style="font-size:.85rem;color:#666" x-text="allBoutsComplete?'All bouts complete':'Bouts remaining: '+boutsRemaining"></span>
+          <!-- Advancement settings always visible while phase is active -->
+          <label style="font-size:.85rem">Advance:
+            <select x-model="closeMethod">
+              <option value="rule">From rule</option>
+              <option value="percentage">% of fencers</option>
+              <option value="count">Exact count</option>
+              <option value="multiple">Multiple of N</option>
+            </select>
+          </label>
+          <input x-show="closeMethod!=='rule'" type="number" min="1" x-model="closeValue"
+                 style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
+                 :placeholder="closeMethod==='percentage'?'%':'N'">
+          <button class="success" :disabled="!allBoutsComplete" @click="closePhase()"
+                  :title="allBoutsComplete?'':'Complete all bouts first'">✓ Close phase</button>
         </span>
       </template>
     </div>
