@@ -186,6 +186,17 @@
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
+function buildSeedPositions(T) {
+  let slots = [1, 2];
+  while (slots.length < T) {
+    const size = slots.length * 2;
+    const next = [];
+    for (const s of slots) next.push(s, size + 1 - s);
+    slots = next;
+  }
+  return slots;
+}
+
 function app() {
   const phaseId = new URLSearchParams(window.location.search).get('id');
   return {
@@ -193,6 +204,7 @@ function app() {
     rounds: [],        // [[bout,...], [bout,...], ...]
     tableauSize: 0,
     nameMap: {},       // competitor_id → display name
+    seedMap: {},       // competitor_id → seed number (1 = top rank)
     selected: null,
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
@@ -230,6 +242,20 @@ function app() {
         if (b.de_round > maxRound) maxRound = b.de_round;
       }
       this.tableauSize = bouts.length ? 2 ** maxRound : 0;
+
+      // Build seed map from R1 bout positions.
+      const r1 = byRound[1] || [];
+      const T = r1.length * 2;
+      if (T >= 2) {
+        const seedSlots = buildSeedPositions(T);
+        this.seedMap = {};
+        for (const b of r1) {
+          const p = b.tableau_position;
+          if (b.left_id)  this.seedMap[b.left_id]  = seedSlots[2 * (p - 1)];
+          if (b.right_id) this.seedMap[b.right_id] = seedSlots[2 * (p - 1) + 1];
+        }
+      }
+
       this.rounds = [];
       for (let r = 1; r <= maxRound; r++) {
         const roundBouts = (byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position);
@@ -292,7 +318,9 @@ function app() {
       if (!bout) return '';
       const id = side === 'left' ? bout.left_id : bout.right_id;
       if (!id) return '';
-      return this.nameMap[id] || ('Competitor #' + id);
+      const seed = this.seedMap[id];
+      const name = this.nameMap[id] || ('Competitor #' + id);
+      return seed ? `(${seed}) ${name}` : name;
     },
 
     scorePanelTitle() {
