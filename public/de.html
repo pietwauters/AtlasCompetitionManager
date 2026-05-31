@@ -276,20 +276,42 @@ function app() {
       if (!totalRounds) { this.finalResults = null; return; }
       const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
       if (!finalBout || finalBout.status !== 'finished') { this.finalResults = null; return; }
-      const sfBouts = bouts.filter(b => b.de_round === totalRounds - 1);
+
       const results = [];
-      // Gold
+      const placeLabel = (n) => {
+        if (n === 1) return '🥇 1st';
+        if (n === 2) return '🥈 2nd';
+        if (n <= 4)  return '🥉 3rd–4th';
+        const end = 2 ** Math.ceil(Math.log2(n + 1));
+        return (n) + 'th–' + end + 'th';
+      };
+
+      // 1st: final winner
       results.push({ place: '🥇 1st', name: this.nameMap[finalBout.winner_id] || '?', medalClass: 'medal-gold' });
-      // Silver (loser of final)
+      // 2nd: final loser
       const silverId = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
       results.push({ place: '🥈 2nd', name: this.nameMap[silverId] || '?', medalClass: 'medal-silver' });
-      // Bronze: both SF losers
-      for (const sf of sfBouts) {
-        if (sf.status !== 'finished') continue;
-        const loserId = sf.winner_id === sf.left_id ? sf.right_id : sf.left_id;
-        if (loserId) results.push({ place: '🥉 3rd', name: this.nameMap[loserId] || '?', medalClass: 'medal-bronze' });
+
+      // All earlier rounds: losers share a band of places
+      for (let r = totalRounds - 1; r >= 1; r--) {
+        const bandStart = 2 ** (totalRounds - r) + 1;  // 3, 5, 9, 17, …
+        const bandEnd   = 2 ** (totalRounds - r + 1);  // 4, 8, 16, 32, …
+        const label = bandStart === bandEnd - 1
+          ? bandStart + 'th–' + bandEnd + 'th'
+          : bandStart + 'th–' + bandEnd + 'th';
+        const medalClass = r === totalRounds - 1 ? 'medal-bronze' : '';
+
+        const roundBouts = bouts.filter(b =>
+          b.de_round === r && b.status === 'finished' && b.winner_id &&
+          b.left_id && b.right_id   // skip byes
+        );
+        for (const b of roundBouts) {
+          const loserId = b.winner_id === b.left_id ? b.right_id : b.left_id;
+          if (loserId) results.push({ place: label, name: this.nameMap[loserId] || '?', medalClass });
+        }
       }
-      this.finalResults = results.length >= 2 ? results : null;
+
+      this.finalResults = results;
     },
 
     roundLabel(ri, total) {
