@@ -46,7 +46,8 @@
     <table>
       <thead>
         <tr>
-          <th style="width:5rem">Place</th>
+          <th style="width:4rem">Place</th>
+          <th style="width:3rem">Seed</th>
           <th>Name</th>
           <th>Club</th>
           <th>Note</th>
@@ -57,10 +58,11 @@
           <tr :class="r.note?.startsWith('Pool') ? 'pool-row' : ''">
             <td>
               <span class="place"
-                :class="r.place===1?'place-1':r.place===2?'place-2':r.place<=4?'place-34':''"
+                :class="r.place===1?'place-1':r.place===2?'place-2':r.place<=3?'place-34':''"
                 x-text="r.place_label">
               </span>
             </td>
+            <td style="color:#aaa;font-size:.85rem" x-text="r.de_seed||'—'"></td>
             <td x-text="r.last_name+', '+r.first_name"></td>
             <td x-text="r.club||'—'"></td>
             <td class="note" x-text="r.note||''"></td>

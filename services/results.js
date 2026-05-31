@@ -1,5 +1,6 @@
 'use strict';
 const db = require('../db');
+const { buildSeedPositions } = require('../lib/deFormation');
 
 function getCompetitionResults(compId) {
   const phases = db.prepare(
@@ -33,35 +34,61 @@ function getCompetitionResults(compId) {
 
     const totalRounds = bouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
     if (totalRounds > 0) {
+      // Name/club lookup
       const info = {};
       for (const b of bouts) {
         if (b.left_id)  info[b.left_id]  = { first_name: b.lf, last_name: b.ll, club: b.lclub };
         if (b.right_id) info[b.right_id] = { first_name: b.rf, last_name: b.rl, club: b.rclub };
       }
 
+      // DE seed lookup from R1 positions
+      const r1 = bouts.filter(b => b.de_round === 1);
+      const T  = r1.length * 2;
+      const seedSlots = buildSeedPositions(T);
+      const deSeed = {};
+      for (const b of r1) {
+        const p = b.tableau_position;
+        if (b.left_id)  deSeed[b.left_id]  = seedSlots[2 * (p - 1)];
+        if (b.right_id) deSeed[b.right_id] = seedSlots[2 * (p - 1) + 1];
+      }
+
+      const push = (place, placeLabel, id, note) => {
+        const i = info[id] || {};
+        entries.push({ place, place_label: placeLabel, competitor_id: id,
+          de_seed: deSeed[id] || null,
+          first_name: i.first_name, last_name: i.last_name, club: i.club, note });
+      };
+
       const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
       if (finalBout?.winner_id) {
-        const push = (place, placeLabel, id, note) => {
-          const i = info[id] || {};
-          entries.push({ place, place_label: placeLabel, competitor_id: id,
-            first_name: i.first_name, last_name: i.last_name, club: i.club, note });
-        };
-
         push(1, '1', finalBout.winner_id, 'DE winner');
-        const silver = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
+
+        const silver = finalBout.winner_id === finalBout.left_id
+          ? finalBout.right_id : finalBout.left_id;
         push(2, '2', silver, 'DE final');
 
-        for (let r = totalRounds - 1; r >= 1; r--) {
-          const bandStart = 2 ** (totalRounds - r) + 1;
-          const bandEnd   = 2 ** (totalRounds - r + 1);
-          const label     = bandStart + '–' + bandEnd;
-          const note      = r === totalRounds - 1 ? 'DE semi-final'
-                          : r === totalRounds - 2 ? 'DE quarter-final'
-                          : 'DE round of ' + bandEnd;
-          for (const b of bouts) {
-            if (b.de_round !== r || b.status !== 'finished' || !b.winner_id || !b.left_id || !b.right_id) continue;
-            const loser = b.winner_id === b.left_id ? b.right_id : b.left_id;
-            push(bandStart, label, loser, note);
+        // SF losers share 3rd (no bronze bout)
+        const sfLosers = bouts
+          .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
+                    && b.winner_id && b.left_id && b.right_id)
+          .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
+        sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+
+        // All other rounds: sort losers by DE seed, assign sequential unique ranks
+        let nextPlace = 3 + sfLosers.length; // 5 when 2 SF losers
+        for (let r = totalRounds - 2; r >= 1; r--) {
+          const roundNote = r === totalRounds - 2 ? 'DE quarter-final'
+                          : 'DE round of ' + (2 ** (totalRounds - r + 1));
+          const losers = bouts
+            .filter(b => b.de_round === r && b.status === 'finished'
+                      && b.winner_id && b.left_id && b.right_id)
+            .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+            .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
+            .sort((a, b) => a.seed - b.seed);
+
+          for (const l of losers) {
+            push(nextPlace, String(nextPlace), l.id, roundNote);
+            nextPlace++;
           }
         }
       }
@@ -87,13 +114,11 @@ function getCompetitionResults(compId) {
       if (deIds.has(row.competitor_id)) continue;
       const place = entries.length + 1;
       entries.push({
-        place,
-        place_label: String(place),
+        place, place_label: String(place),
         competitor_id: row.competitor_id,
-        first_name:   row.first_name,
-        last_name:    row.last_name,
-        club:         row.club_name,
-        note:         'Pool phase (rank ' + row.pool_rank + ')',
+        de_seed: null,
+        first_name: row.first_name, last_name: row.last_name, club: row.club_name,
+        note: 'Pool phase (rank ' + row.pool_rank + ')',
       });
     }
   }
