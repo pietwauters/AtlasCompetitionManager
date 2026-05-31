@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — OPP2</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
+    .notice-ok{background:#d5f5e3;color:#1e5631}
+    .notice-err{background:#fde8e8;color:#922b21}
+    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600;margin-right:.3rem}
+    .badge-connected{background:#d4edda;color:#155724}
+    .badge-disconnected{background:#d6d8db;color:#383d41}
+    .badge-pending{background:#fef3cd;color:#856404}
+    .badge-active{background:#d4edda;color:#155724}
+    .badge-done{background:#d6d8db;color:#383d41}
+    .badge-online{background:#d4edda;color:#155724}
+    .badge-offline{background:#fde8e8;color:#922b21}
+    .broker-row{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-top:.75rem}
+    .broker-row input{flex:1;min-width:220px;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+    .pipeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:1rem}
+    .strip-card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);overflow:hidden}
+    .strip-header{padding:.6rem 1rem;background:#f0f2f5;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid #ddd}
+    .strip-header strong{flex:1;font-size:.95rem}
+    .slot-list{padding:.5rem}
+    .slot{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:.5rem;background:#fafafa}
+    .slot-head{padding:.4rem .7rem;display:flex;align-items:center;gap:.4rem;cursor:default}
+    .slot-label{flex:1;font-size:.85rem;font-weight:600}
+    .slot-time{font-size:.78rem;color:#666;white-space:nowrap}
+    .slot-detail{padding:.3rem .7rem .6rem;font-size:.78rem;color:#555;border-top:1px solid #eee}
+    .slot-detail .row{display:flex;gap:.5rem;align-items:center;margin-bottom:.2rem}
+    .slot-detail input[type=time]{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
+    .slot-detail input[type=number]{width:4rem;padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
+    .slot-detail select{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
+    .slot-actions{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.4rem}
+    .predicted{color:#1a6bab;font-weight:600}
+    .overlap-warn{color:#856404}
+    .add-slot-form{padding:.6rem;border-top:1px solid #eee;background:#f8f8f8}
+    .add-slot-form select,.add-slot-form input{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.82rem;margin-bottom:.3rem;width:100%}
+    .add-slot-form .row{display:flex;gap:.4rem;flex-wrap:wrap}
+    .add-slot-form .row select,.add-slot-form .row input{width:auto;flex:1}
+    .ref-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
+    .ref-table th{text-align:left;padding:.4rem .6rem;background:#f0f2f5;border-bottom:2px solid #ddd}
+    .ref-table td{padding:.4rem .6rem;border-bottom:1px solid #eee;vertical-align:top}
+    .piste-status-grid{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem}
+    .piste-dot{display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border-radius:5px;background:#f0f2f5}
+    select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+  <a href="/opp2.html" style="color:#aad4f5">OPP2</a>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
+
+  <!-- ── Broker config ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <h2 style="margin:0">OPP2 / MQTT</h2>
+      <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
+            x-text="status.connected?'Connected':'Disconnected'"></span>
+      <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
+    </div>
+    <div class="broker-row">
+      <input type="text" x-model="brokerUrl" placeholder="mqtt://openpiste.local:1883">
+      <button class="primary" x-show="!status.connected" @click="connect()">Connect</button>
+      <button x-show="status.connected" @click="disconnect()" style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
+      <button @click="saveSettings()" style="background:#f0f2f5">Save settings</button>
+    </div>
+
+    <!-- Live piste status -->
+    <template x-if="status.connected && status.pistes.length">
+      <div style="margin-top:.75rem">
+        <div style="font-size:.82rem;color:#666;margin-bottom:.3rem">Apparatus status</div>
+        <div class="piste-status-grid">
+          <template x-for="p in status.pistes" :key="p.pisteId">
+            <div class="piste-dot">
+              <span :style="'width:8px;height:8px;border-radius:50%;background:'+(p.apparatusOnline?'#1e8449':'#aaa')"></span>
+              <span x-text="'Piste '+p.pisteId"></span>
+              <span x-show="p.boutId" style="color:#1a6bab;font-size:.75rem" x-text="'bout #'+p.boutId"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Pipeline builder ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem">
+      <h2 style="margin:0">Piste pipelines</h2>
+      <span style="font-size:.82rem;color:#888">Drag-to-reorder not yet available — use ▲▼ buttons</span>
+    </div>
+
+    <div class="pipeline-grid">
+      <template x-for="strip in strips" :key="strip.id">
+        <div class="strip-card">
+          <div class="strip-header">
+            <strong x-text="strip.name||('Strip '+strip.strip_number)"></strong>
+            <template x-if="liveState(strip.strip_number)">
+              <span class="badge"
+                :class="liveState(strip.strip_number).apparatusOnline?'badge-online':'badge-offline'"
+                x-text="liveState(strip.strip_number).apparatusOnline?'online':'offline'"></span>
+            </template>
+          </div>
+
+          <div class="slot-list">
+            <template x-for="(slot, idx) in strip.slots" :key="slot.id">
+              <div class="slot">
+                <div class="slot-head">
+                  <span class="badge" :class="'badge-'+slot.status" x-text="slot.status"></span>
+                  <span class="slot-label" x-text="slotLabel(slot)"></span>
+                  <span class="slot-time">
+                    <span x-show="slot.scheduled_start" x-text="slot.scheduled_start+' →'"></span>
+                    <span class="predicted" x-show="slot.predicted_end" x-text="slot.predicted_end"></span>
+                    <span class="overlap-warn"
+                      x-show="idx>0 && hasOverlap(strip.slots[idx-1], slot)"> ⚠</span>
+                  </span>
+                </div>
+                <div class="slot-detail">
+                  <div class="row">
+                    <label>Start
+                      <input type="time" :value="slot.scheduled_start||''"
+                        @change="updateSlot(slot.id,{scheduled_start:$event.target.value||null},strip)">
+                    </label>
+                    <label>Min/bout
+                      <input type="number" min="1" max="60" :value="slot.minutes_per_bout||''"
+                        :placeholder="slot.effective_minutes_per_bout||'—'"
+                        @change="updateSlot(slot.id,{minutes_per_bout:Number($event.target.value)||null},strip)">
+                    </label>
+                    <label>Referee
+                      <select @change="updateSlot(slot.id,{referee_id:$event.target.value||null},strip)">
+                        <option value="">— None —</option>
+                        <template x-for="r in referees" :key="r.referee_id">
+                          <option :value="r.referee_id"
+                            :selected="slot.referee_id==r.referee_id"
+                            x-text="r.last_name+', '+r.first_name"></option>
+                        </template>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="slot-actions">
+                    <button @click="moveSlot(slot.id,'up',strip)" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
+                    <button @click="moveSlot(slot.id,'down',strip)" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
+                    <button @click="deleteSlot(slot.id,strip)" style="font-size:.75rem;padding:.2rem .5rem;color:#922b21">Remove</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Add slot form -->
+            <div class="add-slot-form" x-show="addOpen===strip.id">
+              <div style="font-size:.82rem;font-weight:600;margin-bottom:.4rem">Add slot</div>
+              <select x-model="addForm.type" style="margin-bottom:.4rem">
+                <option value="pool">Pool</option>
+                <option value="de_range">DE range</option>
+              </select>
+
+              <!-- Pool picker -->
+              <template x-if="addForm.type==='pool'">
+                <div>
+                  <select x-model="addForm.pool_id">
+                    <option value="">— Select pool —</option>
+                    <template x-for="p in availablePools" :key="p.id">
+                      <option :value="p.id"
+                        x-text="p.competition_name+' — Pool '+p.pool_number+' ('+p.phase_status+')'"></option>
+                    </template>
+                  </select>
+                </div>
+              </template>
+
+              <!-- DE range picker -->
+              <template x-if="addForm.type==='de_range'">
+                <div>
+                  <select x-model="addForm.phase_id" style="margin-bottom:.3rem">
+                    <option value="">— Select DE phase —</option>
+                    <template x-for="ph in availableDePhases" :key="ph.id">
+                      <option :value="ph.id"
+                        x-text="ph.competition_name+' — '+ph.phase_label"></option>
+                    </template>
+                  </select>
+                  <div class="row">
+                    <input type="number" x-model.number="addForm.de_round" placeholder="Round" min="1">
+                    <input type="number" x-model.number="addForm.bout_start" placeholder="From bout" min="1">
+                    <input type="number" x-model.number="addForm.bout_end"   placeholder="To bout"   min="1">
+                  </div>
+                </div>
+              </template>
+
+              <div class="row" style="margin-top:.4rem">
+                <input type="time" x-model="addForm.scheduled_start" placeholder="Start time">
+                <input type="number" x-model.number="addForm.minutes_per_bout" placeholder="Min/bout" min="1" max="60">
+              </div>
+              <div style="display:flex;gap:.4rem;margin-top:.4rem">
+                <button class="primary" @click="submitAddSlot(strip)">Add</button>
+                <button @click="addOpen=null">Cancel</button>
+              </div>
+            </div>
+            <div style="padding:.4rem .5rem" x-show="addOpen!==strip.id">
+              <button @click="openAdd(strip)" style="width:100%;font-size:.8rem">+ Add slot</button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── Referee schedule ──────────────────────────────────────────────────── -->
+  <div class="card" x-show="referees.length">
+    <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem">
+      <h2 style="margin:0">Referee schedule</h2>
+      <select x-model="selectedReferee" @change="loadRefereeSchedule()">
+        <option value="">— Select referee —</option>
+        <template x-for="r in referees" :key="r.referee_id">
+          <option :value="r.referee_id" x-text="r.last_name+', '+r.first_name"></option>
+        </template>
+      </select>
+    </div>
+    <template x-if="refSchedule.length">
+      <table class="ref-table">
+        <thead><tr><th>Strip</th><th>Assignment</th><th>Start</th><th>End (predicted)</th><th>Status</th></tr></thead>
+        <tbody>
+          <template x-for="s in refSchedule" :key="s.id">
+            <tr>
+              <td x-text="s.strip_name||('Piste '+s.strip_number)"></td>
+              <td x-text="slotLabel(s)"></td>
+              <td x-text="s.scheduled_start||'—'"></td>
+              <td x-text="s.predicted_end||'—'"></td>
+              <td><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </template>
+    <div x-show="selectedReferee && !refSchedule.length" style="color:#888;font-size:.9rem">No slots assigned to this referee.</div>
+  </div>
+</main>
+
+<script>
+function app() {
+  return {
+    notice: { text: '', error: false },
+    status: { connected: false, brokerUrl: '', pistes: [] },
+    brokerUrl: '',
+    strips: [],
+    referees: [],
+    availablePools: [],
+    availableDePhases: [],
+    addOpen: null,
+    addForm: {},
+    selectedReferee: '',
+    refSchedule: [],
+
+    async init() {
+      await Promise.all([
+        this.loadSettings(),
+        this.loadStatus(),
+        this.loadStrips(),
+        this.loadReferees(),
+        this.loadAvailablePhases(),
+      ]);
+      setInterval(() => this.loadStatus(), 5000);
+    },
+
+    async loadSettings() {
+      const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
+      this.brokerUrl = s.broker_url || 'mqtt://openpiste.local:1883';
+    },
+
+    async loadStatus() {
+      const s = await fetch('/api/opp2/status').then(r => r.json()).catch(() => ({ connected: false, pistes: [] }));
+      this.status = s;
+    },
+
+    async loadStrips() {
+      const data = await fetch('/api/opp2/pipeline').then(r => r.json()).catch(() => []);
+      this.strips = data;
+    },
+
+    async loadReferees() {
+      const people = await fetch('/api/people?role=referee').then(r => r.json()).catch(() => []);
+      this.referees = people;
+    },
+
+    async loadAvailablePhases() {
+      // Load all pools and DE phases for the add-slot pickers.
+      // We use the competitions API to enumerate all active phases.
+      const comps = await fetch('/api/competitions').then(r => r.json()).catch(() => []);
+      const pools = [], dePhases = [];
+      for (const c of comps) {
+        const phases = await fetch(`/api/competitions/${c.id}/phases`).then(r => r.json()).catch(() => []);
+        for (const ph of phases) {
+          if (ph.type === 'pool') {
+            const phPools = await fetch(`/api/phases/${ph.id}/pools`).then(r => r.json()).catch(() => []);
+            for (const p of phPools) {
+              pools.push({ ...p, competition_name: c.name, phase_status: ph.status });
+            }
+          } else if (ph.type === 'de') {
+            dePhases.push({ ...ph, competition_name: c.name,
+              phase_label: `DE Phase ${ph.phase_order} (${ph.status})` });
+          }
+        }
+      }
+      this.availablePools    = pools;
+      this.availableDePhases = dePhases;
+    },
+
+    async connect() {
+      const r = await fetch('/api/opp2/connect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker_url: this.brokerUrl }),
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error || 'Connect failed', true); return; }
+      this.showNotice('Connecting to ' + this.brokerUrl);
+      await this.loadStatus();
+    },
+
+    async disconnect() {
+      await fetch('/api/opp2/disconnect', { method: 'POST' });
+      this.showNotice('Disconnected');
+      await this.loadStatus();
+    },
+
+    async saveSettings() {
+      await fetch('/api/opp2/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker_url: this.brokerUrl }),
+      });
+      this.showNotice('Settings saved');
+    },
+
+    liveState(stripNumber) {
+      return this.status.pistes?.find(p => p.pisteId === String(stripNumber)) || null;
+    },
+
+    slotLabel(slot) {
+      if (slot.type === 'pool')
+        return `${slot.competition_name || '?'} — Pool ${slot.pool_number || '?'}`;
+      if (slot.type === 'de_range')
+        return `${slot.competition_name || '?'} — DE R${slot.de_round} #${slot.bout_start||1}–${slot.bout_end||'end'}`;
+      return slot.type;
+    },
+
+    hasOverlap(prev, curr) {
+      if (!prev?.predicted_end || !curr?.scheduled_start) return false;
+      return curr.scheduled_start < prev.predicted_end;
+    },
+
+    openAdd(strip) {
+      this.addOpen  = strip.id;
+      this.addForm  = { type: 'pool', pool_id: '', phase_id: '',
+                        de_round: 1, bout_start: '', bout_end: '',
+                        scheduled_start: '', minutes_per_bout: '' };
+    },
+
+    async submitAddSlot(strip) {
+      const body = {
+        type:             this.addForm.type,
+        pool_id:          this.addForm.type === 'pool'     ? (this.addForm.pool_id  || null) : null,
+        phase_id:         this.addForm.type === 'de_range' ? (this.addForm.phase_id || null) : null,
+        de_round:         this.addForm.type === 'de_range' ? (this.addForm.de_round || null) : null,
+        bout_start:       this.addForm.type === 'de_range' ? (this.addForm.bout_start || null) : null,
+        bout_end:         this.addForm.type === 'de_range' ? (this.addForm.bout_end   || null) : null,
+        scheduled_start:  this.addForm.scheduled_start  || null,
+        minutes_per_bout: this.addForm.minutes_per_bout || null,
+      };
+      const r = await fetch(`/api/opp2/pipeline/strip/${strip.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { const d = await r.json(); this.showNotice(d.error||'Add failed',true); return; }
+      this.addOpen = null;
+      await this.loadStrips();
+    },
+
+    async updateSlot(id, fields, strip) {
+      const r = await fetch(`/api/opp2/pipeline/slots/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      if (!r.ok) { this.showNotice('Update failed', true); return; }
+      await this.loadStrips();
+    },
+
+    async moveSlot(id, direction, strip) {
+      const r = await fetch(`/api/opp2/pipeline/slots/${id}/reorder`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+      if (!r.ok) return;
+      await this.loadStrips();
+    },
+
+    async deleteSlot(id, strip) {
+      if (!confirm('Remove this slot from the pipeline?')) return;
+      await fetch(`/api/opp2/pipeline/slots/${id}`, { method: 'DELETE' });
+      await this.loadStrips();
+    },
+
+    async loadRefereeSchedule() {
+      if (!this.selectedReferee) { this.refSchedule = []; return; }
+      this.refSchedule = await fetch(`/api/opp2/pipeline/referee/${this.selectedReferee}`)
+        .then(r => r.json()).catch(() => []);
+    },
+
+    showNotice(text, error = false) {
+      this.notice = { text, error };
+      setTimeout(() => { this.notice = { text: '', error: false }; }, 4000);
+    },
+  };
+}
+</script>
+<script src="/js/alpinejs.min.js"></script>
+</body>
+</html>

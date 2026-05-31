@@ -1,0 +1,354 @@
+'use strict';
+const db = require('../db');
+
+// Bouts in a DE round ordered by tableau position for range slicing.
+// Positions come in pairs (1,2), (3,4), ... so we order by position and
+// assign a 1-based index within the round to support bout_start/bout_end.
+const DE_BOUT_ORDER = `
+  SELECT b.id, b.tableau_position, b.status, b.left_id, b.right_id,
+         b.left_score, b.right_score, b.winner_id, b.de_round,
+         ROW_NUMBER() OVER (PARTITION BY b.phase_id, b.de_round
+                            ORDER BY b.tableau_position) AS round_index
+  FROM bouts b
+  WHERE b.de_round IS NOT NULL
+`;
+
+const Pipeline = {
+
+  // ── Queries ───────────────────────────────────────────────────────────────
+
+  findById(id) {
+    return db.prepare('SELECT * FROM pipeline_slots WHERE id = ?').get(id);
+  },
+
+  findByStrip(stripId) {
+    const slots = db.prepare(`
+      SELECT ps.*,
+        po.phase_id   AS pool_phase_id,
+        ph.competition_id,
+        ph.type       AS phase_type,
+        ph.phase_order,
+        co.name       AS competition_name,
+        co.weapon,
+        po.pool_number,
+        rp.first_name AS ref_first, rp.last_name AS ref_last,
+        -- bout count drives predicted duration
+        CASE
+          WHEN ps.type = 'pool'
+            THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          WHEN ps.type = 'de_range'
+            THEN COALESCE(ps.bout_end, 999) - COALESCE(ps.bout_start, 1) + 1
+        END AS bout_count,
+        COALESCE(ps.minutes_per_bout,
+          (SELECT ds.minutes_per_bout FROM bout_duration_standards ds
+           WHERE ds.weapon = co.weapon
+             AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
+        ) AS effective_minutes_per_bout
+      FROM pipeline_slots ps
+      LEFT JOIN pools        po ON po.id  = ps.pool_id
+      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id)
+      LEFT JOIN competitions co ON co.id  = ph.competition_id
+      LEFT JOIN referees     r  ON r.id   = ps.referee_id
+      LEFT JOIN people       rp ON rp.id  = r.person_id
+      WHERE ps.strip_id = ?
+      ORDER BY ps.slot_order
+    `).all(stripId);
+
+    return slots.map(s => this._withPredictedEnd(s));
+  },
+
+  findAllForReferee(refereeId) {
+    const slots = db.prepare(`
+      SELECT ps.*, st.name AS strip_name, st.strip_number,
+        po.pool_number,
+        ph.type AS phase_type, ph.phase_order,
+        co.name AS competition_name, co.weapon,
+        CASE
+          WHEN ps.type = 'pool'
+            THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          WHEN ps.type = 'de_range'
+            THEN COALESCE(ps.bout_end, 999) - COALESCE(ps.bout_start, 1) + 1
+        END AS bout_count,
+        COALESCE(ps.minutes_per_bout,
+          (SELECT ds.minutes_per_bout FROM bout_duration_standards ds
+           WHERE ds.weapon = co.weapon
+             AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
+        ) AS effective_minutes_per_bout
+      FROM pipeline_slots ps
+      JOIN strips        st ON st.id = ps.strip_id
+      LEFT JOIN pools    po ON po.id = ps.pool_id
+      LEFT JOIN phases   ph ON ph.id = COALESCE(ps.phase_id, po.phase_id)
+      LEFT JOIN competitions co ON co.id = ph.competition_id
+      WHERE ps.referee_id = ?
+      ORDER BY ps.strip_id, ps.slot_order
+    `).all(refereeId);
+
+    return slots.map(s => this._withPredictedEnd(s));
+  },
+
+  // All strips with their pipelines, used by the admin page.
+  findAllStrips() {
+    const strips = db.prepare(`
+      SELECT s.*, COUNT(ps.id) AS slot_count
+      FROM strips s
+      LEFT JOIN pipeline_slots ps ON ps.strip_id = s.id
+      GROUP BY s.id
+      ORDER BY s.strip_number
+    `).all();
+
+    return strips.map(s => ({
+      ...s,
+      slots: this.findByStrip(s.id),
+    }));
+  },
+
+  // ── CRUD ─────────────────────────────────────────────────────────────────
+
+  addSlot(stripId, data) {
+    const maxOrder = db.prepare(
+      'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
+    ).get(stripId).m;
+
+    const { lastInsertRowid } = db.prepare(`
+      INSERT INTO pipeline_slots
+        (strip_id, slot_order, type, pool_id, phase_id, de_round,
+         bout_start, bout_end, scheduled_start, minutes_per_bout, referee_id)
+      VALUES
+        (@strip_id, @slot_order, @type, @pool_id, @phase_id, @de_round,
+         @bout_start, @bout_end, @scheduled_start, @minutes_per_bout, @referee_id)
+    `).run({
+      strip_id:         Number(stripId),
+      slot_order:       maxOrder + 1,
+      type:             data.type,
+      pool_id:          data.pool_id          ?? null,
+      phase_id:         data.phase_id         ?? null,
+      de_round:         data.de_round         ?? null,
+      bout_start:       data.bout_start       ?? null,
+      bout_end:         data.bout_end         ?? null,
+      scheduled_start:  data.scheduled_start  ?? null,
+      minutes_per_bout: data.minutes_per_bout ?? null,
+      referee_id:       data.referee_id       ?? null,
+    });
+    return this.findById(lastInsertRowid);
+  },
+
+  updateSlot(id, data) {
+    const current = this.findById(id);
+    if (!current) return null;
+    const m = { ...current, ...data };
+    db.prepare(`
+      UPDATE pipeline_slots
+      SET scheduled_start  = @scheduled_start,
+          minutes_per_bout = @minutes_per_bout,
+          referee_id       = @referee_id,
+          status           = @status
+      WHERE id = @id
+    `).run({
+      id: Number(id),
+      scheduled_start:  m.scheduled_start  ?? null,
+      minutes_per_bout: m.minutes_per_bout ?? null,
+      referee_id:       m.referee_id       ?? null,
+      status:           m.status,
+    });
+    return this.findById(id);
+  },
+
+  // Move a slot up or down within the strip's pipeline.
+  reorder(id, direction) {
+    const slot = this.findById(id);
+    if (!slot) return false;
+    const sibling = db.prepare(`
+      SELECT * FROM pipeline_slots
+      WHERE strip_id = ? AND slot_order ${direction === 'up' ? '<' : '>'} ?
+      ORDER BY slot_order ${direction === 'up' ? 'DESC' : 'ASC'}
+      LIMIT 1
+    `).get(slot.strip_id, slot.slot_order);
+    if (!sibling) return false;
+
+    db.transaction(() => {
+      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?')
+        .run(sibling.slot_order, slot.id);
+      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?')
+        .run(slot.slot_order, sibling.id);
+    })();
+    return true;
+  },
+
+  deleteSlot(id) {
+    return db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(id).changes > 0;
+  },
+
+  // ── Pipeline navigation (used by OPP2 client) ────────────────────────────
+
+  // Returns the current active slot for a strip, or the first pending one.
+  activeSlot(stripId) {
+    return db.prepare(`
+      SELECT * FROM pipeline_slots
+      WHERE strip_id = ?
+        AND status IN ('active', 'pending')
+      ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, slot_order
+      LIMIT 1
+    `).get(stripId) || null;
+  },
+
+  markActive(slotId) {
+    db.prepare("UPDATE pipeline_slots SET status='active' WHERE id=?").run(slotId);
+  },
+
+  markDone(slotId) {
+    db.prepare("UPDATE pipeline_slots SET status='done' WHERE id=?").run(slotId);
+  },
+
+  // Next pending bout within the slot, after the given cursor bout id (or from start).
+  // Returns a fully-joined bout row or null if the slot is exhausted.
+  nextBout(slot, afterBoutId = null) {
+    if (slot.type === 'pool') {
+      return db.prepare(`
+        SELECT b.*, b.id AS bout_id,
+          lp.first_name AS left_first,  lp.last_name  AS left_last,
+          lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+          rp.first_name AS right_first, rp.last_name  AS right_last,
+          rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
+          po.pool_number,
+          ph.phase_order,
+          co.name AS competition_name, co.weapon
+        FROM bouts b
+        JOIN pools      po  ON po.id  = b.pool_id
+        JOIN phases     ph  ON ph.id  = po.phase_id
+        JOIN competitions co ON co.id = ph.competition_id
+        LEFT JOIN competitors lc  ON lc.id  = b.left_id
+        LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
+        LEFT JOIN people      lp  ON lp.id  = lf.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+        LEFT JOIN competitors rc  ON rc.id  = b.right_id
+        LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
+        LEFT JOIN people      rp  ON rp.id  = rf.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+        LEFT JOIN pools       po2 ON po2.id = b.pool_id
+        LEFT JOIN referees    ref ON ref.id = po2.referee_id
+        LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
+        WHERE b.pool_id = ?
+          AND b.status != 'finished'
+          AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
+        ORDER BY b.bout_order
+        LIMIT 1
+      `).get(slot.pool_id, afterBoutId, afterBoutId);
+    }
+
+    // de_range: select from ordered DE bouts within the range
+    const start = slot.bout_start ?? 1;
+    const end   = slot.bout_end   ?? 9999;
+    return db.prepare(`
+      WITH ordered AS (${DE_BOUT_ORDER})
+      SELECT b.*, b.id AS bout_id, o.round_index,
+        lp.first_name AS left_first,  lp.last_name  AS left_last,
+        lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+        rp.first_name AS right_first, rp.last_name  AS right_last,
+        rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+        ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
+        ph.phase_order,
+        co.name AS competition_name, co.weapon
+      FROM bouts b
+      JOIN ordered o ON o.id = b.id
+      JOIN phases     ph  ON ph.id  = b.phase_id
+      JOIN competitions co ON co.id = ph.competition_id
+      LEFT JOIN competitors lc  ON lc.id  = b.left_id
+      LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
+      LEFT JOIN people      lp  ON lp.id  = lf.person_id
+      LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+      LEFT JOIN competitors rc  ON rc.id  = b.right_id
+      LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
+      LEFT JOIN people      rp  ON rp.id  = rf.person_id
+      LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      LEFT JOIN phases      ph2 ON ph2.id = b.phase_id
+      LEFT JOIN referees    ref ON ref.id  = ph2.competition_id  -- placeholder; DE ref TBD
+      LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
+      WHERE b.phase_id = ? AND b.de_round = ?
+        AND o.round_index BETWEEN ? AND ?
+        AND b.status != 'finished'
+        AND (? IS NULL OR o.round_index > (
+              SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?
+            ))
+      ORDER BY o.round_index
+      LIMIT 1
+    `).get(slot.phase_id, slot.de_round, start, end, afterBoutId, afterBoutId);
+  },
+
+  // Previous bout (for PREV command) — walks back one step in the slot's order.
+  prevBout(slot, beforeBoutId) {
+    if (!beforeBoutId) return null;
+    if (slot.type === 'pool') {
+      return db.prepare(`
+        SELECT b.*, b.id AS bout_id,
+          lp.first_name AS left_first,  lp.last_name  AS left_last,
+          lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+          rp.first_name AS right_first, rp.last_name  AS right_last,
+          rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+          po.pool_number, ph.phase_order,
+          co.name AS competition_name, co.weapon
+        FROM bouts b
+        JOIN pools      po  ON po.id  = b.pool_id
+        JOIN phases     ph  ON ph.id  = po.phase_id
+        JOIN competitions co ON co.id = ph.competition_id
+        LEFT JOIN competitors lc  ON lc.id  = b.left_id
+        LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
+        LEFT JOIN people      lp  ON lp.id  = lf.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+        LEFT JOIN competitors rc  ON rc.id  = b.right_id
+        LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
+        LEFT JOIN people      rp  ON rp.id  = rf.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+        WHERE b.pool_id = ?
+          AND b.bout_order < (SELECT bout_order FROM bouts WHERE id = ?)
+        ORDER BY b.bout_order DESC
+        LIMIT 1
+      `).get(slot.pool_id, beforeBoutId);
+    }
+
+    const start = slot.bout_start ?? 1;
+    const end   = slot.bout_end   ?? 9999;
+    return db.prepare(`
+      WITH ordered AS (${DE_BOUT_ORDER})
+      SELECT b.*, b.id AS bout_id, o.round_index,
+        lp.first_name AS left_first,  lp.last_name  AS left_last,
+        lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+        rp.first_name AS right_first, rp.last_name  AS right_last,
+        rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+        ph.phase_order, co.name AS competition_name, co.weapon
+      FROM bouts b
+      JOIN ordered o ON o.id = b.id
+      JOIN phases ph ON ph.id = b.phase_id
+      JOIN competitions co ON co.id = ph.competition_id
+      LEFT JOIN competitors lc  ON lc.id  = b.left_id
+      LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
+      LEFT JOIN people      lp  ON lp.id  = lf.person_id
+      LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+      LEFT JOIN competitors rc  ON rc.id  = b.right_id
+      LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
+      LEFT JOIN people      rp  ON rp.id  = rf.person_id
+      LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      WHERE b.phase_id = ? AND b.de_round = ?
+        AND o.round_index BETWEEN ? AND ?
+        AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)
+      ORDER BY o.round_index DESC
+      LIMIT 1
+    `).get(slot.phase_id, slot.de_round, start, end, beforeBoutId);
+  },
+
+  // ── Predicted end helper ─────────────────────────────────────────────────
+
+  _withPredictedEnd(slot) {
+    if (!slot.scheduled_start || !slot.effective_minutes_per_bout || !slot.bout_count) {
+      return { ...slot, predicted_end: null };
+    }
+    const [h, m] = slot.scheduled_start.split(':').map(Number);
+    const totalMin = h * 60 + m + slot.bout_count * slot.effective_minutes_per_bout;
+    const ph = Math.floor(totalMin / 60) % 24;
+    const pm = totalMin % 60;
+    const predicted_end = `${String(ph).padStart(2,'0')}:${String(pm).padStart(2,'0')}`;
+    return { ...slot, predicted_end };
+  },
+};
+
+module.exports = Pipeline;

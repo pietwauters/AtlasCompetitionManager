@@ -7,7 +7,11 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": ["fencing", "competition", "openpiste"],
+  "keywords": [
+    "fencing",
+    "competition",
+    "openpiste"
+  ],
   "author": "piet.wauters@gmail.com",
   "license": "ISC",
   "dependencies": {
@@ -15,6 +19,7 @@
     "better-sqlite3": "^8.4.0",
     "bonjour": "^3.5.1",
     "express": "^5.2.1",
-    "express-session": "^1.19.0"
+    "express-session": "^1.19.0",
+    "mqtt": "^5.15.1"
   }
 }

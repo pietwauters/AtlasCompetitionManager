@@ -1,10 +1,18 @@
 'use strict';
 
-const express = require('express');
-const path    = require('path');
+const express  = require('express');
+const path     = require('path');
 const { migrate } = require('./db/migrator');
 
 migrate();
+
+const Settings = require('./services/settings');
+const OPP2     = require('./lib/opp2Client');
+if (Settings.get('opp2_enabled') === '1') {
+  OPP2.connect(Settings.get('opp2_broker_url'))
+    .then(() => console.log('[OPP2] Auto-connected on startup'))
+    .catch(e => console.error('[OPP2] Auto-connect failed:', e.message));
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -28,6 +36,7 @@ app.use('/api/pools',  require('./routes/pools'));
 app.use('/api/bouts',  require('./routes/bouts'));
 app.use('/api/rules',  require('./routes/rules'));
 app.use('/api/strips', require('./routes/strips'));
+app.use('/api/opp2',  require('./routes/opp2'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
