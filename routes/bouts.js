@@ -4,6 +4,13 @@ const Bout    = require('../services/bouts');
 
 const router = express.Router();
 
+// List bouts for a phase (used by de.html).
+router.get('/', (req, res) => {
+  const { phase_id } = req.query;
+  if (!phase_id) return res.status(400).json({ error: 'phase_id query param required' });
+  res.json(Bout.findByPhase(phase_id));
+});
+
 router.get('/:id', (req, res) => {
   const b = Bout.findById(req.params.id);
   if (!b) return res.status(404).json({ error: 'Bout not found' });

@@ -1,0 +1,9 @@
+{
+  "id": "de-standard",
+  "description": "Standard Individual DE",
+  "type": "de",
+  "bout": {
+    "touchTarget": 15,
+    "timeLimitMinutes": 9
+  }
+}

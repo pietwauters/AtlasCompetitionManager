@@ -79,43 +79,74 @@
     <template x-for="ph in phases" :key="ph.id">
       <div class="phase-row">
         <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
+        <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:10px;font-weight:600;background:#e8eaf6;color:#3949ab" x-text="ph.type==='de'?'DE':'Pool'"></span>
         <span style="font-weight:600;font-size:.9rem" x-text="ph.rule_doc.replace('.json','')"></span>
-        <span style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
-        <a :href="'/phase.html?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
+        <span x-show="ph.type!=='de'" style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
+        <a :href="(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
         <button class="danger" style="font-size:.8rem" @click="deletePhase(ph)">Delete</button>
       </div>
     </template>
 
     <!-- New phase form -->
     <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
-      <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
-        <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Rule document
-          <select class="inline" x-model="newRuleDoc" @change="poolOptions=null;chosenSizes=null">
-            <option value="">— choose —</option>
-            <template x-for="r in rules" :key="r.filename">
-              <option :value="r.filename" x-text="r.description+' ('+r.filename+')'"></option>
-            </template>
-          </select>
-        </label>
-        <button @click="fetchPoolOptions()" :disabled="!newRuleDoc">Calculate pool options</button>
+      <!-- Phase type selector -->
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+        <button :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool phase</button>
+        <button :class="newPhaseType==='de'?'primary':''" @click="newPhaseType='de';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">DE phase</button>
       </div>
 
-      <!-- Pool options -->
-      <div x-show="poolOptions" style="margin-top:.75rem">
-        <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
-             x-text="'For '+(poolOptions?.fencerCount||0)+' active competitors:'"></div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-          <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
-            <button
-              :class="chosenSizes===opt?'primary':''"
-              @click="chosenSizes=opt"
-              x-text="formatOption(opt) + (i===poolOptions?.recommended?' (recommended)':'')"
-              style="font-size:.85rem">
-            </button>
-          </template>
+      <!-- Pool phase form -->
+      <div x-show="newPhaseType==='pool'">
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Rule document
+            <select class="inline" x-model="newRuleDoc" @change="poolOptions=null;chosenSizes=null">
+              <option value="">— choose —</option>
+              <template x-for="r in poolRules" :key="r.filename">
+                <option :value="r.filename" x-text="r.description+' ('+r.filename+')'"></option>
+              </template>
+            </select>
+          </label>
+          <button @click="fetchPoolOptions()" :disabled="!newRuleDoc">Calculate pool options</button>
         </div>
-        <div style="margin-top:.75rem">
-          <button class="success" :disabled="!chosenSizes" @click="createPhase()">Create pools</button>
+        <div x-show="poolOptions" style="margin-top:.75rem">
+          <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
+               x-text="'For '+(poolOptions?.fencerCount||0)+' active competitors:'"></div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
+              <button
+                :class="chosenSizes===opt?'primary':''"
+                @click="chosenSizes=opt"
+                x-text="formatOption(opt) + (i===poolOptions?.recommended?' (recommended)':'')"
+                style="font-size:.85rem">
+              </button>
+            </template>
+          </div>
+          <div style="margin-top:.75rem">
+            <button class="success" :disabled="!chosenSizes" @click="createPhase()">Create pools</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DE phase form -->
+      <div x-show="newPhaseType==='de'">
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Rule document
+            <select class="inline" x-model="newRuleDoc" @change="deOptions=null">
+              <option value="">— choose —</option>
+              <template x-for="r in deRules" :key="r.filename">
+                <option :value="r.filename" x-text="r.description+' ('+r.filename+')'"></option>
+              </template>
+            </select>
+          </label>
+          <button @click="fetchDeOptions()" :disabled="!newRuleDoc">Preview bracket</button>
+        </div>
+        <div x-show="deOptions" style="margin-top:.75rem;font-size:.85rem;color:#555">
+          <span x-text="deOptions?.N+' competitors → '+deOptions?.tableauSize+'-person tableau'"></span>
+          <span x-show="deOptions?.byeCount>0" style="color:#856404;margin-left:.5rem"
+                x-text="'('+deOptions?.byeCount+' bye'+(deOptions?.byeCount>1?'s':'')+' for top seed'+(deOptions?.byeCount>1?'s':'')+')'" ></span>
+        </div>
+        <div x-show="deOptions" style="margin-top:.75rem">
+          <button class="success" :disabled="!newRuleDoc" @click="createDE()">Create DE bracket</button>
         </div>
       </div>
     </div>
@@ -191,7 +222,8 @@ function app() {
   const compId = new URLSearchParams(window.location.search).get('id');
   return {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[], eligSearch:'',
-    phases:[], rules:[], phaseFormOpen:false, newRuleDoc:'', poolOptions:null, chosenSizes:null,
+    phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
+    newPhaseType:'pool', newRuleDoc:'', poolOptions:null, chosenSizes:null, deOptions:null,
     notice:{text:'',error:false},
 
     get filteredEligible() {
@@ -261,7 +293,12 @@ function app() {
       this.phases = await fetch('/api/competitions/'+compId+'/phases').then(r=>r.json()).catch(()=>[]);
     },
     async loadRules() {
-      this.rules = await fetch('/api/rules?type=pool').then(r=>r.json()).catch(()=>[]);
+      const [pool, de] = await Promise.all([
+        fetch('/api/rules?type=pool').then(r=>r.json()).catch(()=>[]),
+        fetch('/api/rules?type=de').then(r=>r.json()).catch(()=>[]),
+      ]);
+      this.poolRules = pool;
+      this.deRules   = de;
     },
     async fetchPoolOptions() {
       this.poolOptions=null; this.chosenSizes=null;
@@ -270,6 +307,24 @@ function app() {
       if(!r.ok){this.showNotice(data.error||'Failed',true);return;}
       this.poolOptions = data;
       this.chosenSizes = data.options[data.recommended];
+    },
+    async fetchDeOptions() {
+      this.deOptions = null;
+      const r = await fetch('/api/competitions/'+compId+'/phases/de-options');
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error||'Failed', true); return; }
+      this.deOptions = data;
+    },
+    async createDE() {
+      const r = await fetch('/api/competitions/'+compId+'/phases/create-de', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ rule_doc: this.newRuleDoc })
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error||'Create failed', true); return; }
+      this.showNotice('DE bracket created');
+      this.phaseFormOpen=false; this.deOptions=null; this.newRuleDoc='';
+      await this.loadPhases();
     },
     async createPhase() {
       const r = await fetch('/api/competitions/'+compId+'/phases',{

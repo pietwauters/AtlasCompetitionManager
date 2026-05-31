@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — DE Phase</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
+    .notice-ok{background:#d5f5e3;color:#1e5631}
+    .notice-err{background:#fde8e8;color:#922b21}
+    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600}
+    .badge-pending{background:#fef3cd;color:#856404}
+    .badge-active{background:#d4edda;color:#155724}
+    .badge-finished{background:#d6d8db;color:#383d41}
+
+    /* ── Bracket ── */
+    .bracket-wrap{overflow-x:auto;padding-bottom:1rem}
+    .bracket{display:flex;gap:0;align-items:stretch;min-width:max-content}
+
+    .round-col{display:flex;flex-direction:column;justify-content:space-around;width:220px;flex-shrink:0}
+    .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 .5rem;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
+
+.bout-slot{flex:1;display:flex;align-items:center;padding:.25rem .5rem}
+    .bout-card{width:100%;background:#fff;border:1px solid #ddd;border-radius:6px;overflow:hidden;font-size:.82rem;cursor:pointer;transition:box-shadow .15s;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+    .bout-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.15)}
+    .bout-card.selected{border-color:#1a6bab;box-shadow:0 0 0 2px #1a6bab44}
+    .bout-card.finished{border-left:3px solid #1a6bab}
+    .bout-card.bye{border-left:3px solid #ccc;opacity:.7;cursor:default}
+    .bout-card.empty{background:#f8f8f8;border-style:dashed;cursor:default}
+
+    .bout-row{display:flex;align-items:center;padding:.3rem .5rem;gap:.3rem;min-height:28px}
+    .bout-row+.bout-row{border-top:1px solid #f0f0f0}
+    .bout-row.winner{background:#eaf6ee;font-weight:600}
+    .bout-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bout-score{font-family:monospace;font-weight:700;font-size:.9rem;min-width:1.5rem;text-align:center;color:#1a6bab}
+    .bye-label{color:#aaa;font-style:italic;font-size:.78rem;padding:.3rem .5rem}
+
+    /* ── Score panel ── */
+    .score-panel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:1.25rem;margin-top:1rem}
+    .score-panel h3{margin:0 0 1rem;font-size:1rem}
+    .score-inputs{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
+    .score-block{display:flex;flex-direction:column;align-items:center;gap:.3rem}
+    .score-block label{font-size:.82rem;color:#555;font-weight:600}
+    .score-input{width:3.5rem;text-align:center;font-size:1.3rem;font-weight:700;padding:.3rem;border:2px solid #ccc;border-radius:6px}
+    .score-input:focus{border-color:#1a6bab;outline:none}
+    .vs-sep{font-size:1.2rem;color:#aaa;padding-top:1.2rem}
+
+    .medal-gold{color:#c9a000;font-weight:700}
+    .medal-silver{color:#777;font-weight:700}
+    .medal-bronze{color:#b87333;font-weight:700}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+  <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
+
+  <!-- Phase header -->
+  <div class="card">
+    <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+      <h2 style="margin:0" x-text="'Direct Elimination — '+(phase?.rule_doc||'').replace('.json','')"></h2>
+      <span class="badge" :class="'badge-'+(phase?.status||'')" x-text="phase?.status"></span>
+      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
+    </div>
+    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+      <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate phase</button>
+      <span x-show="phase?.status==='active'" style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
+    </div>
+  </div>
+
+  <!-- Bracket -->
+  <div class="card" x-show="rounds.length">
+    <h2 style="margin-top:0">Bracket
+      <span style="font-weight:400;font-size:.82rem;color:#888" x-text="'('+tableauSize+'-person tableau)'"></span>
+    </h2>
+    <div class="bracket-wrap">
+      <div class="bracket">
+        <template x-for="(round, ri) in rounds" :key="ri">
+          <div class="round-col">
+            <h3 x-text="roundLabel(ri, rounds.length)"></h3>
+            <template x-for="bout in round" :key="bout.id">
+              <div class="bout-slot">
+                <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
+                  <template x-if="isBye(bout)">
+                    <div>
+                      <div class="bout-row">
+                        <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
+                      </div>
+                      <div class="bye-label">bye</div>
+                    </div>
+                  </template>
+                  <template x-if="isEmpty(bout)">
+                    <div>
+                      <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                      <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                    </div>
+                  </template>
+                  <template x-if="!isBye(bout) && !isEmpty(bout)">
+                    <div>
+                      <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
+                        <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
+                        <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
+                      </div>
+                      <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
+                        <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
+                        <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Score panel -->
+    <div class="score-panel" x-show="selected && !isBye(selected) && !isEmpty(selected) && phase?.status==='active'">
+      <h3 x-show="selected" x-text="scorePanelTitle()"></h3>
+      <div class="score-inputs">
+        <div class="score-block">
+          <label x-text="boutName(selected,'left')||'Left'"></label>
+          <input class="score-input" type="number" min="0" max="15" x-model.number="scoreLeft">
+        </div>
+        <span class="vs-sep">vs</span>
+        <div class="score-block">
+          <label x-text="boutName(selected,'right')||'Right'"></label>
+          <input class="score-input" type="number" min="0" max="15" x-model.number="scoreRight">
+        </div>
+      </div>
+      <!-- tie-picker: shown when scores are equal and both entered -->
+      <div x-show="selected && scoreLeft===scoreRight && scoreLeft!=='' && scoreLeft!==null" style="margin-bottom:.75rem;font-size:.85rem">
+        Tie — winner:
+        <button :class="tieWinner===selected?.left_id?'primary':''" @click="tieWinner=selected?.left_id" x-text="boutName(selected,'left')"></button>
+        <button :class="tieWinner===selected?.right_id?'primary':''" @click="tieWinner=selected?.right_id" x-text="boutName(selected,'right')"></button>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="success" @click="saveScore()" :disabled="scoreLeft===''||scoreLeft===null||scoreRight===''||scoreRight===null">Save score</button>
+        <button @click="undoScore()" x-show="selected?.status==='finished'">↩ Undo</button>
+        <button @click="selected=null">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Already-finished info when phase is not active -->
+    <div x-show="selected && !isBye(selected) && !isEmpty(selected) && phase?.status!=='active'" style="margin-top:1rem;color:#888;font-size:.85rem">
+      Activate the phase to score bouts.
+    </div>
+  </div>
+
+  <!-- Final results -->
+  <div class="card" x-show="finalResults">
+    <h2 style="margin-top:0">Results</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead><tr>
+        <th style="text-align:left;padding:.4rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd">Place</th>
+        <th style="text-align:left;padding:.4rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd">Name</th>
+      </tr></thead>
+      <tbody>
+        <template x-for="r in finalResults" :key="r.place">
+          <tr>
+            <td style="padding:.4rem .75rem;border-bottom:1px solid #eee">
+              <span :class="r.medalClass" x-text="r.place"></span>
+            </td>
+            <td style="padding:.4rem .75rem;border-bottom:1px solid #eee" x-text="r.name"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  const phaseId = new URLSearchParams(window.location.search).get('id');
+  return {
+    phaseId, phase: null, comp: null,
+    rounds: [],        // [[bout,...], [bout,...], ...]
+    tableauSize: 0,
+    nameMap: {},       // competitor_id → display name
+    selected: null,
+    scoreLeft: '', scoreRight: '', tieWinner: null,
+    notice: { text: '', error: false },
+    finalResults: null,
+
+    async init() {
+      if (!phaseId) { this.showNotice('No phase ID', true); return; }
+      await this.load();
+    },
+
+    async load() {
+      this.phase = await fetch('/api/phases/' + phaseId).then(r => r.json());
+      if (this.phase.competition_id) {
+        this.comp = await fetch('/api/competitions/' + this.phase.competition_id).then(r => r.json());
+      }
+      document.title = 'Atlas — DE — ' + (this.comp?.name || '');
+      await this.loadBouts();
+    },
+
+    async loadBouts() {
+      const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json());
+      // Build name map
+      this.nameMap = {};
+      for (const b of bouts) {
+        if (b.left_id)  this.nameMap[b.left_id]  = b.left_last  + ', ' + b.left_first;
+        if (b.right_id) this.nameMap[b.right_id] = b.right_last + ', ' + b.right_first;
+      }
+      // Group by round
+      const byRound = {};
+      let maxRound = 0;
+      for (const b of bouts) {
+        if (!b.de_round) continue;
+        if (!byRound[b.de_round]) byRound[b.de_round] = [];
+        byRound[b.de_round].push(b);
+        if (b.de_round > maxRound) maxRound = b.de_round;
+      }
+      this.tableauSize = bouts.length ? 2 ** maxRound : 0;
+      this.rounds = [];
+      for (let r = 1; r <= maxRound; r++) {
+        const roundBouts = (byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position);
+        this.rounds.push(roundBouts);
+      }
+      // Update selected bout if open
+      if (this.selected) {
+        this.selected = bouts.find(b => b.id === this.selected.id) || null;
+      }
+      this.computeFinalResults(bouts, maxRound);
+    },
+
+    computeFinalResults(bouts, totalRounds) {
+      if (!totalRounds) { this.finalResults = null; return; }
+      const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
+      if (!finalBout || finalBout.status !== 'finished') { this.finalResults = null; return; }
+      const sfBouts = bouts.filter(b => b.de_round === totalRounds - 1);
+      const results = [];
+      // Gold
+      results.push({ place: '🥇 1st', name: this.nameMap[finalBout.winner_id] || '?', medalClass: 'medal-gold' });
+      // Silver (loser of final)
+      const silverId = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
+      results.push({ place: '🥈 2nd', name: this.nameMap[silverId] || '?', medalClass: 'medal-silver' });
+      // Bronze: both SF losers
+      for (const sf of sfBouts) {
+        if (sf.status !== 'finished') continue;
+        const loserId = sf.winner_id === sf.left_id ? sf.right_id : sf.left_id;
+        if (loserId) results.push({ place: '🥉 3rd', name: this.nameMap[loserId] || '?', medalClass: 'medal-bronze' });
+      }
+      this.finalResults = results.length >= 2 ? results : null;
+    },
+
+    roundLabel(ri, total) {
+      const n = total - ri;
+      if (n === 1) return 'Final';
+      if (n === 2) return 'Semi-final';
+      if (n === 3) return 'Quarter-final';
+      return 'Round of ' + (this.rounds[ri]?.length * 2);
+    },
+
+    isBye(bout) {
+      if (!bout) return false;
+      return bout.status === 'finished' && (bout.left_id === null || bout.right_id === null);
+    },
+
+    isEmpty(bout) {
+      if (!bout) return true;
+      return bout.left_id === null && bout.right_id === null;
+    },
+
+    boutCardClass(bout) {
+      if (this.isBye(bout))   return 'bye';
+      if (this.isEmpty(bout)) return 'empty';
+      const classes = [bout.status];
+      if (this.selected?.id === bout.id) classes.push('selected');
+      return classes.join(' ');
+    },
+
+    boutName(bout, side) {
+      if (!bout) return '';
+      const id = side === 'left' ? bout.left_id : bout.right_id;
+      if (!id) return '';
+      return this.nameMap[id] || ('Competitor #' + id);
+    },
+
+    scorePanelTitle() {
+      if (!this.selected) return '';
+      const roundIdx = this.rounds.findIndex(r => r.some(b => b.id === this.selected.id));
+      return this.roundLabel(roundIdx, this.rounds.length) +
+        ' — ' + (this.boutName(this.selected, 'left') || '?') +
+        ' vs ' + (this.boutName(this.selected, 'right') || '?');
+    },
+
+    progressLabel() {
+      let total = 0, done = 0;
+      for (const round of this.rounds) {
+        for (const b of round) {
+          if (this.isBye(b) || this.isEmpty(b)) continue;
+          total++;
+          if (b.status === 'finished') done++;
+        }
+      }
+      return done + ' / ' + total + ' bouts complete';
+    },
+
+    selectBout(bout) {
+      if (this.isBye(bout) || this.isEmpty(bout)) return;
+      this.selected    = bout;
+      this.scoreLeft   = bout.left_score  ?? '';
+      this.scoreRight  = bout.right_score ?? '';
+      this.tieWinner   = bout.winner_id   ?? null;
+    },
+
+    async activate() {
+      const r = await fetch('/api/phases/' + phaseId + '/activate', { method: 'POST' });
+      if (!r.ok) { this.showNotice((await r.json()).error || 'Activate failed', true); return; }
+      this.showNotice('Phase activated');
+      await this.load();
+    },
+
+    async saveScore() {
+      if (this.scoreLeft === '' || this.scoreLeft === null ||
+          this.scoreRight === '' || this.scoreRight === null) return;
+      const tie = this.scoreLeft === this.scoreRight ? this.tieWinner : null;
+      const r = await fetch('/api/bouts/' + this.selected.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ left_score: this.scoreLeft, right_score: this.scoreRight, winner_id: tie }),
+      });
+      if (!r.ok) { this.showNotice((await r.json()).error || 'Save failed', true); return; }
+      this.showNotice('Score saved');
+      this.selected = null;
+      await this.loadBouts();
+    },
+
+    async undoScore() {
+      const r = await fetch('/api/bouts/' + this.selected.id + '/undo', { method: 'POST' });
+      if (!r.ok) { this.showNotice((await r.json()).error || 'Undo failed', true); return; }
+      this.showNotice('Score undone');
+      await this.loadBouts();
+      // Re-select the bout
+      for (const round of this.rounds) {
+        const b = round.find(x => x.id === this.selected?.id);
+        if (b) { this.selected = b; break; }
+      }
+    },
+
+    showNotice(text, error = false) {
+      this.notice = { text, error };
+      setTimeout(() => { this.notice = { text: '', error: false }; }, 4000);
+    },
+  };
+}
+</script>
+</body>
+</html>

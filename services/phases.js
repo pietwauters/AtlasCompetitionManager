@@ -3,6 +3,7 @@
 const db             = require('../db');
 const { loadRule }   = require('../lib/rules');
 const { formPools, calcPoolOptions } = require('../lib/poolFormation');
+const { buildDE }    = require('../lib/deFormation');
 const Competitor     = require('./competitors');
 
 const DEFAULT_CRITERIA = [
@@ -281,6 +282,119 @@ const Phase = {
     })();
 
     return { rankings, advanced: advanceN, eliminated: N - advanceN };
+  },
+
+  // ---------------------------------------------------------------------------
+  // DE: preview — returns { N, tableauSize, byeCount, totalRounds }
+  // ---------------------------------------------------------------------------
+  getDeOptions(compId) {
+    const rows = this._getDeSeeding(compId);
+    if (rows.length < 2) throw Object.assign(new Error('At least 2 active competitors required.'), { status: 400 });
+    const T = 2 ** Math.ceil(Math.log2(rows.length));
+    return { N: rows.length, tableauSize: T, byeCount: T - rows.length, totalRounds: Math.log2(T) };
+  },
+
+  // Returns competitors ranked for DE seeding. Uses rankings from the most
+  // recent finished pool phase (advanced only), falling back to active
+  // competitors ordered by initial_seed.
+  _getDeSeeding(compId) {
+    const lastPhase = db.prepare(`
+      SELECT id FROM phases
+      WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
+      ORDER BY phase_order DESC LIMIT 1
+    `).get(compId);
+
+    if (lastPhase) {
+      return db.prepare(`
+        SELECT r.competitor_id, r.position AS pool_rank
+        FROM rankings r
+        WHERE r.phase_id = ? AND r.advanced = 1
+        ORDER BY r.position
+      `).all(lastPhase.id);
+    }
+
+    return Competitor.findAll(compId)
+      .filter(c => c.competitor_status === 'active')
+      .sort((a, b) => (a.initial_seed || 9999) - (b.initial_seed || 9999))
+      .map((c, i) => ({ competitor_id: c.competitor_id, pool_rank: i + 1 }));
+  },
+
+  // ---------------------------------------------------------------------------
+  // Create DE phase: inserts phase + all bout slots for every round.
+  // Round 1 bouts get real competitor IDs (null for bye slots, auto-finished).
+  // Rounds 2+ are pre-created as empty placeholders; winners are filled in as
+  // bouts complete (see bouts.advanceDEWinner).
+  // ---------------------------------------------------------------------------
+  createDE(compId, ruleDoc) {
+    const seeding     = this._getDeSeeding(compId);
+    const competitors = seeding.map(r => ({ competitor_id: r.competitor_id }));
+
+    const { tableauSize, totalRounds, r1Bouts } = buildDE(competitors);
+
+    const phaseId = db.transaction(() => {
+      const maxOrder = db.prepare(
+        'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
+      ).get(compId).m;
+
+      const { lastInsertRowid: phaseId } = db.prepare(`
+        INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
+        VALUES (@comp_id, @order, 'de', @rule_doc, 'pending')
+      `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
+
+      // Pre-create all bouts for every round.
+      // boutIds[round][position] lets us wire winners to next-round slots.
+      const boutIds = {};
+      for (let round = 1; round <= totalRounds; round++) {
+        boutIds[round] = {};
+        const boutsInRound = tableauSize / (2 ** round);
+
+        for (let pos = 1; pos <= boutsInRound; pos++) {
+          let leftId = null, rightId = null, status = 'pending', winnerId = null;
+          let leftScore = null, rightScore = null;
+
+          if (round === 1) {
+            const spec = r1Bouts[pos - 1];
+            leftId  = spec.left?.competitor_id  ?? null;
+            rightId = spec.right?.competitor_id ?? null;
+
+            // Auto-finish bye bouts (one side is null).
+            if (leftId === null || rightId === null) {
+              status    = 'finished';
+              winnerId  = leftId ?? rightId;
+              leftScore  = leftId  ? 1 : 0;
+              rightScore = rightId ? 1 : 0;
+            }
+          }
+
+          const { lastInsertRowid: boutId } = db.prepare(`
+            INSERT INTO bouts
+              (phase_id, left_id, right_id, de_round, tableau_position,
+               status, winner_id, left_score, right_score, bout_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(phaseId, leftId, rightId, round, pos, status, winnerId, leftScore, rightScore, pos);
+
+          boutIds[round][pos] = boutId;
+        }
+      }
+
+      // Wire bye winners into round-2 slots immediately.
+      for (const spec of r1Bouts) {
+        if (spec.left !== null && spec.right !== null) continue; // not a bye
+        const winner = spec.left ?? spec.right;
+        if (!winner) continue;
+
+        const r2Pos  = Math.ceil(spec.tableauPosition / 2);
+        const r2Id   = boutIds[2]?.[r2Pos];
+        if (!r2Id) continue;
+
+        const side = spec.tableauPosition % 2 === 1 ? 'left_id' : 'right_id';
+        db.prepare(`UPDATE bouts SET ${side} = ? WHERE id = ?`).run(winner.competitor_id, r2Id);
+      }
+
+      return phaseId;
+    })();
+
+    return this.findById(phaseId);
   },
 
   delete(id) {

@@ -9,12 +9,31 @@ router.get('/', (req, res) => {
   res.json(Phase.findByCompetition(req.params.compId));
 });
 
-// Static path — must come before /:id
+// Static paths — must come before /:id
 router.get('/pool-options', (req, res) => {
   const { rule_doc } = req.query;
   if (!rule_doc) return res.status(400).json({ error: 'rule_doc query param required' });
   try {
     res.json(Phase.calcOptions(req.params.compId, rule_doc));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.get('/de-options', (req, res) => {
+  try {
+    res.json(Phase.getDeOptions(req.params.compId));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.post('/create-de', (req, res) => {
+  const { rule_doc } = req.body;
+  if (!rule_doc) return res.status(400).json({ error: 'rule_doc required' });
+  try {
+    const phase = Phase.createDE(req.params.compId, rule_doc);
+    res.status(201).json(phase);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
