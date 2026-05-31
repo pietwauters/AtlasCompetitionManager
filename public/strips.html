@@ -23,6 +23,9 @@
     .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
     .notice-ok{background:#d5f5e3;color:#1e5631}
     .notice-err{background:#fde8e8;color:#922b21}
+    .name-input{font-size:.9rem;width:100%;padding:.25rem .4rem;border:1px solid transparent;border-radius:4px;background:transparent;transition:border-color .15s,background .15s}
+    .name-input:hover{border-color:#ccc;background:#fafafa}
+    .name-input:focus{border-color:#1a6bab;background:#fff;outline:none}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -51,10 +54,11 @@
           <tr>
             <td x-text="s.strip_number"></td>
             <td>
-              <input style="border:none;background:transparent;font-size:.9rem;width:100%;padding:0"
+              <input class="name-input"
                      :value="s.name||''"
                      @change="rename(s, $event.target.value)"
-                     placeholder="— no name —">
+                     @keydown.enter="$event.target.blur()"
+                     placeholder="click to add name">
             </td>
             <td><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
             <td><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
