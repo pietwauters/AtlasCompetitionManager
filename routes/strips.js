@@ -34,8 +34,10 @@ router.post('/', (req, res) => {
 });
 
 router.patch('/:id', (req, res) => {
+  const before = Strip.findById(req.params.id);
+  if (!before) return res.status(404).json({ error: 'Strip not found' });
   const s = Strip.update(req.params.id, req.body);
-  if (!s) return res.status(404).json({ error: 'Strip not found' });
+  if (before.name !== s.name) OPP2.renamePiste(before.name, s.name);
   res.json(s);
 });
 
