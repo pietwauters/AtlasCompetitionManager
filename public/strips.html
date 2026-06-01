@@ -132,7 +132,7 @@ function app() {
       for(let i=1;i<=n;i++){
         if(!existing.has(i)){
           await fetch('/api/strips',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({strip_number:i,name:'Piste '+i})});
+            body:JSON.stringify({strip_number:i,name:String(i)})});
         }
       }
       this.showNotice('Strips 1–'+n+' ready');
