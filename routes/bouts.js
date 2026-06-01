@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const Bout    = require('../services/bouts');
+const Event   = require('../services/events');
 const SSE     = require('../lib/sse');
 
 const router = express.Router();
@@ -23,8 +24,20 @@ router.get('/:id', (req, res) => {
 router.patch('/:id', (req, res) => {
   const { left_score, right_score, winner_id } = req.body;
   try {
+    const before = Bout.findById(req.params.id);
+    if (!before) return res.status(404).json({ error: 'Bout not found' });
     const b = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
-    if (!b) return res.status(404).json({ error: 'Bout not found' });
+    Event.record({
+      competition_id: b.competition_id,
+      phase_id:       b.phase_id,
+      bout_id:        b.id,
+      event_type:     'bout.score_override',
+      actor:          'manual',
+      payload: {
+        before: { left_score: before.left_score, right_score: before.right_score, winner_id: before.winner_id },
+        after:  { left_score: b.left_score,      right_score: b.right_score,      winner_id: b.winner_id },
+      },
+    });
     if (b.pool_id) SSE.emit(b.pool_id, 'bout-updated', b);
     res.json(b);
   } catch (e) {
