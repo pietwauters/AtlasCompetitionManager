@@ -27,6 +27,7 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const s = Strip.create(req.body);
+    OPP2.addPiste(s);
     res.status(201).json(s);
   } catch (e) {
     res.status(400).json({ error: e.message });
