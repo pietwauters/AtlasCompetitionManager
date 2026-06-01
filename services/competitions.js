@@ -19,7 +19,8 @@ const Competition = {
     if (tournament_id)    { conditions.push('c.tournament_id = @tournament_id'); params.tournament_id = tournament_id; }
     if (!include_archived){ conditions.push("c.status != 'archived'"); }
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    return db.prepare(`
+
+    const comps = db.prepare(`
       SELECT c.*, t.name AS tournament_name,
         COUNT(comp.id) AS competitor_count
       FROM competitions c
@@ -29,6 +30,26 @@ const Competition = {
       GROUP BY c.id
       ORDER BY c.date DESC, c.name
     `).all(params);
+
+    if (!comps.length) return comps;
+
+    // One query for all age categories — avoids N+1 on the list page.
+    const placeholders = comps.map(() => '?').join(',');
+    const cats = db.prepare(`
+      SELECT cac.competition_id, ac.*
+      FROM age_categories ac
+      JOIN competition_age_categories cac ON cac.age_category_id = ac.id
+      WHERE cac.competition_id IN (${placeholders})
+      ORDER BY COALESCE(ac.max_age, 999)
+    `).all(...comps.map(c => c.id));
+
+    const catsByComp = {};
+    for (const cat of cats) {
+      (catsByComp[cat.competition_id] = catsByComp[cat.competition_id] || []).push(cat);
+    }
+    for (const comp of comps) comp.age_categories = catsByComp[comp.id] || [];
+
+    return comps;
   },
 
   findById(id) {

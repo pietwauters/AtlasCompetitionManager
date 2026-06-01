@@ -166,18 +166,14 @@ function app() {
 
     async loadComps() {
       const list = await fetch('/api/competitions').then(r=>r.json());
-      this.competitions = await Promise.all(list.map(async c => {
-        const full = await fetch('/api/competitions/'+c.id).then(r=>r.json());
-        return {...c, age_cats: full.age_categories?.map(a=>a.code).join(', ')||''};
-      }));
+      this.competitions = list.map(c => ({...c, age_cats: c.age_categories?.map(a=>a.code).join(', ')||''}));
     },
     async loadTourns() { this.tournaments = await fetch('/api/tournaments').then(r=>r.json()); },
     async loadAgeCats() { this.ageCategories = await fetch('/api/age-categories').then(r=>r.json()); },
 
     openCompForm() { this.compForm={id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]}; this.compFormOpen=true; },
-    async editComp(c) {
-      const full = await fetch('/api/competitions/'+c.id).then(r=>r.json());
-      this.compForm={id:c.id,name:c.name,weapon:c.weapon,gender:c.gender,date:c.date||'',tournament_id:c.tournament_id||'',age_category_ids:full.age_categories?.map(a=>a.id)||[]};
+    editComp(c) {
+      this.compForm={id:c.id,name:c.name,weapon:c.weapon,gender:c.gender,date:c.date||'',tournament_id:c.tournament_id||'',age_category_ids:c.age_categories?.map(a=>a.id)||[]};
       this.compFormOpen=true;
     },
     toggleAgeCat(id,checked) {
