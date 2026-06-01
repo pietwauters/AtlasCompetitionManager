@@ -94,7 +94,17 @@ function app() {
     newNumber: '', newName: '',
     notice: {text:'',error:false},
 
-    async init() { await this.load(); },
+    async init() {
+      await this.load();
+      const es = new EventSource('/api/strips/events');
+      es.addEventListener('piste-state', e => {
+        const p = JSON.parse(e.data);
+        this.strips = this.strips.map(s => s.id === p.stripId
+          ? { ...s, network_state: p.apparatusOnline ? 'online' : 'offline',
+                    boutId: p.boutId, slotId: p.slotId }
+          : s);
+      });
+    },
 
     async load() {
       this.strips = await fetch('/api/strips').then(r=>r.json());

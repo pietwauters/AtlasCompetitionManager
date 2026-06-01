@@ -1,8 +1,18 @@
 'use strict';
 const express = require('express');
 const Strip   = require('../services/strips');
+const SSE     = require('../lib/sse');
+const OPP2    = require('../lib/opp2Client');
 
 const router = express.Router();
+
+router.get('/events', (req, res) => {
+  SSE.subscribe('__strips__', res);
+  // Send current live state immediately so the page doesn't wait for the next change
+  for (const piste of OPP2.status().pistes) {
+    res.write(`event: piste-state\ndata: ${JSON.stringify(piste)}\n\n`);
+  }
+});
 
 router.get('/', (req, res) => {
   res.json(Strip.findAll());
