@@ -101,7 +101,7 @@ function app() {
       const es = new EventSource('/api/strips/events');
       es.addEventListener('piste-state', e => {
         const p = JSON.parse(e.data);
-        this.strips = this.strips.map(s => s.id === p.stripId
+        this.strips = this.strips.map(s => s.name === p.pisteId
           ? { ...s, network_state: p.apparatusOnline ? 'online' : 'offline',
                     boutId: p.boutId, slotId: p.slotId, bout: p.bout }
           : s);
