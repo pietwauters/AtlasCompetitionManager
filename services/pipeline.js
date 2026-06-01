@@ -206,9 +206,9 @@ const Pipeline = {
       return db.prepare(`
         SELECT b.*, b.id AS bout_id,
           lp.first_name AS left_first,  lp.last_name  AS left_last,
-          lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+          lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
           rp.first_name AS right_first, rp.last_name  AS right_last,
-          rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+          rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
           ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
           po.pool_number,
           ph.phase_order,
@@ -243,9 +243,9 @@ const Pipeline = {
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
         lp.first_name AS left_first,  lp.last_name  AS left_last,
-        lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+        lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
         rp.first_name AS right_first, rp.last_name  AS right_last,
-        rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+        rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
         ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
         ph.phase_order,
         co.name AS competition_name, co.weapon
@@ -282,9 +282,9 @@ const Pipeline = {
       return db.prepare(`
         SELECT b.*, b.id AS bout_id,
           lp.first_name AS left_first,  lp.last_name  AS left_last,
-          lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+          lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
           rp.first_name AS right_first, rp.last_name  AS right_last,
-          rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+          rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
           po.pool_number, ph.phase_order,
           co.name AS competition_name, co.weapon
         FROM bouts b
@@ -312,9 +312,9 @@ const Pipeline = {
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
         lp.first_name AS left_first,  lp.last_name  AS left_last,
-        lp.nationality AS left_nation, lcl.name AS left_club, lcl.abbr AS left_club_abbr,
+        lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
         rp.first_name AS right_first, rp.last_name  AS right_last,
-        rp.nationality AS right_nation, rcl.name AS right_club, rcl.abbr AS right_club_abbr,
+        rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
         ph.phase_order, co.name AS competition_name, co.weapon
       FROM bouts b
       JOIN ordered o ON o.id = b.id

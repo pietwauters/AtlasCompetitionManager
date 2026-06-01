@@ -2,8 +2,13 @@
 const express = require('express');
 const Pool    = require('../services/pools');
 const Bout    = require('../services/bouts');
+const SSE     = require('../lib/sse');
 
 const router = express.Router();
+
+router.get('/:id/events', (req, res) => {
+  SSE.subscribe(req.params.id, res);
+});
 
 router.get('/:id', (req, res) => {
   const pool = Pool.findById(req.params.id);

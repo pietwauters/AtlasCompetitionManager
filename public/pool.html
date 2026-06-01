@@ -118,8 +118,11 @@ function app() {
     async init() {
       if(!poolId){this.showNotice('No pool ID in URL',true);return;}
       await this.load();
-      // Auto-refresh every 30 seconds (for multi-tablet use)
-      setInterval(()=>this.load(),30000);
+      const es = new EventSource('/api/pools/'+poolId+'/events');
+      es.addEventListener('bout-updated', e => {
+        const updated = JSON.parse(e.data);
+        this.bouts = this.bouts.map(b => b.id===updated.id ? {...b,...updated} : b);
+      });
     },
 
     async load() {

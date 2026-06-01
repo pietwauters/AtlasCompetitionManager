@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const Bout    = require('../services/bouts');
+const SSE     = require('../lib/sse');
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ router.patch('/:id', (req, res) => {
   try {
     const b = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
     if (!b) return res.status(404).json({ error: 'Bout not found' });
+    if (b.pool_id) SSE.emit(b.pool_id, 'bout-updated', b);
     res.json(b);
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -34,6 +36,7 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/undo', (req, res) => {
   const b = Bout.undo(req.params.id);
   if (!b) return res.status(404).json({ error: 'Nothing to undo' });
+  if (b.pool_id) SSE.emit(b.pool_id, 'bout-updated', b);
   res.json(b);
 });
 
