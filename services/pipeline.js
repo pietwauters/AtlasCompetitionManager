@@ -21,6 +21,10 @@ const Pipeline = {
     return db.prepare('SELECT * FROM pipeline_slots WHERE id = ?').get(id);
   },
 
+  findByPool(poolId) {
+    return db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(poolId) || null;
+  },
+
   findByStrip(stripId) {
     const slots = db.prepare(`
       SELECT ps.*,
@@ -105,31 +109,53 @@ const Pipeline = {
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   addSlot(stripId, data) {
-    const maxOrder = db.prepare(
-      'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
-    ).get(stripId).m;
+    return db.transaction(() => {
+      // A pool may only live in one pipeline slot. If it's already assigned
+      // elsewhere, evict it first and clean up the old strip's status.
+      if (data.pool_id) {
+        const existing = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(data.pool_id);
+        if (existing && existing.strip_id !== Number(stripId)) {
+          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
+          const oldHasMore = db.prepare(
+            'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
+          ).get(existing.strip_id).n;
+          if (oldHasMore === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(existing.strip_id);
+        }
+      }
 
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO pipeline_slots
-        (strip_id, slot_order, type, pool_id, phase_id, de_round,
-         bout_start, bout_end, scheduled_start, minutes_per_bout, referee_id)
-      VALUES
-        (@strip_id, @slot_order, @type, @pool_id, @phase_id, @de_round,
-         @bout_start, @bout_end, @scheduled_start, @minutes_per_bout, @referee_id)
-    `).run({
-      strip_id:         Number(stripId),
-      slot_order:       maxOrder + 1,
-      type:             data.type,
-      pool_id:          data.pool_id          ?? null,
-      phase_id:         data.phase_id         ?? null,
-      de_round:         data.de_round         ?? null,
-      bout_start:       data.bout_start       ?? null,
-      bout_end:         data.bout_end         ?? null,
-      scheduled_start:  data.scheduled_start  ?? null,
-      minutes_per_bout: data.minutes_per_bout ?? null,
-      referee_id:       data.referee_id       ?? null,
-    });
-    return this.findById(lastInsertRowid);
+      const maxOrder = db.prepare(
+        'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
+      ).get(stripId).m;
+
+      const { lastInsertRowid } = db.prepare(`
+        INSERT INTO pipeline_slots
+          (strip_id, slot_order, type, pool_id, phase_id, de_round,
+           bout_start, bout_end, scheduled_start, minutes_per_bout, referee_id)
+        VALUES
+          (@strip_id, @slot_order, @type, @pool_id, @phase_id, @de_round,
+           @bout_start, @bout_end, @scheduled_start, @minutes_per_bout, @referee_id)
+      `).run({
+        strip_id:         Number(stripId),
+        slot_order:       maxOrder + 1,
+        type:             data.type,
+        pool_id:          data.pool_id          ?? null,
+        phase_id:         data.phase_id         ?? null,
+        de_round:         data.de_round         ?? null,
+        bout_start:       data.bout_start       ?? null,
+        bout_end:         data.bout_end         ?? null,
+        scheduled_start:  data.scheduled_start  ?? null,
+        minutes_per_bout: data.minutes_per_bout ?? null,
+        referee_id:       data.referee_id       ?? null,
+      });
+
+      // Keep pools.strip_id and strips.status in sync
+      if (data.pool_id) {
+        db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
+        db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+      }
+
+      return this.findById(lastInsertRowid);
+    })();
   },
 
   updateSlot(id, data) {
@@ -175,7 +201,19 @@ const Pipeline = {
   },
 
   deleteSlot(id) {
-    return db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(id).changes > 0;
+    return db.transaction(() => {
+      const slot = this.findById(id);
+      if (!slot) return false;
+      const changed = db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(id).changes > 0;
+      if (changed && slot.pool_id) {
+        db.prepare('UPDATE pools SET strip_id = NULL WHERE id = ?').run(slot.pool_id);
+        const remaining = db.prepare(
+          'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
+        ).get(slot.strip_id).n;
+        if (remaining === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
+      }
+      return changed;
+    })();
   },
 
   // ── Pipeline navigation (used by OPP2 client) ────────────────────────────

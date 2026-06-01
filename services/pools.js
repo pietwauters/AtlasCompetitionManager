@@ -1,7 +1,6 @@
 'use strict';
 const db   = require('../db');
 const Bout = require('./bouts');
-const Strip = require('./strips');
 
 const Pool = {
   findById(poolId) {
@@ -60,21 +59,13 @@ const Pool = {
     return pools;
   },
 
+  // Only referee_id is a direct pool attribute. Strip assignment is owned
+  // by the pipeline — use Pipeline.addSlot / Pipeline.deleteSlot for that.
   update(poolId, data) {
     const current = db.prepare('SELECT * FROM pools WHERE id = ?').get(poolId);
     if (!current) return null;
-    const newStripId = 'strip_id'   in data ? (data.strip_id   ?? null) : current.strip_id;
-    const newRefId   = 'referee_id' in data ? (data.referee_id ?? null) : current.referee_id;
-    db.prepare('UPDATE pools SET strip_id = ?, referee_id = ? WHERE id = ?')
-      .run(newStripId, newRefId, Number(poolId));
-
-    // Keep strip status in sync: mark newly assigned strip as 'assigned',
-    // and free the previously assigned strip back to 'idle' if it changed.
-    if (newStripId !== current.strip_id) {
-      if (current.strip_id) Strip.update(current.strip_id, { status: 'idle' });
-      if (newStripId)       Strip.update(newStripId,       { status: 'assigned' });
-    }
-
+    const newRefId = 'referee_id' in data ? (data.referee_id ?? null) : current.referee_id;
+    db.prepare('UPDATE pools SET referee_id = ? WHERE id = ?').run(newRefId, Number(poolId));
     return this.findById(poolId);
   },
 };
