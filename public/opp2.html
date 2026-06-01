@@ -105,10 +105,10 @@
         <div class="strip-card">
           <div class="strip-header">
             <strong x-text="strip.name||('Strip '+strip.strip_number)"></strong>
-            <template x-if="liveState(strip.strip_number)">
+            <template x-if="liveState(strip.name)">
               <span class="badge"
-                :class="liveState(strip.strip_number).apparatusOnline?'badge-online':'badge-offline'"
-                x-text="liveState(strip.strip_number).apparatusOnline?'online':'offline'"></span>
+                :class="liveState(strip.name).apparatusOnline?'badge-online':'badge-offline'"
+                x-text="liveState(strip.name).apparatusOnline?'online':'offline'"></span>
             </template>
           </div>
 
@@ -338,8 +338,8 @@ function app() {
       this.showNotice('Settings saved');
     },
 
-    liveState(stripNumber) {
-      return this.status.pistes?.find(p => p.pisteId === String(stripNumber)) || null;
+    liveState(stripName) {
+      return this.status.pistes?.find(p => p.pisteId === stripName) || null;
     },
 
     slotLabel(slot) {
