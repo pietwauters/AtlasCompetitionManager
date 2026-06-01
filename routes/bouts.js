@@ -19,6 +19,12 @@ router.get('/:id', (req, res) => {
   res.json(b);
 });
 
+router.get('/:id/events', (req, res) => {
+  const b = Bout.findById(req.params.id);
+  if (!b) return res.status(404).json({ error: 'Bout not found' });
+  res.json(Event.findByBout(req.params.id));
+});
+
 // Update scores.
 // Body: { left_score, right_score, winner_id? }
 router.patch('/:id', (req, res) => {

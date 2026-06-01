@@ -4,6 +4,7 @@ const Competition = require('../services/competitions');
 const Competitor  = require('../services/competitors');
 const AgeCategory = require('../services/ageCategories');
 const Results     = require('../services/results');
+const Event       = require('../services/events');
 
 const router = express.Router();
 
@@ -66,6 +67,14 @@ router.get('/:id/results', (req, res) => {
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
+});
+
+// GET /api/competitions/:id/events[?event_type=card&phase_id=X&bout_id=Y]
+router.get('/:id/events', (req, res) => {
+  const c = Competition.findById(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Competition not found' });
+  const { event_type, phase_id, bout_id } = req.query;
+  res.json(Event.findByCompetition(req.params.id, { event_type, phase_id, bout_id }));
 });
 
 module.exports = router;

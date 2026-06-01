@@ -32,10 +32,30 @@ const Event = {
     ).all(boutId);
   },
 
-  findByCompetition(compId) {
+  // Optional filters: { event_type, phase_id, bout_id }
+  // event_type without a dot is treated as a namespace prefix:
+  //   'card'  → matches card.yellow, card.red, card.black, card.p
+  //   'video' → matches video.call, video.result
+  //   'card.red' → exact match only
+  findByCompetition(compId, { event_type, phase_id, bout_id } = {}) {
+    const conditions = ['competition_id = @comp_id'];
+    const params     = { comp_id: compId };
+
+    if (event_type) {
+      if (event_type.includes('.')) {
+        conditions.push('event_type = @event_type');
+        params.event_type = event_type;
+      } else {
+        conditions.push("event_type LIKE @event_type");
+        params.event_type = event_type + '.%';
+      }
+    }
+    if (phase_id) { conditions.push('phase_id = @phase_id'); params.phase_id = phase_id; }
+    if (bout_id)  { conditions.push('bout_id  = @bout_id');  params.bout_id  = bout_id;  }
+
     return db.prepare(
-      'SELECT * FROM events WHERE competition_id = ? ORDER BY recorded_at DESC'
-    ).all(compId);
+      `SELECT * FROM events WHERE ${conditions.join(' AND ')} ORDER BY recorded_at DESC`
+    ).all(params);
   },
 };
 
