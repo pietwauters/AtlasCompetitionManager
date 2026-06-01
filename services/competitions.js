@@ -13,9 +13,12 @@ function withAgeCategories(comp) {
 }
 
 const Competition = {
-  findAll({ tournament_id } = {}) {
-    const where  = tournament_id ? 'WHERE c.tournament_id = @tournament_id' : '';
-    const params = tournament_id ? { tournament_id } : {};
+  findAll({ tournament_id, include_archived = false } = {}) {
+    const conditions = [];
+    const params     = {};
+    if (tournament_id)    { conditions.push('c.tournament_id = @tournament_id'); params.tournament_id = tournament_id; }
+    if (!include_archived){ conditions.push("c.status != 'archived'"); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
     return db.prepare(`
       SELECT c.*, t.name AS tournament_name,
         COUNT(comp.id) AS competitor_count
@@ -83,8 +86,20 @@ const Competition = {
     run();
   },
 
+  archive(id) {
+    return db.prepare("UPDATE competitions SET status='archived' WHERE id=?").run(id);
+  },
+
   delete(id) {
-    return db.prepare('DELETE FROM competitions WHERE id = ?').run(id);
+    const run = db.transaction(() => {
+      // bouts.left_id/right_id are RESTRICT — delete bouts first so the
+      // cascade from competitors can proceed without hitting the constraint.
+      db.prepare(`
+        DELETE FROM bouts WHERE phase_id IN (SELECT id FROM phases WHERE competition_id = ?)
+      `).run(id);
+      return db.prepare('DELETE FROM competitions WHERE id = ?').run(id);
+    });
+    return run();
   },
 };
 

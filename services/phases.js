@@ -93,6 +93,15 @@ const Phase = {
         'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
       ).get(compId).m;
 
+      if (maxOrder > 0) {
+        const prev = db.prepare(
+          'SELECT status FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1'
+        ).get(compId);
+        if (prev && prev.status !== 'finished') {
+          throw Object.assign(new Error('Previous phase must be finished before creating a new one.'), { status: 400 });
+        }
+      }
+
       const { lastInsertRowid: phaseId } = db.prepare(`
         INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
         VALUES (@comp_id, @order, 'pool', @rule_doc, 'pending')
@@ -431,6 +440,15 @@ const Phase = {
       const maxOrder = db.prepare(
         'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
       ).get(compId).m;
+
+      if (maxOrder > 0) {
+        const prev = db.prepare(
+          'SELECT status FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1'
+        ).get(compId);
+        if (prev && prev.status !== 'finished') {
+          throw Object.assign(new Error('Previous phase must be finished before creating a new one.'), { status: 400 });
+        }
+      }
 
       const { lastInsertRowid: phaseId } = db.prepare(`
         INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)

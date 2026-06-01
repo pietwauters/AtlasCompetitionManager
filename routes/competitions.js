@@ -32,6 +32,12 @@ router.patch('/:id', (req, res) => {
   res.json(c);
 });
 
+router.post('/:id/archive', (req, res) => {
+  const result = Competition.archive(req.params.id);
+  if (!result.changes) return res.status(404).json({ error: 'Competition not found' });
+  res.json({ ok: true });
+});
+
 router.delete('/:id', (req, res) => {
   const result = Competition.delete(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Competition not found' });

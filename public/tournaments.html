@@ -21,6 +21,7 @@
     .badge-draft { background:#fef3cd; color:#856404; }
     .badge-active { background:#d4edda; color:#155724; }
     .badge-finished { background:#d6d8db; color:#383d41; }
+    .badge-archived { background:#e2e3e5; color:#6c757d; }
     .badge-open { background:#d4edda; color:#155724; }
     .badge-closed { background:#d6d8db; color:#383d41; }
     .notice-bar { padding:.6rem 1rem; border-radius:5px; margin-bottom:1rem; font-size:.9rem; }
@@ -73,6 +74,7 @@
               <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
               <td>
                 <button @click="editComp(c)">Edit</button>
+                <button @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
                 <button class="danger" @click="deleteComp(c)">Delete</button>
               </td>
             </tr>
@@ -193,8 +195,14 @@ function app() {
       this.compFormOpen=false;
       await this.loadComps();
     },
+    async archiveComp(c) {
+      if(!confirm('Archive "'+c.name+'"?\nIt will be hidden from this list. Data is preserved.'))return;
+      const r=await fetch('/api/competitions/'+c.id+'/archive',{method:'POST'});
+      if(!r.ok){this.showNotice('Archive failed',true);return;}
+      this.showNotice('Archived '+c.name); await this.loadComps();
+    },
     async deleteComp(c) {
-      if(!confirm('Delete "'+c.name+'"? This removes all competitors and phases.'))return;
+      if(!confirm('Permanently delete "'+c.name+'"?\nThis removes ALL data: competitors, phases, bouts. This cannot be undone.'))return;
       const r=await fetch('/api/competitions/'+c.id,{method:'DELETE'});
       if(!r.ok){this.showNotice('Delete failed',true);return;}
       this.showNotice('Deleted '+c.name); await this.loadComps();
