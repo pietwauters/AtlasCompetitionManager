@@ -1,119 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>System Administration</title>
-    <link rel="stylesheet" href="/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
+<body x-data="app()" x-init="init()">
+<header>
+  <strong>Atlas</strong>
+  <a href="/index.html">Home</a>
+  <a href="/people.html">People</a>
+  <a href="/tournaments.html">Events</a>
+  <a href="/strips.html">Strips</a>
+  <a href="/opp2.html">Schedule</a>
+  <a href="/admin.html" style="color:#aad4f5">Admin</a>
+</header>
+<main>
+  <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
-<body>
-    <header>
-        <h1>System Administration</h1>
-        <a href="/">Back to Home</a>
-    </header>
-    <main>
-        <section>
-            <h2>MQTT Broker Configuration</h2>
-            <form id="mqtt-broker-form" onsubmit="return false;">
-                <label>
-                    Broker Address (hostname or URL):
-                    <input type="text" id="mqtt-broker-host" placeholder="e.g. openpiste.local or mqtt://host">
-                </label>
-                <label>
-                    Broker IP Address:
-                    <input type="text" id="mqtt-broker-ip" placeholder="e.g. 10.154.1.126">
-                </label>
-                <button type="button" id="resolve-broker">Resolve Hostname</button>
-                <button type="button" id="save-broker">Save Settings</button>
-                <span id="broker-msg" style="color:green;"></span>
-            </form>
-        </section>
-    </main>
-    <script>
-        // Load config on page load
-        window.addEventListener('DOMContentLoaded', async () => {
-            const hostInput = document.getElementById('mqtt-broker-host');
-            const ipInput = document.getElementById('mqtt-broker-ip');
-            try {
-                const res = await fetch('/api/config');
-                if (res.ok) {
-                    const config = await res.json();
-                    if (config.mqttBroker) hostInput.value = config.mqttBroker;
-                    if (config.mqttBrokerIp) ipInput.value = config.mqttBrokerIp;
-                }
-            } catch { }
-        });
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">
+      <h2 style="margin:0">MQTT Broker</h2>
+      <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
+            x-text="status.connected?'Connected':'Disconnected'"></span>
+      <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+      <input type="text" x-model="brokerUrl" placeholder="mqtt://openpiste.local:1883"
+             style="flex:1;min-width:16rem">
+      <button class="primary" x-show="!status.connected" @click="connect()">Connect</button>
+      <button x-show="status.connected" @click="disconnect()"
+              style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
+      <button @click="saveSettings()" style="background:#f0f2f5">Save</button>
+    </div>
+  </div>
+</main>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    notice: { text: '', error: false },
+    status: { connected: false, brokerUrl: '', pistes: [] },
+    brokerUrl: '',
 
-        // MQTT Broker Hostname Resolution Logic
-        document.getElementById('resolve-broker').onclick = async function () {
-            const hostInput = document.getElementById('mqtt-broker-host');
-            const ipInput = document.getElementById('mqtt-broker-ip');
-            const msg = document.getElementById('broker-msg');
-            msg.textContent = '';
-            const host = hostInput.value.trim();
-            if (!host) {
-                msg.style.color = 'red';
-                msg.textContent = 'Please enter a hostname.';
-                return;
-            }
-            msg.style.color = 'black';
-            msg.textContent = 'Resolving...';
-            try {
-                // Try mDNS/Bonjour first
-                let res = await fetch(`/api/mdns/resolve?host=${encodeURIComponent(host)}`);
-                let data = await res.json();
-                if (res.ok && data.ip) {
-                    ipInput.value = data.ip;
-                    msg.style.color = 'green';
-                    msg.textContent = `Resolved (mDNS): ${data.ip}`;
-                    return;
-                }
-                // If mDNS fails, try DNS
-                res = await fetch(`/api/resolve?host=${encodeURIComponent(host)}`);
-                data = await res.json();
-                if (res.ok && data.ip) {
-                    ipInput.value = data.ip;
-                    msg.style.color = 'green';
-                    msg.textContent = `Resolved (DNS): ${data.ip}`;
-                } else {
-                    msg.style.color = 'red';
-                    msg.textContent = data.error || 'Could not resolve hostname.';
-                }
-            } catch (e) {
-                msg.style.color = 'red';
-                msg.textContent = 'Error resolving hostname.';
-            }
-        };
+    async init() {
+      const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
+      this.brokerUrl = s.broker_url || 'mqtt://openpiste.local:1883';
+      await this.loadStatus();
+      setInterval(() => this.loadStatus(), 5000);
+    },
 
-        // Save config
-        document.getElementById('save-broker').onclick = async function () {
-            const hostInput = document.getElementById('mqtt-broker-host');
-            const ipInput = document.getElementById('mqtt-broker-ip');
-            const msg = document.getElementById('broker-msg');
-            const config = {
-                mqttBroker: hostInput.value.trim(),
-                mqttBrokerIp: ipInput.value.trim()
-            };
-            try {
-                const res = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                if (res.ok) {
-                    msg.style.color = 'green';
-                    msg.textContent = 'Settings saved.';
-                } else {
-                    msg.style.color = 'red';
-                    msg.textContent = 'Failed to save settings.';
-                }
-            } catch {
-                msg.style.color = 'red';
-                msg.textContent = 'Error saving settings.';
-            }
-        };
-    </script>
+    async loadStatus() {
+      const s = await fetch('/api/opp2/status').then(r => r.json()).catch(() => ({ connected: false, pistes: [] }));
+      this.status = s;
+    },
+
+    async connect() {
+      const r = await fetch('/api/opp2/connect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker_url: this.brokerUrl }),
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error || 'Connect failed', true); return; }
+      this.showNotice('Connecting to ' + this.brokerUrl);
+      await this.loadStatus();
+    },
+
+    async disconnect() {
+      await fetch('/api/opp2/disconnect', { method: 'POST' });
+      this.showNotice('Disconnected');
+      await this.loadStatus();
+    },
+
+    async saveSettings() {
+      await fetch('/api/opp2/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker_url: this.brokerUrl }),
+      });
+      this.showNotice('Settings saved');
+    },
+
+    showNotice(text, error = false) {
+      this.notice = { text, error };
+      setTimeout(() => { this.notice = { text: '', error: false }; }, 3000);
+    },
+  };
+}
+</script>
 </body>
-
 </html>

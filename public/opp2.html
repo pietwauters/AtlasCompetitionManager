@@ -56,24 +56,20 @@
   <a href="/tournaments.html">Events</a>
   <a href="/strips.html">Strips</a>
   <a href="/opp2.html" style="color:#aad4f5">Schedule</a>
+  <a href="/admin.html">Admin</a>
 </header>
 <main>
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
-  <!-- ── Broker config ──────────────────────────────────────────────────── -->
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
       <h2 style="margin:0">Piste Schedule</h2>
       <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
             x-text="status.connected?'Connected':'Disconnected'"></span>
       <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
-    </div>
-    <div class="broker-row">
-      <input type="text" x-model="brokerUrl" placeholder="mqtt://openpiste.local:1883">
-      <button class="primary" x-show="!status.connected" @click="connect()">Connect</button>
-      <button x-show="status.connected" @click="disconnect()" style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
-      <button @click="saveSettings()" style="background:#f0f2f5">Save settings</button>
+      <a href="/admin.html" style="font-size:.82rem;color:#888;margin-left:auto">⚙ Settings</a>
     </div>
 
     <!-- Live piste status -->
@@ -270,7 +266,6 @@ function app() {
   return {
     notice: { text: '', error: false },
     status: { connected: false, brokerUrl: '', pistes: [] },
-    brokerUrl: '',
     strips: [],
     referees: [],
     availablePools: [],
@@ -283,18 +278,12 @@ function app() {
 
     async init() {
       await Promise.all([
-        this.loadSettings(),
         this.loadStatus(),
         this.loadStrips(),
         this.loadReferees(),
         this.loadAvailablePhases(),
       ]);
       setInterval(() => this.loadStatus(), 5000);
-    },
-
-    async loadSettings() {
-      const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
-      this.brokerUrl = s.broker_url || 'mqtt://openpiste.local:1883';
     },
 
     async loadStatus() {
@@ -333,31 +322,6 @@ function app() {
       }
       this.availablePools    = pools;
       this.availableDePhases = dePhases;
-    },
-
-    async connect() {
-      const r = await fetch('/api/opp2/connect', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ broker_url: this.brokerUrl }),
-      });
-      const d = await r.json();
-      if (!r.ok) { this.showNotice(d.error || 'Connect failed', true); return; }
-      this.showNotice('Connecting to ' + this.brokerUrl);
-      await this.loadStatus();
-    },
-
-    async disconnect() {
-      await fetch('/api/opp2/disconnect', { method: 'POST' });
-      this.showNotice('Disconnected');
-      await this.loadStatus();
-    },
-
-    async saveSettings() {
-      await fetch('/api/opp2/settings', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ broker_url: this.brokerUrl }),
-      });
-      this.showNotice('Settings saved');
     },
 
     liveState(stripName) {
