@@ -245,11 +245,33 @@ const Pipeline = {
     db.prepare("UPDATE pipeline_slots SET status='done' WHERE id=?").run(slotId);
   },
 
+  // Returns the number of unfinished bouts remaining in a slot.
+  // Used to determine whether the slot is truly done (0 remaining).
+  pendingBoutCount(slot) {
+    if (slot.type === 'pool') {
+      return db.prepare(
+        "SELECT COUNT(*) AS n FROM bouts WHERE pool_id=? AND status!='finished'"
+      ).get(slot.pool_id).n;
+    }
+    const start = slot.bout_start ?? 1;
+    const end   = slot.bout_end   ?? 9999;
+    return db.prepare(`
+      WITH ordered AS (${DE_BOUT_ORDER})
+      SELECT COUNT(*) AS n FROM bouts b
+      JOIN ordered o ON o.id = b.id
+      WHERE b.phase_id=? AND b.de_round=?
+        AND o.round_index BETWEEN ? AND ?
+        AND b.status != 'finished'
+    `).get(slot.phase_id, slot.de_round, start, end).n;
+  },
+
   // Next pending bout within the slot, after the given cursor bout id (or from start).
-  // Returns a fully-joined bout row or null if the slot is exhausted.
+  // For pool slots: tries forward first, then wraps around to catch skipped bouts.
+  // Returns null only when no unfinished bout is available to advance to
+  // (either all finished, or only the current bout remains pending).
   nextBout(slot, afterBoutId = null) {
     if (slot.type === 'pool') {
-      return db.prepare(`
+      const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
           lp.first_name AS left_first,  lp.last_name  AS left_last,
           lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
@@ -274,12 +296,24 @@ const Pipeline = {
         LEFT JOIN pools       po2 ON po2.id = b.pool_id
         LEFT JOIN referees    ref ON ref.id = po2.referee_id
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
+      `;
+
+      // Forward: next pending bout after cursor in bout_order
+      const forward = db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
           AND b.status != 'finished'
           AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
-        ORDER BY b.bout_order
-        LIMIT 1
+        ORDER BY b.bout_order LIMIT 1
       `).get(slot.pool_id, afterBoutId, afterBoutId);
+      if (forward) return forward;
+
+      // Wrap-around: skipped bouts earlier in the order.
+      // Only run if there is a cursor; exclude the current bout to avoid looping.
+      if (!afterBoutId) return null;
+      return db.prepare(`${POOL_JOIN}
+        WHERE b.pool_id = ? AND b.status != 'finished' AND b.id != ?
+        ORDER BY b.bout_order LIMIT 1
+      `).get(slot.pool_id, afterBoutId) || null;
     }
 
     // de_range: select from ordered DE bouts within the range
