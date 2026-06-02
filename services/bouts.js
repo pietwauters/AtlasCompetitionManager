@@ -63,16 +63,17 @@ const Bout = {
       WHERE id=@id
     `).run({ id, ls, rs, winner, status });
 
-    if (status === 'finished') this.advanceDEWinner(id);
-
-    return this.findById(id);
+    const bout = this.findById(id);
+    const next = status === 'finished' ? this.advanceDEWinner(id) : null;
+    return { bout, next };
   },
 
   // After a DE bout is finished, fill the winner into the correct slot of the
   // next-round bout. Does nothing for pool bouts or if there is no next round.
+  // Returns the updated next-round bout (full row), or null.
   advanceDEWinner(boutId) {
     const bout = db.prepare('SELECT * FROM bouts WHERE id = ?').get(boutId);
-    if (!bout || !bout.de_round || !bout.winner_id || bout.status !== 'finished') return;
+    if (!bout || !bout.de_round || !bout.winner_id || bout.status !== 'finished') return null;
 
     const nextRound = bout.de_round + 1;
     const nextPos   = Math.ceil(bout.tableau_position / 2);
@@ -81,11 +82,12 @@ const Bout = {
       SELECT * FROM bouts WHERE phase_id = ? AND de_round = ? AND tableau_position = ?
     `).get(bout.phase_id, nextRound, nextPos);
 
-    if (!nextBout) return; // final has no next round
+    if (!nextBout) return null; // final has no next round
 
     // Odd tableau_position → left side of next bout; even → right side.
     const side = bout.tableau_position % 2 === 1 ? 'left_id' : 'right_id';
     db.prepare(`UPDATE bouts SET ${side} = ? WHERE id = ?`).run(bout.winner_id, nextBout.id);
+    return this.findById(nextBout.id);
   },
 
   // Restore last history snapshot and delete it.
@@ -124,7 +126,15 @@ const Bout = {
       }
     })();
 
-    return this.findById(id);
+    const bout = this.findById(id);
+    let next = null;
+    if (current.de_round && current.winner_id) {
+      const row = db.prepare(`
+        SELECT id FROM bouts WHERE phase_id=? AND de_round=? AND tableau_position=?
+      `).get(current.phase_id, current.de_round + 1, Math.ceil(current.tableau_position / 2));
+      if (row) next = this.findById(row.id);
+    }
+    return { bout, next };
   },
 };
 

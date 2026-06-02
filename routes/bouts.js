@@ -32,7 +32,7 @@ router.patch('/:id', (req, res) => {
   try {
     const before = Bout.findById(req.params.id);
     if (!before) return res.status(404).json({ error: 'Bout not found' });
-    const b = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
+    const { bout: b, next } = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
     Event.record({
       competition_id: b.competition_id,
       phase_id:       b.phase_id,
@@ -44,7 +44,9 @@ router.patch('/:id', (req, res) => {
         after:  { left_score: b.left_score,      right_score: b.right_score,      winner_id: b.winner_id },
       },
     });
-    if (b.pool_id) SSE.emit(b.pool_id, 'bout-updated', b);
+    if (b.pool_id)  SSE.emit(b.pool_id,  'bout-updated', b);
+    if (b.phase_id) SSE.emit(b.phase_id, 'bout-updated', b);
+    if (next?.phase_id) SSE.emit(next.phase_id, 'bout-updated', next);
     res.json(b);
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -53,9 +55,12 @@ router.patch('/:id', (req, res) => {
 
 // Undo the last score entry for this bout.
 router.post('/:id/undo', (req, res) => {
-  const b = Bout.undo(req.params.id);
-  if (!b) return res.status(404).json({ error: 'Nothing to undo' });
-  if (b.pool_id) SSE.emit(b.pool_id, 'bout-updated', b);
+  const result = Bout.undo(req.params.id);
+  if (!result) return res.status(404).json({ error: 'Nothing to undo' });
+  const { bout: b, next } = result;
+  if (b.pool_id)  SSE.emit(b.pool_id,  'bout-updated', b);
+  if (b.phase_id) SSE.emit(b.phase_id, 'bout-updated', b);
+  if (next?.phase_id) SSE.emit(next.phase_id, 'bout-updated', next);
   res.json(b);
 });
 

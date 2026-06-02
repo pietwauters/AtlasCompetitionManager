@@ -180,18 +180,39 @@
               <!-- DE range picker -->
               <template x-if="addForm.type==='de_range'">
                 <div>
-                  <select x-model="addForm.phase_id" style="margin-bottom:.3rem">
+                  <select x-model="addForm.phase_id" @change="loadDeRounds(addForm.phase_id)" style="margin-bottom:.3rem">
                     <option value="">— Select DE phase —</option>
                     <template x-for="ph in availableDePhases" :key="ph.id">
                       <option :value="ph.id"
                         x-text="ph.competition_name+' — '+ph.phase_label"></option>
                     </template>
                   </select>
-                  <div class="row">
-                    <input type="number" x-model.number="addForm.de_round" placeholder="Round" min="1">
-                    <input type="number" x-model.number="addForm.bout_start" placeholder="From bout" min="1">
-                    <input type="number" x-model.number="addForm.bout_end"   placeholder="To bout"   min="1">
-                  </div>
+                  <template x-if="deRounds.length > 0">
+                    <div style="margin-bottom:.3rem">
+                      <select @change="selectDeRound($event.target.value)" style="width:100%">
+                        <option value="">— Select round —</option>
+                        <template x-for="rd in deRounds" :key="rd.de_round">
+                          <option :value="rd.de_round" :selected="addForm.de_round===rd.de_round"
+                            x-text="'Round '+rd.de_round+' ('+rd.total_bouts+' bouts)'"></option>
+                        </template>
+                      </select>
+                    </div>
+                  </template>
+                  <template x-if="addForm.de_round">
+                    <div class="row" style="align-items:flex-end">
+                      <div>
+                        <div style="font-size:.75rem;color:#666;margin-bottom:.1rem">From bout</div>
+                        <input type="number" x-model.number="addForm.bout_start" min="1">
+                      </div>
+                      <div>
+                        <div style="font-size:.75rem;color:#666;margin-bottom:.1rem">To bout</div>
+                        <input type="number" x-model.number="addForm.bout_end" min="1">
+                      </div>
+                      <div style="font-size:.75rem;color:#888;padding-bottom:.25rem"
+                        x-text="'1–'+(deRounds.find(r=>r.de_round===addForm.de_round)?.total_bouts||'?')+' available'">
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </template>
 
@@ -254,6 +275,7 @@ function app() {
     referees: [],
     availablePools: [],
     availableDePhases: [],
+    deRounds: [],
     addOpen: null,
     addForm: {},
     selectedReferee: '',
@@ -357,9 +379,34 @@ function app() {
 
     openAdd(strip) {
       this.addOpen  = strip.id;
+      this.deRounds = [];
       this.addForm  = { type: 'pool', pool_id: '', phase_id: '',
-                        de_round: 1, bout_start: '', bout_end: '',
+                        de_round: '', bout_start: '', bout_end: '',
                         scheduled_start: '', minutes_per_bout: '' };
+    },
+
+    async loadDeRounds(phaseId) {
+      this.deRounds = [];
+      this.addForm.de_round  = '';
+      this.addForm.bout_start = '';
+      this.addForm.bout_end   = '';
+      if (!phaseId) return;
+      const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json()).catch(() => []);
+      const map = {};
+      for (const b of bouts) {
+        if (b.de_round == null) continue;
+        map[b.de_round] = (map[b.de_round] || 0) + 1;
+      }
+      this.deRounds = Object.entries(map)
+        .map(([r, n]) => ({ de_round: Number(r), total_bouts: n }))
+        .sort((a, b) => a.de_round - b.de_round);
+    },
+
+    selectDeRound(val) {
+      const deRound = Number(val);
+      this.addForm.de_round = deRound;
+      const rd = this.deRounds.find(r => r.de_round === deRound);
+      if (rd) { this.addForm.bout_start = 1; this.addForm.bout_end = rd.total_bouts; }
     },
 
     async submitAddSlot(strip) {

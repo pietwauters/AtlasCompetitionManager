@@ -220,6 +220,14 @@ function app() {
     async init() {
       if (!phaseId) { this.showNotice('No phase ID', true); return; }
       await this.load();
+      const es = new EventSource('/api/phases/' + phaseId + '/events');
+      es.addEventListener('bout-updated', e => {
+        const updated = JSON.parse(e.data);
+        this.rounds = this.rounds.map(round =>
+          round.map(b => b.id === updated.id ? { ...b, ...updated } : b)
+        );
+        if (this.selected?.id === updated.id) this.selected = { ...this.selected, ...updated };
+      });
     },
 
     async load() {

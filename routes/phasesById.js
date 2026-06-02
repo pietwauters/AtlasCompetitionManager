@@ -4,8 +4,13 @@
 const express = require('express');
 const Phase   = require('../services/phases');
 const Pool    = require('../services/pools');
+const SSE     = require('../lib/sse');
 
 const router = express.Router();
+
+router.get('/:id/events', (req, res) => {
+  SSE.subscribe(req.params.id, res);
+});
 
 router.get('/:id', (req, res) => {
   const p = Phase.findById(req.params.id);
