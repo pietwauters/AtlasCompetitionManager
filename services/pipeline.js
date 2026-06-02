@@ -359,7 +359,7 @@ const Pipeline = {
   prevBout(slot, beforeBoutId) {
     if (!beforeBoutId) return null;
     if (slot.type === 'pool') {
-      return db.prepare(`
+      const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
           lp.first_name AS left_first,  lp.last_name  AS left_last,
           lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
@@ -379,11 +379,21 @@ const Pipeline = {
         LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
         LEFT JOIN people      rp  ON rp.id  = rf.person_id
         LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      `;
+
+      // Backward in bout_order
+      const backward = db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
           AND b.bout_order < (SELECT bout_order FROM bouts WHERE id = ?)
-        ORDER BY b.bout_order DESC
-        LIMIT 1
+        ORDER BY b.bout_order DESC LIMIT 1
       `).get(slot.pool_id, beforeBoutId);
+      if (backward) return backward;
+
+      // Wrap around: already at the first bout; jump to the last one in the pool
+      return db.prepare(`${POOL_JOIN}
+        WHERE b.pool_id = ? AND b.id != ?
+        ORDER BY b.bout_order DESC LIMIT 1
+      `).get(slot.pool_id, beforeBoutId) || null;
     }
 
     const start = slot.bout_start ?? 1;
