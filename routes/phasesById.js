@@ -44,4 +44,11 @@ router.post('/:id/simulate', (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
+router.post('/:id/reopen', (req, res) => {
+  try {
+    Phase.reopen(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
 module.exports = router;

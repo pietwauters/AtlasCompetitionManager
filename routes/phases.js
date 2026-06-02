@@ -85,10 +85,22 @@ router.post('/:id/close', (req, res) => {
   }
 });
 
+router.post('/:id/reopen', (req, res) => {
+  try {
+    Phase.reopen(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 router.delete('/:id', (req, res) => {
-  const result = Phase.delete(req.params.id);
-  if (!result.changes) return res.status(404).json({ error: 'Phase not found' });
-  res.json({ ok: true });
+  try {
+    Phase.delete(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

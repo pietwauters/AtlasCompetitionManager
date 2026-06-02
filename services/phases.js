@@ -146,12 +146,18 @@ const Phase = {
     if (!phase) return [];
 
     let criteria = DEFAULT_CRITERIA;
-    try { criteria = loadRule(phase.rule_doc).seeding?.criteria || DEFAULT_CRITERIA; } catch {}
+    let levelPools = false;
+    try {
+      const rule = loadRule(phase.rule_doc);
+      criteria   = rule.seeding?.criteria || DEFAULT_CRITERIA;
+      levelPools = rule.levelPools === true;
+    } catch {}
 
-    // All competitors in this phase
+    // All competitors in this phase, including their pool_number for level-pool ranking
     const competitorRows = db.prepare(`
       SELECT DISTINCT pc.competitor_id, c.initial_seed,
-        p.first_name, p.last_name, cl.name AS club_name, p.nationality
+        p.first_name, p.last_name, cl.name AS club_name, p.nationality,
+        ph.pool_number
       FROM pool_competitors pc
       JOIN pools ph ON ph.id = pc.pool_id AND ph.phase_id = ?
       JOIN competitors c ON c.id = pc.competitor_id
@@ -176,6 +182,7 @@ const Phase = {
         club_name:        c.club_name,
         nationality:      c.nationality,
         initial_seed:     c.initial_seed ?? 9999,
+        pool_number:      c.pool_number,
         victories:        0,
         matches:          0,
         touches_scored:   0,
@@ -205,7 +212,7 @@ const Phase = {
       s.victory_ratio = s.matches > 0 ? s.victories / s.matches : 0;
     }
 
-    const sorted = Object.values(stats).sort((a, b) => {
+    const compareByCriteria = (a, b) => {
       for (const crit of criteria) {
         let diff = 0;
         switch (crit) {
@@ -219,7 +226,44 @@ const Phase = {
         if (diff !== 0) return diff;
       }
       return 0;
-    });
+    };
+
+    let sorted;
+    if (levelPools) {
+      // Rank within each pool independently; pool level order is derived from
+      // the actual seeding (previous phase rankings), not from pool_number labels.
+      const byPool = {};
+      for (const s of Object.values(stats)) {
+        if (!byPool[s.pool_number]) byPool[s.pool_number] = [];
+        byPool[s.pool_number].push(s);
+      }
+
+      // Find previous pool phase to anchor level ordering
+      const prevPhase = db.prepare(`
+        SELECT id FROM phases
+        WHERE competition_id = ? AND type = 'pool' AND phase_order < ?
+        ORDER BY phase_order DESC LIMIT 1
+      `).get(phase.competition_id, phase.phase_order);
+
+      const prevRankMap = prevPhase
+        ? new Map(db.prepare('SELECT competitor_id, position FROM rankings WHERE phase_id = ?')
+            .all(prevPhase.id).map(r => [r.competitor_id, r.position]))
+        : null;
+
+      // Level key = min rank of pool members in the previous phase (or min initial_seed)
+      const poolLevelKey = pn => {
+        const members = byPool[pn];
+        if (prevRankMap) return Math.min(...members.map(m => prevRankMap.get(m.competitor_id) ?? 9999));
+        return Math.min(...members.map(m => m.initial_seed));
+      };
+
+      sorted = Object.keys(byPool)
+        .map(Number)
+        .sort((a, b) => poolLevelKey(a) - poolLevelKey(b))
+        .flatMap(pn => byPool[pn].sort(compareByCriteria));
+    } else {
+      sorted = Object.values(stats).sort(compareByCriteria);
+    }
 
     return sorted.map((s, i) => ({ ...s, position: i + 1 }));
   },
@@ -240,8 +284,12 @@ const Phase = {
     try { rule = loadRule(phase.rule_doc); } catch { rule = {}; }
     const adv = advancementOverride || rule.advancement || { method: 'percentage', value: 70 };
 
-    let advanceN = N;
-    if (adv.eliminateAfterPhase !== false) {
+    let advanceN;
+    if (!advancementOverride && adv.eliminateAfterPhase === true) {
+      // Rule says this phase is final: no one advances regardless of the percentage value.
+      advanceN = 0;
+    } else {
+      advanceN = N;
       switch (adv.method) {
         case 'count':
           advanceN = Math.min(Number(adv.value), N);
@@ -261,7 +309,7 @@ const Phase = {
           break;
         }
       }
-      advanceN = Math.max(1, Math.min(advanceN, N));
+      advanceN = Math.max(0, Math.min(advanceN, N));
     }
 
     db.transaction(() => {
@@ -571,8 +619,41 @@ const Phase = {
     return { simulated: count };
   },
 
+  // ---------------------------------------------------------------------------
+  // Reopen a finished phase: undo the close — restore eliminated competitors,
+  // drop saved rankings, set phase and pools back to active.
+  // Scores are untouched; the manager re-closes when ready.
+  // ---------------------------------------------------------------------------
+  reopen(id) {
+    db.transaction(() => {
+      const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(id);
+      if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
+      if (phase.status !== 'finished') throw Object.assign(new Error('Only finished phases can be reopened.'), { status: 400 });
+
+      // Restore competitors eliminated by this phase
+      db.prepare(`
+        UPDATE competitors SET status='active', eliminated_after=NULL, final_rank=NULL
+        WHERE eliminated_after = ?
+      `).run(id);
+
+      // Drop saved rankings (live rankings are recomputed on the fly)
+      db.prepare('DELETE FROM rankings WHERE phase_id = ?').run(id);
+
+      // Set phase and pools back to active
+      db.prepare("UPDATE phases SET status='active' WHERE id=?").run(id);
+      db.prepare("UPDATE pools  SET status='active' WHERE phase_id=?").run(id);
+    })();
+  },
+
   delete(id) {
-    return db.prepare('DELETE FROM phases WHERE id = ?').run(id);
+    db.transaction(() => {
+      // Restore any competitors eliminated by this phase before cascading
+      db.prepare(`
+        UPDATE competitors SET status='active', eliminated_after=NULL, final_rank=NULL
+        WHERE eliminated_after = ?
+      `).run(id);
+      db.prepare('DELETE FROM phases WHERE id = ?').run(id);
+    })();
   },
 };
 

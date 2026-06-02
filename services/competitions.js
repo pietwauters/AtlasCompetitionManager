@@ -118,8 +118,8 @@ const Competition = {
       SELECT c.id, c.name, c.weapon, c.gender,
              p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
       FROM competitions c
-      JOIN phases p ON p.competition_id = c.id AND p.status IN ('active','pending')
-      WHERE c.status != 'archived'
+      LEFT JOIN phases p ON p.competition_id = c.id AND p.status IN ('active','pending')
+      WHERE c.status = 'active'
       ORDER BY c.name, p.phase_order DESC
     `).all();
 

@@ -7,8 +7,7 @@ function getCompetitionResults(compId) {
     'SELECT id, type, phase_order, status FROM phases WHERE competition_id=? ORDER BY phase_order'
   ).all(compId);
 
-  const dePhase   = [...phases].reverse().find(p => p.type === 'de');
-  const poolPhase = [...phases].reverse().find(p => p.type === 'pool' && p.status === 'finished');
+  const dePhase = [...phases].reverse().find(p => p.type === 'de');
 
   const entries = [];
 
@@ -95,38 +94,70 @@ function getCompetitionResults(compId) {
     }
   }
 
-  // ── Pool-eliminated fencers ───────────────────────────────────────────────
-  if (poolPhase) {
-    const deIds = new Set(entries.map(e => e.competitor_id));
+  // ── Pool fencers ─────────────────────────────────────────────────────────
+  // Sorted most-recent first so finishedPools[0] is the last (final) pool round.
+  const finishedPools = phases
+    .filter(p => p.type === 'pool' && p.status === 'finished')
+    .sort((a, b) => b.phase_order - a.phase_order);
 
-    // Anchor pool-eliminated ranks after all DE participants.
-    const advancedCount = db.prepare(
-      "SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1"
-    ).get(poolPhase.id).n;
+  if (finishedPools.length > 0) {
+    const seen = new Set(entries.map(e => e.competitor_id));
+    const lastPool = finishedPools[0];
 
-    const eliminated = db.prepare(`
-      SELECT r.position AS pool_rank, r.competitor_id,
+    const fetchPoolRows = (phaseId, onlyEliminated) => db.prepare(`
+      SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
              p.first_name, p.last_name, cl.name AS club_name
       FROM rankings r
-      JOIN competitors c ON c.id  = r.competitor_id
-      JOIN fencers     f ON f.id  = c.fencer_id
-      JOIN people      p ON p.id  = f.person_id
+      JOIN competitors c  ON c.id  = r.competitor_id
+      JOIN fencers     f  ON f.id  = c.fencer_id
+      JOIN people      p  ON p.id  = f.person_id
       LEFT JOIN clubs  cl ON cl.id = p.club_id
-      WHERE r.phase_id = ? AND r.advanced = 0
+      WHERE r.phase_id = ? ${onlyEliminated ? 'AND r.advanced = 0' : ''}
       ORDER BY r.position
-    `).all(poolPhase.id);
+    `).all(phaseId);
 
-    let poolPlace = advancedCount + 1;
-    for (const row of eliminated) {
-      if (deIds.has(row.competitor_id)) continue;
+    const pushEntry = (place, row, note) => {
       entries.push({
-        place: poolPlace, place_label: String(poolPlace),
+        place, place_label: String(place),
         competitor_id: row.competitor_id,
         de_seed: null,
         first_name: row.first_name, last_name: row.last_name, club: row.club_name,
-        note: 'Pool phase (rank ' + row.pool_rank + ')',
+        note,
       });
-      poolPlace++;
+      seen.add(row.competitor_id);
+    };
+
+    // True when a later phase exists OR when competitors were marked advanced
+    // (competition is between phases; next phase not yet created).
+    const advancedCount = db.prepare(
+      'SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1'
+    ).get(lastPool.id).n;
+    const hasLaterPhase = phases.some(p => p.phase_order > lastPool.phase_order) || advancedCount > 0;
+
+    let nextPlace;
+    if (hasLaterPhase) {
+      // Not the final phase: only show eliminated fencers; advanced slots reserved for later phase.
+      nextPlace = advancedCount + 1;
+      for (const row of fetchPoolRows(lastPool.id, true)) {
+        if (seen.has(row.competitor_id)) continue;
+        pushEntry(nextPlace++, row, 'Pool phase (rank ' + row.pool_rank + ')');
+      }
+    } else {
+      // This pool is the final phase — show all fencers as the final ranking.
+      nextPlace = 1;
+      for (const row of fetchPoolRows(lastPool.id, false)) {
+        if (seen.has(row.competitor_id)) continue;
+        pushEntry(nextPlace++, row, 'Pool phase (rank ' + row.pool_rank + ')');
+      }
+    }
+
+    // Earlier pool rounds: append fencers eliminated before reaching the last pool.
+    for (let i = 1; i < finishedPools.length; i++) {
+      for (const row of fetchPoolRows(finishedPools[i].id, true)) {
+        if (seen.has(row.competitor_id)) continue;
+        pushEntry(nextPlace++, row,
+          'Pool round ' + finishedPools[i].phase_order + ' (rank ' + row.pool_rank + ')');
+      }
     }
   }
 
