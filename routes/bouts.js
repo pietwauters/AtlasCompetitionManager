@@ -44,9 +44,10 @@ router.patch('/:id', (req, res) => {
         after:  { left_score: b.left_score,      right_score: b.right_score,      winner_id: b.winner_id },
       },
     });
-    if (b.pool_id)  SSE.emit(b.pool_id,  'bout-updated', b);
-    if (b.phase_id) SSE.emit(b.phase_id, 'bout-updated', b);
-    if (next?.phase_id) SSE.emit(next.phase_id, 'bout-updated', next);
+    if (b.pool_id)       SSE.emit(b.pool_id,          'bout-updated',    b);
+    if (b.phase_id)      SSE.emit(b.phase_id,         'bout-updated',    b);
+    if (next?.phase_id)  SSE.emit(next.phase_id,      'bout-updated',    next);
+    if (b.competition_id) SSE.emit('comp_' + b.competition_id, 'results-updated', {});
     res.json(b);
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -58,9 +59,10 @@ router.post('/:id/undo', (req, res) => {
   const result = Bout.undo(req.params.id);
   if (!result) return res.status(404).json({ error: 'Nothing to undo' });
   const { bout: b, next } = result;
-  if (b.pool_id)  SSE.emit(b.pool_id,  'bout-updated', b);
-  if (b.phase_id) SSE.emit(b.phase_id, 'bout-updated', b);
-  if (next?.phase_id) SSE.emit(next.phase_id, 'bout-updated', next);
+  if (b.pool_id)        SSE.emit(b.pool_id,          'bout-updated',    b);
+  if (b.phase_id)       SSE.emit(b.phase_id,         'bout-updated',    b);
+  if (next?.phase_id)   SSE.emit(next.phase_id,      'bout-updated',    next);
+  if (b.competition_id) SSE.emit('comp_' + b.competition_id, 'results-updated', {});
   res.json(b);
 });
 

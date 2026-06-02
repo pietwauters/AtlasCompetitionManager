@@ -59,37 +59,37 @@ function getCompetitionResults(compId) {
           first_name: i.first_name, last_name: i.last_name, club: i.club, note });
       };
 
+      // 1st and 2nd — only when final is decided
       const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
       if (finalBout?.winner_id) {
         push(1, '1', finalBout.winner_id, 'DE winner');
-
         const silver = finalBout.winner_id === finalBout.left_id
           ? finalBout.right_id : finalBout.left_id;
         push(2, '2', silver, 'DE final');
+      }
 
-        // SF losers share 3rd (no bronze bout)
-        const sfLosers = bouts
-          .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
+      // SF losers share 3rd (no bronze bout)
+      const sfLosers = bouts
+        .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
+                  && b.winner_id && b.left_id && b.right_id)
+        .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
+      sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+
+      // All earlier rounds: place derived from bracket depth, not entry count.
+      // Round r losers start at 2^(totalRounds-r)+1 (e.g. QF→5, R16→9, R32→17).
+      for (let r = totalRounds - 2; r >= 1; r--) {
+        const roundNote = r === totalRounds - 2 ? 'DE quarter-final'
+                        : 'DE round of ' + (2 ** (totalRounds - r + 1));
+        const roundStartPlace = 2 ** (totalRounds - r) + 1;
+        const losers = bouts
+          .filter(b => b.de_round === r && b.status === 'finished'
                     && b.winner_id && b.left_id && b.right_id)
-          .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
-        sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+          .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+          .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
+          .sort((a, b) => a.seed - b.seed);
 
-        // All other rounds: sort losers by DE seed, assign sequential unique ranks
-        let nextPlace = 3 + sfLosers.length; // 5 when 2 SF losers
-        for (let r = totalRounds - 2; r >= 1; r--) {
-          const roundNote = r === totalRounds - 2 ? 'DE quarter-final'
-                          : 'DE round of ' + (2 ** (totalRounds - r + 1));
-          const losers = bouts
-            .filter(b => b.de_round === r && b.status === 'finished'
-                      && b.winner_id && b.left_id && b.right_id)
-            .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
-            .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
-            .sort((a, b) => a.seed - b.seed);
-
-          for (const l of losers) {
-            push(nextPlace, String(nextPlace), l.id, roundNote);
-            nextPlace++;
-          }
+        for (let i = 0; i < losers.length; i++) {
+          push(roundStartPlace + i, String(roundStartPlace + i), losers[i].id, roundNote);
         }
       }
     }
@@ -98,6 +98,12 @@ function getCompetitionResults(compId) {
   // ── Pool-eliminated fencers ───────────────────────────────────────────────
   if (poolPhase) {
     const deIds = new Set(entries.map(e => e.competitor_id));
+
+    // Anchor pool-eliminated ranks after all DE participants.
+    const advancedCount = db.prepare(
+      "SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1"
+    ).get(poolPhase.id).n;
+
     const eliminated = db.prepare(`
       SELECT r.position AS pool_rank, r.competitor_id,
              p.first_name, p.last_name, cl.name AS club_name
@@ -110,16 +116,17 @@ function getCompetitionResults(compId) {
       ORDER BY r.position
     `).all(poolPhase.id);
 
+    let poolPlace = advancedCount + 1;
     for (const row of eliminated) {
       if (deIds.has(row.competitor_id)) continue;
-      const place = entries.length + 1;
       entries.push({
-        place, place_label: String(place),
+        place: poolPlace, place_label: String(poolPlace),
         competitor_id: row.competitor_id,
         de_seed: null,
         first_name: row.first_name, last_name: row.last_name, club: row.club_name,
         note: 'Pool phase (rank ' + row.pool_rank + ')',
       });
+      poolPlace++;
     }
   }
 

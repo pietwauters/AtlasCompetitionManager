@@ -5,6 +5,7 @@ const Competitor  = require('../services/competitors');
 const AgeCategory = require('../services/ageCategories');
 const Results     = require('../services/results');
 const Event       = require('../services/events');
+const SSE         = require('../lib/sse');
 
 const router = express.Router();
 
@@ -67,6 +68,11 @@ router.get('/:id/results', (req, res) => {
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
+});
+
+// SSE stream — pushes 'results-updated' whenever a bout in this competition is scored.
+router.get('/:id/updates', (req, res) => {
+  SSE.subscribe('comp_' + req.params.id, res);
 });
 
 // GET /api/competitions/:id/events[?event_type=card&phase_id=X&bout_id=Y]

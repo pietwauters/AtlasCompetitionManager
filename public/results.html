@@ -87,6 +87,11 @@ function app() {
         fetch('/api/competitions/' + compId + '/results').then(r => r.json()),
       ]);
       document.title = 'Atlas — ' + (this.comp?.name || '') + ' Results';
+      const es = new EventSource('/api/competitions/' + compId + '/updates');
+      es.addEventListener('results-updated', () => {
+        fetch('/api/competitions/' + compId + '/results')
+          .then(r => r.json()).then(d => { this.results = d; });
+      });
     },
   };
 }
