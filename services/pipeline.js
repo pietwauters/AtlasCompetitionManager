@@ -243,6 +243,13 @@ const Pipeline = {
 
   markDone(slotId) {
     db.prepare("UPDATE pipeline_slots SET status='done' WHERE id=?").run(slotId);
+    const slot = db.prepare('SELECT strip_id FROM pipeline_slots WHERE id=?').get(slotId);
+    if (slot) {
+      const active = db.prepare(
+        "SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id=? AND status IN ('pending','active')"
+      ).get(slot.strip_id).n;
+      if (active === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
+    }
   },
 
   // Finds the first 'done' slot for a strip that still has pending bouts,
