@@ -10,15 +10,17 @@ const router = express.Router();
 
 router.get('/settings', (req, res) => {
   res.json({
-    broker_url: Settings.get('opp2_broker_url'),
-    enabled:    Settings.get('opp2_enabled') === '1',
+    broker_url:        Settings.get('opp2_broker_url'),
+    enabled:           Settings.get('opp2_enabled') === '1',
+    auto_next_on_end:  Settings.get('opp2_auto_next_on_end') === '1',
   });
 });
 
 router.put('/settings', (req, res) => {
-  const { broker_url, enabled } = req.body;
-  if (broker_url !== undefined) Settings.set('opp2_broker_url', broker_url);
-  if (enabled    !== undefined) Settings.set('opp2_enabled', enabled ? '1' : '0');
+  const { broker_url, enabled, auto_next_on_end } = req.body;
+  if (broker_url       !== undefined) Settings.set('opp2_broker_url', broker_url);
+  if (enabled          !== undefined) Settings.set('opp2_enabled', enabled ? '1' : '0');
+  if (auto_next_on_end !== undefined) Settings.set('opp2_auto_next_on_end', auto_next_on_end ? '1' : '0');
   res.json({ ok: true });
 });
 
