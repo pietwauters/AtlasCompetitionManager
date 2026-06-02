@@ -110,45 +110,65 @@
 
           <div class="slot-list">
             <template x-for="(slot, idx) in strip.slots" :key="slot.id">
-              <div class="slot">
-                <div class="slot-head">
-                  <span class="badge" :class="'badge-'+slot.status" x-text="slot.status"></span>
-                  <span class="slot-label" x-text="slotLabel(slot)"></span>
-                  <span class="slot-time">
-                    <span x-show="slot.scheduled_start" x-text="slot.scheduled_start+' →'"></span>
-                    <span class="predicted" x-show="slot.predicted_end" x-text="slot.predicted_end"></span>
-                    <span class="overlap-warn"
-                      x-show="idx>0 && hasOverlap(strip.slots[idx-1], slot)"> ⚠</span>
-                  </span>
-                </div>
-                <div class="slot-detail">
-                  <div class="row">
-                    <label>Start
-                      <input type="time" :value="slot.scheduled_start||''"
-                        @change="updateSlot(slot.id,{scheduled_start:$event.target.value||null},strip)">
-                    </label>
-                    <label>Min/bout
-                      <input type="number" min="1" max="60" :value="slot.minutes_per_bout||''"
-                        :placeholder="slot.effective_minutes_per_bout||'—'"
-                        @change="updateSlot(slot.id,{minutes_per_bout:Number($event.target.value)||null},strip)">
-                    </label>
-                    <label>Referee
-                      <select @change="updateSlot(slot.id,{referee_id:$event.target.value||null},strip)">
-                        <option value="">— None —</option>
-                        <template x-for="r in referees" :key="r.referee_id">
-                          <option :value="r.referee_id"
-                            :selected="slot.referee_id==r.referee_id"
-                            x-text="r.last_name+', '+r.first_name"></option>
-                        </template>
-                      </select>
-                    </label>
+              <div :class="'slot'+(slot.status==='done'?' slot-done':'')">
+
+                <!-- Done slots: collapsed pill, click to expand -->
+                <template x-if="slot.status==='done' && !expandedSlots.has(slot.id)">
+                  <div class="slot-head slot-collapsed" @click="expandedSlots.add(slot.id); expandedSlots = new Set(expandedSlots)" style="cursor:pointer;opacity:.55">
+                    <span class="badge badge-done">✓ done</span>
+                    <span class="slot-label" x-text="slotLabel(slot)"></span>
+                    <span style="font-size:.75rem;color:#aaa;margin-left:auto">▶ show</span>
                   </div>
-                  <div class="slot-actions">
-                    <button @click="moveSlot(slot.id,'up',strip)" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
-                    <button @click="moveSlot(slot.id,'down',strip)" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
-                    <button @click="deleteSlot(slot.id,strip)" style="font-size:.75rem;padding:.2rem .5rem;color:#922b21">Remove</button>
+                </template>
+
+                <!-- All other slots (and expanded done slots) -->
+                <template x-if="slot.status!=='done' || expandedSlots.has(slot.id)">
+                  <div>
+                    <div class="slot-head" :style="slot.status==='done'?'opacity:.65':''">
+                      <span class="badge" :class="'badge-'+slot.status" x-text="slot.status"></span>
+                      <span class="slot-label" x-text="slotLabel(slot)"></span>
+                      <span class="slot-time">
+                        <span x-show="slot.scheduled_start" x-text="slot.scheduled_start+' →'"></span>
+                        <span class="predicted" x-show="slot.predicted_end" x-text="slot.predicted_end"></span>
+                        <span class="overlap-warn"
+                          x-show="idx>0 && hasOverlap(strip.slots[idx-1], slot)"> ⚠</span>
+                      </span>
+                      <template x-if="slot.status==='done'">
+                        <span @click="expandedSlots.delete(slot.id); expandedSlots = new Set(expandedSlots)"
+                              style="font-size:.75rem;color:#aaa;cursor:pointer;margin-left:.5rem">▼ hide</span>
+                      </template>
+                    </div>
+                    <div class="slot-detail">
+                      <div class="row">
+                        <label>Start
+                          <input type="time" :value="slot.scheduled_start||''"
+                            @change="updateSlot(slot.id,{scheduled_start:$event.target.value||null},strip)">
+                        </label>
+                        <label>Min/bout
+                          <input type="number" min="1" max="60" :value="slot.minutes_per_bout||''"
+                            :placeholder="slot.effective_minutes_per_bout||'—'"
+                            @change="updateSlot(slot.id,{minutes_per_bout:Number($event.target.value)||null},strip)">
+                        </label>
+                        <label>Referee
+                          <select @change="updateSlot(slot.id,{referee_id:$event.target.value||null},strip)">
+                            <option value="">— None —</option>
+                            <template x-for="r in referees" :key="r.referee_id">
+                              <option :value="r.referee_id"
+                                :selected="slot.referee_id==r.referee_id"
+                                x-text="r.last_name+', '+r.first_name"></option>
+                            </template>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="slot-actions">
+                        <button @click="moveSlot(slot.id,'up',strip)" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
+                        <button @click="moveSlot(slot.id,'down',strip)" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
+                        <button @click="deleteSlot(slot.id,strip)" style="font-size:.75rem;padding:.2rem .5rem;color:#922b21">Remove</button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </template>
+
               </div>
             </template>
 
@@ -267,6 +287,7 @@ function app() {
     notice: { text: '', error: false },
     status: { connected: false, brokerUrl: '', pistes: [] },
     strips: [],
+    expandedSlots: new Set(),
     referees: [],
     availablePools: [],
     availableDePhases: [],
