@@ -59,8 +59,15 @@
 
   <!-- ── Active competitions ─────────────────────────────────────────────── -->
   <div class="section-title">Active competitions</div>
-  <template x-if="active.length === 0">
-    <p class="empty-note">No competitions running right now.</p>
+  <template x-if="active.length === 0 && upcoming.length === 0">
+    <div style="background:#fff;border-radius:8px;padding:1.5rem 1.25rem;box-shadow:0 2px 6px rgba(0,0,0,.08);
+                display:flex;flex-direction:column;gap:.75rem;max-width:420px">
+      <div style="font-size:.95rem;color:#555">No competitions running right now.</div>
+      <a href="/tournaments.html" style="display:inline-block;padding:.45rem 1rem;background:#1a6bab;
+         color:#fff;border-radius:5px;text-decoration:none;font-size:.9rem;font-weight:600;align-self:flex-start">
+        → Go to Events to start one
+      </a>
+    </div>
   </template>
   <div class="comp-grid">
     <template x-for="c in active" :key="c.phase_id">
@@ -122,6 +129,16 @@
       </div>
     </div>
   </template>
+
+  <!-- ── Setup links ────────────────────────────────────────────────────── -->
+  <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid #e5e5e5;
+              display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.82rem;color:#888">
+    <span>Setup:</span>
+    <a href="/people.html" style="color:#888">People &amp; fencers</a>
+    <a href="/tournaments.html" style="color:#888">Events &amp; competitions</a>
+    <a href="/strips.html" style="color:#888">Strips / Pistes</a>
+    <a href="/opp2.html" style="color:#888">Schedule</a>
+  </div>
 
 </main>
 <script src="/js/nav.js"></script>
