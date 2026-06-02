@@ -119,6 +119,7 @@ function app() {
       if(!poolId){this.showNotice('No pool ID in URL',true);return;}
       await this.load();
       const es = new EventSource('/api/pools/'+poolId+'/events');
+      window.addEventListener('beforeunload', () => es.close());
       es.addEventListener('bout-updated', e => {
         const updated = JSON.parse(e.data);
         this.bouts = this.bouts.map(b => b.id===updated.id ? {...b,...updated} : b);

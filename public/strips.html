@@ -103,6 +103,7 @@ function app() {
     async init() {
       await this.load();
       const es = new EventSource('/api/strips/events');
+      window.addEventListener('beforeunload', () => es.close());
       es.addEventListener('piste-state', e => {
         const p = JSON.parse(e.data);
         this.strips = this.strips.map(s => s.name === p.pisteId

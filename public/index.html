@@ -155,6 +155,7 @@ function app() {
       setInterval(() => this.loadComps(), 20000);
 
       const es = new EventSource('/api/opp2/piste-events');
+      window.addEventListener('beforeunload', () => es.close());
       es.addEventListener('piste-state', e => {
         const update = JSON.parse(e.data);
         if (!this.pisteStatus.pistes) return;
