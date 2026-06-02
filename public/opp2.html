@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Atlas — OPP2</title>
+  <title>Atlas — Schedule</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
@@ -55,7 +55,7 @@
   <a href="/people.html">People</a>
   <a href="/tournaments.html">Events</a>
   <a href="/strips.html">Strips</a>
-  <a href="/opp2.html" style="color:#aad4f5">OPP2</a>
+  <a href="/opp2.html" style="color:#aad4f5">Schedule</a>
 </header>
 <main>
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
@@ -64,7 +64,7 @@
   <!-- ── Broker config ──────────────────────────────────────────────────── -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-      <h2 style="margin:0">OPP2 / MQTT</h2>
+      <h2 style="margin:0">Piste Schedule</h2>
       <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
             x-text="status.connected?'Connected':'Disconnected'"></span>
       <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
