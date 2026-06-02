@@ -79,9 +79,15 @@
         <div class="piste-status-grid">
           <template x-for="p in status.pistes" :key="p.pisteId">
             <div class="piste-dot">
-              <span :style="'width:8px;height:8px;border-radius:50%;background:'+(p.apparatusOnline?'#1e8449':'#aaa')"></span>
-              <span x-text="'Piste '+p.pisteId"></span>
-              <span x-show="p.boutId" style="color:#1a6bab;font-size:.75rem" x-text="'bout #'+p.boutId"></span>
+              <span :style="'width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(p.apparatusOnline?'#1e8449':'#aaa')"></span>
+              <span style="font-weight:600" x-text="p.pisteId"></span>
+              <template x-if="p.bout">
+                <span style="color:#1a6bab;font-size:.8rem"
+                  x-text="'#'+p.bout.bout_order+' '+p.bout.left+' — '+p.bout.right"></span>
+              </template>
+              <template x-if="!p.bout">
+                <span style="color:#aaa;font-size:.8rem">idle</span>
+              </template>
             </div>
           </template>
         </div>
@@ -105,6 +111,10 @@
               <span class="badge"
                 :class="liveState(strip.name).apparatusOnline?'badge-online':'badge-offline'"
                 x-text="liveState(strip.name).apparatusOnline?'online':'offline'"></span>
+            </template>
+            <template x-if="liveState(strip.name)?.bout">
+              <span style="font-size:.78rem;color:#1a6bab;margin-left:.25rem"
+                x-text="'▶ #'+liveState(strip.name).bout.bout_order+' '+liveState(strip.name).bout.left+' — '+liveState(strip.name).bout.right"></span>
             </template>
           </div>
 
