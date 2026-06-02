@@ -245,6 +245,21 @@ const Pipeline = {
     db.prepare("UPDATE pipeline_slots SET status='done' WHERE id=?").run(slotId);
   },
 
+  // Finds the first 'done' slot for a strip that still has pending bouts,
+  // resets it to 'pending', and returns it. Used to recover from stale state.
+  recoverStaleSlot(stripId) {
+    const slots = db.prepare(
+      "SELECT * FROM pipeline_slots WHERE strip_id = ? AND status = 'done' ORDER BY slot_order"
+    ).all(stripId);
+    for (const slot of slots) {
+      if (this.pendingBoutCount(slot) > 0) {
+        db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(slot.id);
+        return this.findById(slot.id);
+      }
+    }
+    return null;
+  },
+
   // Returns the number of unfinished bouts remaining in a slot.
   // Used to determine whether the slot is truly done (0 remaining).
   pendingBoutCount(slot) {
