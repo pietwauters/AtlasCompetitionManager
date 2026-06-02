@@ -3,6 +3,7 @@ const express  = require('express');
 const OPP2     = require('../lib/opp2Client');
 const Settings = require('../services/settings');
 const Pipeline = require('../services/pipeline');
+const SSE      = require('../lib/sse');
 
 const router = express.Router();
 
@@ -28,6 +29,10 @@ router.put('/settings', (req, res) => {
 
 router.get('/status', (req, res) => {
   res.json(OPP2.status());
+});
+
+router.get('/piste-events', (req, res) => {
+  SSE.subscribe('__strips__', res);
 });
 
 router.post('/connect', async (req, res) => {

@@ -36,14 +36,17 @@
   </style>
 </head>
 <body x-data="app()" x-init="init()">
-<header>
-  <strong>Atlas</strong>
-  <a href="/index.html">Home</a>
-  <a href="/people.html">People</a>
-  <a href="/tournaments.html">Events</a>
-  <a href="/strips.html">Strips</a>
-  <a href="/opp2.html">Schedule</a>
-  <a href="/admin.html">Admin</a>
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+  </template>
+  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/admin.html">Admin</a>
+  </div>
 </header>
 <main>
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>

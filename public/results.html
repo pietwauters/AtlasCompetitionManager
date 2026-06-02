@@ -19,15 +19,19 @@
   </style>
 </head>
 <body x-data="app()" x-init="init()">
-<header>
-  <strong>Atlas</strong>
-  <a href="/index.html">Home</a>
-  <a href="/people.html">People</a>
-  <a href="/tournaments.html">Events</a>
-  <a href="/strips.html">Strips</a>
-  <a href="/opp2.html">Schedule</a>
-  <a href="/admin.html">Admin</a>
-  <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+  </template>
+  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+    <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+    
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/admin.html">Admin</a>
+  </div>
 </header>
 <main>
   <div class="card">
@@ -74,6 +78,7 @@
     </table>
   </div>
 </main>
+<script src="/js/nav.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {

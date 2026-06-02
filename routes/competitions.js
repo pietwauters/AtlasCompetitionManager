@@ -13,6 +13,10 @@ router.get('/', (req, res) => {
   res.json(Competition.findAll({ tournament_id: req.query.tournament_id }));
 });
 
+router.get('/active', (req, res) => {
+  res.json(Competition.withLivePhases());
+});
+
 router.get('/:id', (req, res) => {
   const c = Competition.findById(req.params.id);
   if (!c) return res.status(404).json({ error: 'Competition not found' });
