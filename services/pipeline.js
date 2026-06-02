@@ -110,16 +110,24 @@ const Pipeline = {
 
   addSlot(stripId, data) {
     return db.transaction(() => {
-      // A pool may only live in one pipeline slot. If it's already assigned
-      // elsewhere, evict it first and clean up the old strip's status.
+      // A pool may only live in one pipeline slot.
       if (data.pool_id) {
         const existing = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(data.pool_id);
-        if (existing && existing.strip_id !== Number(stripId)) {
-          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
-          const oldHasMore = db.prepare(
-            'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
-          ).get(existing.strip_id).n;
-          if (oldHasMore === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(existing.strip_id);
+        if (existing) {
+          if (existing.strip_id !== Number(stripId)) {
+            // Pool was on a different strip — evict it first.
+            db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
+            const oldHasMore = db.prepare(
+              'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
+            ).get(existing.strip_id).n;
+            if (oldHasMore === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(existing.strip_id);
+          } else {
+            // Pool already on this strip — reset to pending (idempotent re-assign).
+            db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existing.id);
+            db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+            db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
+            return this.findById(existing.id);
+          }
         }
       }
 
