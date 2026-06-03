@@ -73,6 +73,7 @@
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">
       <h2 style="margin:0">Users</h2>
       <button class="primary" @click="openCreate()">+ Add user</button>
+      <button @click="printAllBadges()" x-show="users.length > 0" style="font-size:.85rem">Print all badges</button>
     </div>
 
     <div x-show="users.length === 0" style="color:#888;font-size:.9rem">No users yet.</div>
@@ -95,6 +96,7 @@
             <td x-text="u.first_name ? u.first_name+' '+u.last_name : '—'"></td>
             <td x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:#888"></td>
             <td style="text-align:right;white-space:nowrap">
+              <button @click="showQr(u)"    style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">QR</button>
               <button @click="doResetPin(u)" style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">Reset PIN</button>
               <button @click="doDelete(u)" class="danger" style="font-size:.82rem;padding:.3rem .7rem;margin:0">Delete</button>
             </td>
@@ -128,6 +130,22 @@
     </div>
   </div>
 
+  <!-- ── QR code modal ─────────────────────────────────────────────────── -->
+  <div x-show="qrModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
+       display:flex;align-items:center;justify-content:center" @click.self="qrModal.open=false">
+    <div style="background:#fff;border-radius:10px;padding:2rem;text-align:center;min-width:280px">
+      <canvas id="qr-canvas" style="display:block;margin:0 auto"></canvas>
+      <div style="font-size:1.15rem;font-weight:700;margin-top:.75rem" x-text="qrModal.user?.username"></div>
+      <div style="font-size:.85rem;color:#555;margin-bottom:.25rem" x-text="roleLabel(qrModal.user?.role)"></div>
+      <div style="font-size:.65rem;color:#bbb;word-break:break-all;margin-bottom:1.25rem;max-width:240px;margin-left:auto;margin-right:auto"
+           x-text="qrModal.user?.user_token"></div>
+      <div style="display:flex;gap:.5rem;justify-content:center">
+        <button class="primary" @click="printBadge(qrModal.user)">Print badge</button>
+        <button @click="qrModal.open=false">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── PIN reveal modal ────────────────────────────────────────────────── -->
   <div x-show="pinModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
        display:flex;align-items:center;justify-content:center">
@@ -145,6 +163,7 @@
 
 </main>
 <script src="/js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
@@ -156,6 +175,7 @@ function app() {
     users:       [],
     createModal: { open: false, username: '', role: 'director' },
     pinModal:    { open: false, pin: '', label: '' },
+    qrModal:     { open: false, user: null },
 
     async init() {
       const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
@@ -233,6 +253,92 @@ function app() {
       if (!r.ok) { this.showNotice('Delete failed', true); return; }
       await this.loadUsers();
       this.showNotice(`${u.username} deleted`);
+    },
+
+    showQr(u) {
+      this.qrModal = { open: true, user: u };
+      this.$nextTick(() => {
+        const url = `${location.origin}/login.html?u=${encodeURIComponent(u.user_token)}`;
+        QRCode.toCanvas(document.getElementById('qr-canvas'), url, { width: 240, margin: 2 });
+      });
+    },
+
+    loginUrl(u) {
+      return `${location.origin}/login.html?u=${encodeURIComponent(u.user_token)}`;
+    },
+
+    roleLabel(role) {
+      return { admin: 'Admin', director: 'Director', assistant: 'Assistant', referee: 'Referee' }[role] || role || '';
+    },
+
+    badgeHtml(u, dataUrl) {
+      const rl = this.roleLabel(u.role);
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Badge — ${u.username}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#fff}
+  .badge{width:8cm;padding:1cm;border:1px solid #ccc;border-radius:.4cm;text-align:center;
+         page-break-inside:avoid;display:inline-block;margin:.3cm}
+  .badge img{display:block;margin:0 auto;width:5cm;height:5cm}
+  .name{font-size:1.1rem;font-weight:700;margin-top:.4cm}
+  .role{font-size:.85rem;color:#555;margin-top:.15cm}
+  .token{font-size:.5rem;color:#bbb;margin-top:.3cm;word-break:break-all}
+  @media print{@page{margin:.5cm}body{margin:0}}
+</style></head><body>
+<div class="badge">
+  <img src="${dataUrl}">
+  <div class="name">${u.username}</div>
+  <div class="role">${rl}</div>
+  <div class="token">${u.user_token}</div>
+</div>
+<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`;
+    },
+
+    printBadge(u) {
+      if (!u) return;
+      const url = this.loginUrl(u);
+      QRCode.toDataURL(url, { width: 300, margin: 2 }, (err, dataUrl) => {
+        if (err) return;
+        const w = window.open('', '_blank');
+        w.document.write(this.badgeHtml(u, dataUrl));
+        w.document.close();
+      });
+    },
+
+    async printAllBadges() {
+      const pairs = await Promise.all(this.users.map(u =>
+        new Promise(resolve => {
+          QRCode.toDataURL(this.loginUrl(u), { width: 300, margin: 2 }, (err, dataUrl) => {
+            resolve(err ? null : { u, dataUrl });
+          });
+        })
+      ));
+      const badges = pairs.filter(Boolean).map(({ u, dataUrl }) => {
+        const rl = this.roleLabel(u.role);
+        return `<div class="badge">
+          <img src="${dataUrl}">
+          <div class="name">${u.username}</div>
+          <div class="role">${rl}</div>
+          <div class="token">${u.user_token}</div>
+        </div>`;
+      }).join('');
+      const w = window.open('', '_blank');
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>All Badges</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#fff;padding:.5cm}
+  .badge{width:8cm;padding:1cm;border:1px solid #ccc;border-radius:.4cm;text-align:center;
+         page-break-inside:avoid;display:inline-block;margin:.3cm;vertical-align:top}
+  .badge img{display:block;margin:0 auto;width:5cm;height:5cm}
+  .name{font-size:1.1rem;font-weight:700;margin-top:.4cm}
+  .role{font-size:.85rem;color:#555;margin-top:.15cm}
+  .token{font-size:.5rem;color:#bbb;margin-top:.3cm;word-break:break-all}
+  @media print{@page{margin:.5cm}body{margin:0;padding:.2cm}}
+</style></head><body>${badges}
+<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`);
+      w.document.close();
     },
 
     roleBadge(role) {

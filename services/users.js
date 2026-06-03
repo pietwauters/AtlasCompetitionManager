@@ -43,7 +43,9 @@ const User = {
 
   findAll() {
     return db.prepare(`
-      SELECT u.*, p.first_name, p.last_name
+      SELECT u.id, u.person_id, u.role, u.username, u.user_token,
+             u.force_pin_change, u.created_at, u.last_login_at,
+             p.first_name, p.last_name
       FROM users u
       LEFT JOIN people p ON p.id = u.person_id
       ORDER BY u.role, u.username
