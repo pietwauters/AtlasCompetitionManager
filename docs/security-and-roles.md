@@ -227,11 +227,11 @@ QR codes are generated inside Atlas (no external service):
 
 ---
 
-## Open questions
+## Closed decisions
 
-| # | Question |
-|---|---|
-| O1 | Forgotten PIN: self-service reset (email? SMS?) or admin-only reset? Given local-only context, admin reset is probably sufficient. |
-| O2 | QR code badge printing: browser print dialog, or generate a PDF? |
-| O3 | Should Directors be linkable to people records (for audit trail / future features)? Currently optional. |
-| O4 | Multi-device: if a referee logs in on a second device, does it invalidate the first session? |
+| # | Question | Decision |
+|---|---|---|
+| O1 | Forgotten PIN: self-service or admin reset? | Admin-only reset. No email/SMS on a local Pi. Admin resets → PIN shown once → forced change on next login. |
+| O2 | Badge printing: browser print dialog or PDF? | Browser print dialog with print-optimised CSS. No PDF dependency. |
+| O3 | Directors linkable to people records? | Optional. A director who is also in the people DB can be linked, but it is not required. |
+| O4 | Multi-device referee login: invalidate first session? | Concurrent sessions allowed — a referee may scan accidentally on two devices. Admin can view and manually invalidate active sessions. |
