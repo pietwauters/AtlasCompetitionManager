@@ -27,6 +27,7 @@
     .notice-bar { padding:.6rem 1rem; border-radius:5px; margin-bottom:1rem; font-size:.9rem; }
     .notice-ok { background:#d5f5e3; color:#1e5631; }
     .notice-err { background:#fde8e8; color:#922b21; }
+    main { max-width: 1200px; }
     a.comp-link { color:#1a6bab; text-decoration:none; font-weight:600; }
     a.comp-link:hover { text-decoration:underline; }
     .tabs { display:flex; gap:0; border-bottom:2px solid #ddd; margin-bottom:1rem; }
@@ -119,26 +120,46 @@
         <h2 style="margin:0;flex:1">Tournaments</h2>
         <button class="primary" @click="openTournForm()">+ New tournament</button>
       </div>
-      <table>
-        <thead><tr><th>Name</th><th>City</th><th>Dates</th><th>Level</th><th>Competitions</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          <template x-for="t in tournaments" :key="t.id">
-            <tr>
-              <td x-text="t.name"></td>
-              <td x-text="t.city||'—'"></td>
-              <td x-text="formatDates(t)"></td>
-              <td x-text="t.level||'—'"></td>
-              <td x-text="t.competition_count"></td>
-              <td><span class="badge" :class="'badge-'+t.status" x-text="t.status"></span></td>
-              <td>
-                <button @click="editTourn(t)">Edit</button>
-                <button class="danger" @click="deleteTourn(t)">Delete</button>
-              </td>
-            </tr>
-          </template>
-          <tr x-show="tournaments.length===0"><td colspan="7" style="text-align:center;color:#999;padding:1.5rem">No tournaments yet.</td></tr>
-        </tbody>
-      </table>
+      <div x-show="tournaments.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No tournaments yet.</div>
+      <template x-for="t in tournamentGroups" :key="t.id">
+        <div style="border:1px solid #ddd;border-radius:6px;margin-bottom:1rem;overflow:hidden">
+          <!-- Tournament header -->
+          <div style="background:#f0f2f5;padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <strong x-text="t.name" style="font-size:1rem;flex:1"></strong>
+            <span style="font-size:.82rem;color:#555" x-show="t.city" x-text="t.city"></span>
+            <span style="font-size:.82rem;color:#555" x-show="t.date_start" x-text="formatDates(t)"></span>
+            <span style="font-size:.82rem;color:#555" x-show="t.level" x-text="t.level"></span>
+            <span class="badge" :class="'badge-'+t.status" x-text="t.status"></span>
+            <button @click="editTourn(t)" style="font-size:.82rem">Edit</button>
+            <button class="danger" @click="deleteTourn(t)" style="font-size:.82rem">Delete</button>
+          </div>
+          <!-- Competitions inside this tournament -->
+          <div x-show="t.competitions.length===0" style="padding:.75rem 1rem;font-size:.85rem;color:#999">No competitions linked to this tournament.</div>
+          <table x-show="t.competitions.length>0" style="margin:0">
+            <thead><tr>
+              <th>Name</th><th>Weapon</th><th>Gender</th><th>Age</th><th>Date</th><th>Fencers</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody>
+              <template x-for="c in t.competitions" :key="c.id">
+                <tr>
+                  <td><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
+                  <td x-text="c.weapon"></td>
+                  <td x-text="c.gender"></td>
+                  <td x-text="c.age_cats||'—'"></td>
+                  <td x-text="c.date||'—'"></td>
+                  <td x-text="c.competitor_count"></td>
+                  <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+                  <td>
+                    <button @click="editComp(c);tab='competitions'">Edit</button>
+                    <button @click="archiveComp(c)" title="Hide without deleting">Archive</button>
+                    <button class="danger" @click="deleteComp(c)">Delete</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
     </div>
     <div class="card" x-show="tournFormOpen">
       <h2 x-text="tournForm.id?'Edit tournament':'New tournament'"></h2>
@@ -162,6 +183,13 @@
 function app() {
   return {
     tab:'competitions', competitions:[], tournaments:[], ageCategories:[],
+
+    get tournamentGroups() {
+      return this.tournaments.map(t => ({
+        ...t,
+        competitions: this.competitions.filter(c => c.tournament_id === t.id),
+      }));
+    },
     notice:{text:'',error:false},
     compFormOpen:false, compForm:{id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]},
     tournFormOpen:false, tournForm:{id:null,name:'',city:'',country:'',date_start:'',date_end:'',organizer:'',level:''},
@@ -235,6 +263,7 @@ function app() {
   };
 }
 </script>
+<script src="/js/nav.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>

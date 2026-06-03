@@ -100,14 +100,17 @@
 
   <!-- ── Pipeline builder ──────────────────────────────────────────────────── -->
   <div class="card">
-    <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem">
+    <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem;flex-wrap:wrap">
       <h2 style="margin:0">Piste pipelines</h2>
       <span style="font-size:.82rem;color:#888">Drag-to-reorder not yet available — use ▲▼ buttons</span>
+      <label style="margin-left:auto;font-size:.85rem;display:flex;align-items:center;gap:.35rem;cursor:pointer">
+        <input type="checkbox" x-model="hideOffline"> Hide offline pistes
+      </label>
     </div>
 
     <div class="pipeline-grid">
       <template x-for="strip in strips" :key="strip.id">
-        <div class="strip-card">
+        <div class="strip-card" x-show="!hideOffline || !isOffline(strip)">
           <div class="strip-header">
             <strong x-text="strip.name||('Strip '+strip.strip_number)"></strong>
             <template x-if="liveState(strip.name)">
@@ -123,7 +126,7 @@
 
           <div class="slot-list">
             <template x-for="(slot, idx) in strip.slots" :key="slot.id">
-              <div :class="'slot'+(slot.status==='done'?' slot-done':'')">
+              <div x-show="showSlot(slot, idx, strip.slots)" :class="'slot'+(slot.status==='done'?' slot-done':'')"
 
                 <!-- Done slots: collapsed pill, click to expand -->
                 <template x-if="slot.status==='done' && !expandedSlots.has(slot.id)">
@@ -154,8 +157,8 @@
                     <div class="slot-detail">
                       <div class="row">
                         <label>Start
-                          <input type="time" :value="slot.scheduled_start||''"
-                            @change="updateSlot(slot.id,{scheduled_start:$event.target.value||null},strip)">
+                          <input type="time" step="300" :value="slot.scheduled_start||''"
+                            @change="updateSlot(slot.id,{scheduled_start:round5($event.target.value)||null},strip)">
                         </label>
                         <label>Min/bout
                           <input type="number" min="1" max="60" :value="slot.minutes_per_bout||''"
@@ -246,7 +249,9 @@
               </template>
 
               <div class="row" style="margin-top:.4rem">
-                <input type="time" x-model="addForm.scheduled_start" placeholder="Start time">
+                <input type="time" step="300" x-model="addForm.scheduled_start"
+                  @change="addForm.scheduled_start = round5($event.target.value)"
+                  placeholder="Start time">
                 <input type="number" x-model.number="addForm.minutes_per_bout" placeholder="Min/bout" min="1" max="60">
               </div>
               <div style="display:flex;gap:.4rem;margin-top:.4rem">
@@ -260,6 +265,49 @@
           </div>
         </div>
       </template>
+    </div>
+  </div>
+
+  <!-- ── Piste schedule (Gantt) ───────────────────────────────────────────── -->
+  <div class="card" x-show="ganttData.hasData">
+    <h2 style="margin-top:0">Piste schedule</h2>
+    <div style="overflow-x:auto">
+      <div :style="'min-width:600px'">
+        <!-- Time axis -->
+        <div style="display:flex;margin-left:110px;position:relative;height:22px;border-bottom:2px solid #ddd;margin-bottom:2px">
+          <template x-for="tick in ganttData.ticks" :key="tick.left">
+            <div style="position:absolute;transform:translateX(-50%);font-size:.72rem;color:#888;white-space:nowrap"
+                 :style="'left:'+tick.left+'%'" x-text="tick.label"></div>
+          </template>
+        </div>
+        <!-- Strip rows -->
+        <template x-for="row in ganttData.rows" :key="row.name">
+          <div style="display:flex;align-items:center;height:34px;border-bottom:1px solid #f0f0f0">
+            <div style="width:110px;flex-shrink:0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                 x-text="row.name"></div>
+            <div style="flex:1;position:relative;height:26px;background:#fafafa;border-radius:3px">
+              <!-- "Now" line -->
+              <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
+                   :style="{ left: ganttData.nowLeft + '%' }"></div>
+              <!-- Slot bars -->
+              <template x-for="bar in row.bars" :key="bar.id">
+                <div style="position:absolute;top:3px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box"
+                     :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
+                     :title="bar.label+(bar.start?' ('+bar.start+' → '+(bar.end||'?')+')')">
+                  <span x-text="bar.label"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <!-- Legend -->
+        <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
+          <span style="margin-left:auto;color:#aaa">Only slots with a scheduled start time are shown.</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -301,6 +349,8 @@ function app() {
     status: { connected: false, brokerUrl: '', pistes: [] },
     strips: [],
     expandedSlots: new Set(),
+    _tick: 0,
+    hideOffline: false,
     referees: [],
     availablePools: [],
     availableDePhases: [],
@@ -318,6 +368,7 @@ function app() {
         this.loadAvailablePhases(),
       ]);
       setInterval(() => this.loadStatus(), 5000);
+      setInterval(() => this._tick++, 60000);
     },
 
     async loadStatus() {
@@ -354,12 +405,82 @@ function app() {
           }
         }
       }
-      this.availablePools    = pools;
+      const plannedPoolIds = new Set(
+        this.strips.flatMap(s => s.slots).filter(s => s.pool_id).map(s => s.pool_id)
+      );
+      this.availablePools    = pools.filter(p => !plannedPoolIds.has(p.id));
       this.availableDePhases = dePhases;
     },
 
     liveState(stripName) {
       return this.status.pistes?.find(p => p.pisteId === stripName) || null;
+    },
+
+    round5(time) {
+      if (!time) return time;
+      const [h, m] = time.split(':').map(Number);
+      const r = Math.round(m / 5) * 5;
+      const hh = r === 60 ? h + 1 : h;
+      const mm = r === 60 ? 0 : r;
+      return `${String(hh % 24).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    },
+
+    isOffline(strip) {
+      const s = this.liveState(strip.name);
+      return s !== null && !s.apparatusOnline;
+    },
+
+    showSlot(slot, idx, slots) {
+      if (slot.status !== 'done') return true;
+      const lastDoneIdx = slots.reduce((last, s, i) => s.status === 'done' ? i : last, -1);
+      return idx === lastDoneIdx;
+    },
+
+    get ganttData() {
+      void this._tick; // reactive dependency for "now" line updates
+      const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const fmtMin = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+      const colorOf = s => s.status === 'done' ? '#999' : s.status === 'active' ? '#1e8449' : '#1a6bab';
+
+      const scheduled = this.strips.flatMap(strip =>
+        strip.slots.filter(s => s.scheduled_start).map(s => ({ strip, slot: s }))
+      );
+      if (!scheduled.length) return { hasData: false, rows: [], ticks: [], nowLeft: null };
+
+      const starts = scheduled.map(({ slot: s }) => toMin(s.scheduled_start));
+      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(s.predicted_end));
+      const axisStart = Math.floor(Math.min(...starts) / 30) * 30;
+      const axisEnd   = Math.ceil((ends.length ? Math.max(...ends) : Math.max(...starts) + 60) / 30) * 30;
+      const total = axisEnd - axisStart;
+
+      const ticks = [];
+      for (let t = axisStart; t <= axisEnd; t += 30)
+        ticks.push({ label: fmtMin(t), left: (t - axisStart) / total * 100 });
+
+      const rows = this.strips
+        .filter(strip => strip.slots.some(s => s.scheduled_start))
+        .map(strip => ({
+          name: strip.name || ('Piste ' + strip.strip_number),
+          bars: strip.slots.filter(s => s.scheduled_start).map(s => {
+            const s0 = toMin(s.scheduled_start);
+            const s1 = s.predicted_end ? toMin(s.predicted_end) : s0 + 30;
+            return {
+              id:    s.id,
+              left:  (s0 - axisStart) / total * 100,
+              width: Math.max((s1 - s0) / total * 100, 0.5),
+              color: colorOf(s),
+              label: this.slotLabel(s),
+              start: s.scheduled_start,
+              end:   s.predicted_end,
+            };
+          }),
+        }));
+
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const nowLeft = Math.max(0, Math.min(100, (nowMin - axisStart) / total * 100));
+
+      return { hasData: true, rows, ticks, nowLeft };
     },
 
     slotLabel(slot) {
@@ -378,9 +499,18 @@ function app() {
     openAdd(strip) {
       this.addOpen  = strip.id;
       this.deRounds = [];
+      const latest = strip.slots
+        .filter(s => s.predicted_end)
+        .reduce((best, s) => (!best || s.predicted_end > best) ? s.predicted_end : best, null);
+      let suggested = '';
+      if (latest) {
+        const [h, m] = latest.split(':').map(Number);
+        const t = h * 60 + m + 5;
+        suggested = this.round5(`${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
+      }
       this.addForm  = { type: 'pool', pool_id: '', phase_id: '',
                         de_round: '', bout_start: '', bout_end: '',
-                        scheduled_start: '', minutes_per_bout: '' };
+                        scheduled_start: suggested, minutes_per_bout: '' };
     },
 
     async loadDeRounds(phaseId) {
@@ -464,6 +594,7 @@ function app() {
   };
 }
 </script>
+<script src="/js/nav.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>
