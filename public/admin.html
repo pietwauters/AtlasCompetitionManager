@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Admin</title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600}
+    .badge-connected{background:#d4edda;color:#155724}
+    .badge-disconnected{background:#d6d8db;color:#383d41}
+    .badge-pool{background:#dbeafe;color:#1e40af}
+    .badge-de{background:#ede9fe;color:#5b21b6}
+    .table{border-collapse:collapse;font-size:.88rem}
+    .table th,.table td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid #e5e7eb}
+    .table th{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+    .form-label{display:block;font-size:.83rem;font-weight:600;margin-bottom:.3rem;color:#374151}
+    .form-input{width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:6px;font-size:.9rem}
+    .notice-bar{padding:.6rem 1rem;border-radius:6px;margin-bottom:.75rem;font-size:.9rem}
+    .notice-ok{background:#d4edda;color:#155724}
+    .notice-err{background:#fde8e8;color:#922b21}
+  </style>
 </head>
 <body x-data="app()" x-init="init()">
 <header x-data="navApp()" x-init="initNav()">
@@ -52,28 +67,113 @@
       the referee does not need to press NEXT between bouts.
     </div>
   </div>
+
+  <!-- ── Users ──────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">
+      <h2 style="margin:0">Users</h2>
+      <button class="primary" @click="openCreate()">+ Add user</button>
+    </div>
+
+    <div x-show="users.length === 0" style="color:#888;font-size:.9rem">No users yet.</div>
+
+    <table class="table" x-show="users.length > 0" style="width:100%">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Person</th>
+          <th>Last login</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="u in users" :key="u.id">
+          <tr>
+            <td x-text="u.username"></td>
+            <td><span class="badge" :class="roleBadge(u.role)" x-text="u.role"></span></td>
+            <td x-text="u.first_name ? u.first_name+' '+u.last_name : '—'"></td>
+            <td x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:#888"></td>
+            <td style="text-align:right;white-space:nowrap">
+              <button @click="doResetPin(u)" style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">Reset PIN</button>
+              <button @click="doDelete(u)" class="danger" style="font-size:.82rem;padding:.3rem .7rem;margin:0">Delete</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Create user modal ───────────────────────────────────────────────── -->
+  <div x-show="createModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
+       display:flex;align-items:center;justify-content:center" @click.self="createModal.open=false">
+    <div style="background:#fff;border-radius:10px;padding:2rem;min-width:320px;max-width:420px;width:90%">
+      <h3 style="margin:0 0 1.25rem">New user</h3>
+
+      <label class="form-label">Username</label>
+      <input type="text" x-model="createModal.username" class="form-input" placeholder="e.g. referee_marie">
+
+      <label class="form-label" style="margin-top:.75rem">Role</label>
+      <select x-model="createModal.role" class="form-input">
+        <option value="admin">Admin</option>
+        <option value="director">Director</option>
+        <option value="assistant">Assistant</option>
+        <option value="referee">Referee</option>
+      </select>
+
+      <div style="display:flex;gap:.5rem;margin-top:1.5rem;justify-content:flex-end">
+        <button @click="createModal.open=false">Cancel</button>
+        <button class="primary" @click="doCreate()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PIN reveal modal ────────────────────────────────────────────────── -->
+  <div x-show="pinModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
+       display:flex;align-items:center;justify-content:center">
+    <div style="background:#1a1a2e;color:#eee;border-radius:10px;padding:2rem;min-width:320px;max-width:380px;width:90%;text-align:center">
+      <div style="font-size:.85rem;color:#aaa;margin-bottom:.5rem" x-text="pinModal.label"></div>
+      <div style="font-size:3rem;font-weight:700;letter-spacing:.3em;color:#e94560;margin:.5rem 0"
+           x-text="pinModal.pin"></div>
+      <div style="font-size:.82rem;color:#888;margin-bottom:1.5rem">
+        Write this down — it will not be shown again.<br>
+        The user must change it on first login.
+      </div>
+      <button class="primary" @click="pinModal.open=false" style="background:#e94560;border:none">Got it</button>
+    </div>
+  </div>
+
 </main>
 <script src="/js/nav.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
   return {
-    notice: { text: '', error: false },
-    status: { connected: false, brokerUrl: '', pistes: [] },
-    brokerUrl: '',
+    notice:      { text: '', error: false },
+    status:      { connected: false, brokerUrl: '', pistes: [] },
+    brokerUrl:   '',
     autoNextOnEnd: false,
+    users:       [],
+    createModal: { open: false, username: '', role: 'director' },
+    pinModal:    { open: false, pin: '', label: '' },
 
     async init() {
       const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
-      this.brokerUrl    = s.broker_url || 'mqtt://openpiste.local:1883';
+      this.brokerUrl     = s.broker_url || 'mqtt://openpiste.local:1883';
       this.autoNextOnEnd = s.auto_next_on_end || false;
-      await this.loadStatus();
+      await Promise.all([ this.loadStatus(), this.loadUsers() ]);
       setInterval(() => this.loadStatus(), 5000);
     },
 
     async loadStatus() {
       const s = await fetch('/api/opp2/status').then(r => r.json()).catch(() => ({ connected: false, pistes: [] }));
       this.status = s;
+    },
+
+    async loadUsers() {
+      const r = await fetch('/api/users').catch(() => null);
+      if (!r || !r.ok) return;
+      this.users = await r.json();
     },
 
     async connect() {
@@ -99,6 +199,49 @@ function app() {
         body: JSON.stringify({ broker_url: this.brokerUrl, auto_next_on_end: this.autoNextOnEnd }),
       });
       this.showNotice('Settings saved');
+    },
+
+    openCreate() {
+      this.createModal = { open: true, username: '', role: 'director' };
+    },
+
+    async doCreate() {
+      const { username, role } = this.createModal;
+      if (!username.trim()) { this.showNotice('Username is required', true); return; }
+      const r = await fetch('/api/users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), role }),
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error || 'Create failed', true); return; }
+      this.createModal.open = false;
+      await this.loadUsers();
+      this.pinModal = { open: true, pin: d.plainPin, label: `PIN for ${d.user.username}` };
+    },
+
+    async doResetPin(u) {
+      if (!confirm(`Reset PIN for ${u.username}?`)) return;
+      const r = await fetch(`/api/users/${u.id}/reset-pin`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error || 'Reset failed', true); return; }
+      this.pinModal = { open: true, pin: d.plainPin, label: `New PIN for ${u.username}` };
+    },
+
+    async doDelete(u) {
+      if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return;
+      const r = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+      if (!r.ok) { this.showNotice('Delete failed', true); return; }
+      await this.loadUsers();
+      this.showNotice(`${u.username} deleted`);
+    },
+
+    roleBadge(role) {
+      return { admin: 'badge-connected', director: 'badge-pool', assistant: 'badge-de', referee: '' }[role] || '';
+    },
+
+    fmtDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
 
     showNotice(text, error = false) {

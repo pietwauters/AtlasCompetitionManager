@@ -9,7 +9,7 @@ router.post('/login', (req, res) => {
   const { token, pin } = req.body;
   if (!token || !pin) return res.status(400).json({ error: 'token and pin required' });
 
-  const user = User.findByToken(token);
+  const user = User.findByToken(token) || User.findByUsername(token);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   if (!User.verifyPin(user, pin)) return res.status(401).json({ error: 'Invalid credentials' });
 

@@ -5,7 +5,7 @@ function navApp() {
 
     async initNav() {
       this._injectFullscreen();
-      await this.loadActiveComps();
+      await Promise.all([ this.loadActiveComps(), this._injectUserWidget() ]);
       setInterval(() => this.loadActiveComps(), 20000);
     },
 
@@ -39,6 +39,42 @@ function navApp() {
       if (sessionStorage.getItem('fs') === '1') {
         document.documentElement.requestFullscreen().catch(() => sessionStorage.removeItem('fs'));
       }
+    },
+
+    async _injectUserWidget() {
+      const navRight = document.querySelector('header > div[style*="margin-left"]');
+      if (!navRight) return;
+
+      const data = await fetch('/api/auth/me').then(r => r.json()).catch(() => ({}));
+
+      const sep = document.createElement('span');
+      sep.style.cssText = 'width:1px;height:1rem;background:rgba(255,255,255,.2);flex-shrink:0';
+      navRight.appendChild(sep);
+
+      if (!data.authenticated) {
+        const a = document.createElement('a');
+        a.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+        a.textContent = 'Sign in';
+        a.style.cssText = 'opacity:.65;font-size:.85rem';
+        navRight.appendChild(a);
+        return;
+      }
+
+      const roleLabel = { admin: 'Admin', director: 'Director', assistant: 'Assistant', referee: 'Referee' };
+      const pill = document.createElement('span');
+      pill.style.cssText = 'font-size:.78rem;opacity:.65;white-space:nowrap';
+      pill.textContent = `${data.username} · ${roleLabel[data.role] || data.role}`;
+      navRight.appendChild(pill);
+
+      const btn = document.createElement('button');
+      btn.textContent = 'Sign out';
+      btn.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);' +
+        'color:inherit;font-size:.78rem;cursor:pointer;padding:.2rem .5rem;border-radius:4px;margin:0';
+      btn.addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        location.href = '/login.html';
+      });
+      navRight.appendChild(btn);
     },
 
     async loadActiveComps() {

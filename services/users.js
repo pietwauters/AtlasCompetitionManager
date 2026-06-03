@@ -32,6 +32,15 @@ const User = {
     `).get(token);
   },
 
+  findByUsername(username) {
+    return db.prepare(`
+      SELECT u.*, p.first_name, p.last_name
+      FROM users u
+      LEFT JOIN people p ON p.id = u.person_id
+      WHERE u.username = ?
+    `).get(username);
+  },
+
   findAll() {
     return db.prepare(`
       SELECT u.*, p.first_name, p.last_name

@@ -48,22 +48,30 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Auth routes (public — no role required)
 app.use('/api/auth', require('./routes/auth'));
 
+// Middleware: pass GETs through; require a minimum role for mutations.
+function writeOnly(role) {
+  return (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    return auth.require(role)(req, res, next);
+  };
+}
+
 // API routes
-app.use('/api/people',       require('./routes/people'));
-app.use('/api/clubs',        require('./routes/clubs'));
-app.use('/api/nocs',         require('./routes/nocs'));
-app.use('/api/age-categories', require('./routes/ageCategories'));
-app.use('/api/tournaments',  require('./routes/tournaments'));
-app.use('/api/competitions', require('./routes/competitions'));
-app.use('/api/competitions/:compId/competitors', require('./routes/competitors'));
-app.use('/api/competitions/:compId/phases',    require('./routes/phases'));
-app.use('/api/phases', require('./routes/phasesById'));
-app.use('/api/pools',  require('./routes/pools'));
-app.use('/api/bouts',  require('./routes/bouts'));
+app.use('/api/people',       writeOnly('assistant'), require('./routes/people'));
+app.use('/api/clubs',        writeOnly('assistant'), require('./routes/clubs'));
+app.use('/api/nocs',         writeOnly('assistant'), require('./routes/nocs'));
+app.use('/api/age-categories', writeOnly('director'), require('./routes/ageCategories'));
+app.use('/api/tournaments',  writeOnly('director'),  require('./routes/tournaments'));
+app.use('/api/competitions', writeOnly('director'),  require('./routes/competitions'));
+app.use('/api/competitions/:compId/competitors', writeOnly('director'), require('./routes/competitors'));
+app.use('/api/competitions/:compId/phases',    writeOnly('director'), require('./routes/phases'));
+app.use('/api/phases', writeOnly('director'), require('./routes/phasesById'));
+app.use('/api/pools',  writeOnly('director'), require('./routes/pools'));
+app.use('/api/bouts',  writeOnly('director'), require('./routes/bouts'));
 app.use('/api/rules',  require('./routes/rules'));
-app.use('/api/strips', require('./routes/strips'));
-app.use('/api/opp2',  require('./routes/opp2'));
-app.use('/api/users', auth.require('admin'), require('./routes/users'));
+app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
+app.use('/api/opp2',   writeOnly('admin'),    require('./routes/opp2'));
+app.use('/api/users',  auth.require('admin'), require('./routes/users'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
