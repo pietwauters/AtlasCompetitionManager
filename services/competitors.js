@@ -139,7 +139,9 @@ const Competitor = {
     return db.prepare('DELETE FROM competitors WHERE id = ?').run(competitorId);
   },
 
-  // Assign seeds 1..N sorted by fencer ranking, then name (unranked go last).
+  // Assign seeds 1..N sorted by fencer ranking ASC (1 = best), then name.
+  // ranking = position on the national/club list; lower is better.
+  // Fencers without a ranking go last. points is not used for seeding (yet).
   autoSeed(competitionId) {
     const rows = db.prepare(`
       SELECT comp.id, f.ranking, p.last_name, p.first_name

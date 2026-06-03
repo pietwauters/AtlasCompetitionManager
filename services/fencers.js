@@ -20,7 +20,7 @@ function hydrate(row) {
 const BASE = `
   SELECT
     f.id AS fencer_id,
-    f.licence, f.weapons, f.handedness, f.ranking,
+    f.licence, f.weapons, f.handedness, f.ranking, f.points,
     p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
     p.nationality, p.club_id, c.name AS club_name
   FROM fencers f
@@ -59,16 +59,17 @@ const Fencer = {
   },
 
   // Add a fencer profile to an existing person.
-  create(personId, { licence, weapons, handedness, ranking } = {}) {
+  create(personId, { licence, weapons, handedness, ranking, points } = {}) {
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO fencers (person_id, licence, weapons, handedness, ranking)
-      VALUES (@person_id, @licence, @weapons, @handedness, @ranking)
+      INSERT INTO fencers (person_id, licence, weapons, handedness, ranking, points)
+      VALUES (@person_id, @licence, @weapons, @handedness, @ranking, @points)
     `).run({
       person_id:  Number(personId),
       licence:    licence    || null,
       weapons:    serializeWeapons(weapons),
       handedness: handedness || null,
       ranking:    ranking != null ? Number(ranking) : null,
+      points:     points  != null ? Number(points)  : null,
     });
     return this.findById(lastInsertRowid);
   },
@@ -81,7 +82,7 @@ const Fencer = {
     db.prepare(`
       UPDATE fencers
       SET licence = @licence, weapons = @weapons,
-          handedness = @handedness, ranking = @ranking
+          handedness = @handedness, ranking = @ranking, points = @points
       WHERE id = @id
     `).run({
       id:         Number(fencerId),
@@ -89,6 +90,7 @@ const Fencer = {
       weapons:    serializeWeapons(m.weapons),
       handedness: m.handedness || null,
       ranking:    m.ranking != null ? Number(m.ranking) : null,
+      points:     m.points  != null ? Number(m.points)  : null,
     });
     return this.findById(fencerId);
   },

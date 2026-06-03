@@ -187,6 +187,9 @@
           <label>Ranking
             <input type="number" x-model="form.fencer.ranking" placeholder="42">
           </label>
+          <label>Points
+            <input type="number" x-model="form.fencer.points" placeholder="0">
+          </label>
         </div>
       </template>
 
@@ -217,11 +220,11 @@
       <div class="import-area" style="margin-top:1rem">
         <p class="import-hint">
           Required columns: <code>first_name, last_name</code> —
-          Optional: <code>date_of_birth, gender, nationality, club, licence, weapons, handedness, ranking</code><br>
+          Optional: <code>date_of_birth, gender, nationality, club, licence, weapons, handedness, ranking, points</code><br>
           Existing records are updated by licence (if set) or by name + date of birth.
         </p>
         <textarea x-model="csvText" rows="8"
-          placeholder="first_name,last_name,date_of_birth,gender,nationality,club,licence,weapons,handedness,ranking
+          placeholder="first_name,last_name,date_of_birth,gender,nationality,club,licence,weapons,handedness,ranking,points
 Alice,Dupont,2007-04-12,F,BEL,Club Namur,BEL-001,foil,R,15"></textarea>
         <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center">
           <button class="primary" @click="importCsv()">Import</button>
@@ -249,7 +252,7 @@ function app() {
       id: null, first_name: '', last_name: '', date_of_birth: '',
       gender: '', nationality: '', club_id: '',
       isFencer: false, isReferee: false,
-      fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+      fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
       referee: { licence: '', level: '' },
     },
 
@@ -278,7 +281,7 @@ function app() {
         id: null, first_name: '', last_name: '', date_of_birth: '',
         gender: '', nationality: '', club_id: '',
         isFencer: false, isReferee: false,
-        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
         referee: { licence: '', level: '' },
       };
       this.formOpen = true;
@@ -295,7 +298,7 @@ function app() {
         club_id:       p.club_id       || '',
         isFencer:      !!p.is_fencer,
         isReferee:     !!p.is_referee,
-        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '' },
+        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
         referee: { licence: '', level: '' },
       };
       // Load full profiles from the detail endpoint
@@ -306,6 +309,7 @@ function app() {
             handedness:  full.fencer.handedness || '',
             weapons_raw: (full.fencer.weapons || []).join(', '),
             ranking:     full.fencer.ranking    || '',
+            points:      full.fencer.points     || '',
           };
         }
         if (full.referee) {
@@ -379,6 +383,7 @@ function app() {
                       ? this.form.fencer.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
                       : [],
         ranking:    this.form.fencer.ranking ? Number(this.form.fencer.ranking) : null,
+        points:     this.form.fencer.points  ? Number(this.form.fencer.points)  : null,
       };
     },
 

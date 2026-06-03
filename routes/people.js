@@ -29,6 +29,7 @@ router.get('/export', (req, res) => {
     { key: 'weapons_csv',   header: 'weapons' },
     { key: 'handedness',    header: 'handedness' },
     { key: 'ranking',       header: 'ranking' },
+    { key: 'points',        header: 'points' },
   ];
 
   // Serialize weapons array → comma-separated string for CSV compatibility

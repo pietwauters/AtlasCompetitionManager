@@ -38,6 +38,7 @@ function importRow(row) {
     weapons:    parseWeaponsFromCsv(row.weapons),
     handedness: row.handedness?.trim() || null,
     ranking:    row.ranking ? parseInt(row.ranking, 10) || null : null,
+    points:     row.points  ? parseInt(row.points,  10) || null : null,
   };
 
   // --- Try to find existing record ---
