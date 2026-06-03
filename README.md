@@ -48,7 +48,11 @@ sudo bash install.sh
 - Create the `data/` directory and initialise the database
 - Install PM2 and configure auto-start at boot via systemd
 
-After install, Atlas is available at `http://<pi-ip>:3000`.
+After install, Atlas is available at `http://<pi-ip>:3001`.
+
+> **Port note:** Atlas defaults to port `3001` to avoid conflicting with
+> `mqtt-web` and other OpenPiste services that typically run on port `3000`.
+> Change `PORT=` in `.env` if needed.
 
 ---
 

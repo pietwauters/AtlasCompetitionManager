@@ -73,9 +73,10 @@ echo "==> Checking .env"
 if [ ! -f "$APP_DIR/.env" ]; then
   cat > "$APP_DIR/.env" << 'EOF'
 # Atlas Competition Manager — environment variables
-# Copy this file to .env and fill in the values.
 
-PORT=3000
+# Port to listen on. Default 3001 to avoid conflict with mqtt-web (3000).
+# Change if another service already uses this port.
+PORT=3001
 
 # Required in production. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 SESSION_SECRET=change-me-before-going-to-production
@@ -84,6 +85,19 @@ EOF
   echo "    Created .env — set SESSION_SECRET before going to production"
 else
   echo "    .env already exists, skipping"
+fi
+
+# ---------------------------------------------------------------------------
+# 5b. Check the chosen port is not already in use
+# ---------------------------------------------------------------------------
+APP_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2 | tr -d ' ' || echo 3001)
+if ss -tlnp 2>/dev/null | grep -q ":${APP_PORT} " || \
+   lsof -iTCP:"${APP_PORT}" -sTCP:LISTEN -t 2>/dev/null | grep -q .; then
+  echo ""
+  echo "  !! WARNING: port ${APP_PORT} is already in use on this machine."
+  echo "     Edit $APP_DIR/.env and change PORT= before starting Atlas,"
+  echo "     then run: pm2 restart atlas"
+  echo ""
 fi
 
 # ---------------------------------------------------------------------------
@@ -110,10 +124,11 @@ sudo -u "$APP_USER" pm2 start "$APP_DIR/server.js" \
 sudo -u "$APP_USER" pm2 save
 sudo pm2 startup systemd -u "$APP_USER" --hp "$HOME_DIR"
 
+APP_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2 | tr -d ' ' || echo 3001)
 echo ""
 echo "========================================================"
 echo " $APP_NAME installed successfully!"
-echo " Access it at: http://$(hostname -I | awk '{print $1}'):3000"
+echo " Access it at: http://$(hostname -I | awk '{print $1}'):${APP_PORT}"
 echo " Status : sudo -u $APP_USER pm2 status"
 echo " Logs   : sudo -u $APP_USER pm2 logs atlas"
 echo "========================================================"
