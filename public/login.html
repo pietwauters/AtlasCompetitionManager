@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; color: #e94560; }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+    label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.3rem; margin-top: 1.2rem; }
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #0f3460;
+      border: 1px solid #1a4a7a;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 1rem;
+      outline: none;
+    }
+    input:focus { border-color: #e94560; }
+    input[type=password] { letter-spacing: 0.3em; font-size: 1.4rem; }
+    .hint { font-size: 0.78rem; color: #666; margin-top: 0.3rem; }
+    button {
+      width: 100%;
+      margin-top: 2rem;
+      padding: 0.85rem;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #c73652; }
+    button:disabled { background: #555; cursor: default; }
+    .error {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: rgba(233,69,96,0.15);
+      border: 1px solid #e94560;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #e94560;
+      display: none;
+    }
+    .qr-hint {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.8rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Atlas</h1>
+    <p class="subtitle">Competition Manager — Sign in</p>
+
+    <label for="token">Username / badge token</label>
+    <input id="token" type="text" autocomplete="username" placeholder="Scan QR or type username">
+    <p class="hint">Scan your accreditation QR code or type your username.</p>
+
+    <label for="pin">PIN</label>
+    <input id="pin" type="password" inputmode="numeric" pattern="\d*" maxlength="12"
+           autocomplete="current-password" placeholder="••••••">
+
+    <button id="btn" onclick="doLogin()">Sign in</button>
+    <div class="error" id="err"></div>
+
+    <p class="qr-hint">Point your camera at the QR on your badge to pre-fill the token.</p>
+  </div>
+
+  <script>
+    // Pre-fill token from QR code URL param: /login.html?u=TOKEN
+    const params = new URLSearchParams(location.search);
+    const tokenParam = params.get('u') || params.get('user');
+    if (tokenParam) {
+      document.getElementById('token').value = tokenParam;
+      document.getElementById('pin').focus();
+    }
+
+    document.getElementById('pin').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    async function doLogin() {
+      const token = document.getElementById('token').value.trim();
+      const pin   = document.getElementById('pin').value.trim();
+      const err   = document.getElementById('err');
+      const btn   = document.getElementById('btn');
+
+      err.style.display = 'none';
+      if (!token || !pin) { showError('Please enter your token and PIN.'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+
+      try {
+        const r = await fetch('/api/auth/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ token, pin }),
+        });
+        const data = await r.json();
+
+        if (!r.ok) { showError(data.error || 'Login failed.'); return; }
+
+        if (data.forcePin) {
+          location.href = '/change-pin.html';
+          return;
+        }
+
+        const next = params.get('next') || '/';
+        location.href = next;
+      } catch {
+        showError('Could not reach the server. Try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('err');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('pin').value = '';
+      document.getElementById('pin').focus();
+    }
+  </script>
+</body>
+</html>

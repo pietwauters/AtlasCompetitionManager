@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Change PIN</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: #e94560; }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+    label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.3rem; margin-top: 1.2rem; }
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #0f3460;
+      border: 1px solid #1a4a7a;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 1.4rem;
+      letter-spacing: 0.3em;
+      outline: none;
+    }
+    input:focus { border-color: #e94560; }
+    button {
+      width: 100%;
+      margin-top: 2rem;
+      padding: 0.85rem;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #c73652; }
+    .error, .success {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .error   { background: rgba(233,69,96,0.15); border: 1px solid #e94560; color: #e94560; }
+    .success { background: rgba(40,167,69,0.15);  border: 1px solid #28a745; color: #28a745; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Change your PIN</h1>
+    <p class="subtitle">You must set a new PIN before continuing. Minimum 6 digits.</p>
+
+    <label for="current">Current PIN</label>
+    <input id="current" type="password" inputmode="numeric" pattern="\d*" maxlength="12" placeholder="••••••">
+
+    <label for="newPin">New PIN (min. 6 digits)</label>
+    <input id="newPin" type="password" inputmode="numeric" pattern="\d*" maxlength="12" placeholder="••••••">
+
+    <label for="confirm">Confirm new PIN</label>
+    <input id="confirm" type="password" inputmode="numeric" pattern="\d*" maxlength="12" placeholder="••••••">
+
+    <button onclick="changePin()">Set new PIN</button>
+    <div class="error"   id="err"></div>
+    <div class="success" id="ok">PIN changed. Redirecting…</div>
+  </div>
+
+  <script>
+    async function changePin() {
+      const current = document.getElementById('current').value.trim();
+      const newPin  = document.getElementById('newPin').value.trim();
+      const confirm = document.getElementById('confirm').value.trim();
+
+      if (newPin !== confirm) { showError('New PINs do not match.'); return; }
+      if (!/^\d{6,}$/.test(newPin)) { showError('PIN must be at least 6 digits.'); return; }
+
+      const r = await fetch('/api/auth/change-pin', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ currentPin: current, newPin }),
+      });
+      const data = await r.json();
+      if (!r.ok) { showError(data.error || 'Failed.'); return; }
+
+      document.getElementById('ok').style.display = 'block';
+      document.getElementById('err').style.display = 'none';
+      setTimeout(() => location.href = '/', 1500);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('err');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

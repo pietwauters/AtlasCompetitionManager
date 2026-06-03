@@ -124,11 +124,45 @@ sudo -u "$APP_USER" pm2 start "$APP_DIR/server.js" \
 sudo -u "$APP_USER" pm2 save
 sudo pm2 startup systemd -u "$APP_USER" --hp "$HOME_DIR"
 
+# ---------------------------------------------------------------------------
+# 8. Bootstrap admin account (only on first install — skipped if users exist)
+# ---------------------------------------------------------------------------
+echo "==> Bootstrapping admin account"
+ADMIN_RESULT=$(sudo -u "$APP_USER" node -e "
+  require('./db/migrator').migrate();
+  const db = require('./db');
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  if (existing > 0) { console.log('SKIP'); process.exit(0); }
+  const User = require('./services/users');
+  const { user, plainPin } = User.create({ username: 'admin', role: 'admin' });
+  console.log('PIN:' + plainPin);
+" 2>&1)
+
+if echo "$ADMIN_RESULT" | grep -q "^SKIP"; then
+  echo "    Admin account already exists, skipping."
+elif echo "$ADMIN_RESULT" | grep -q "^PIN:"; then
+  ADMIN_PIN=$(echo "$ADMIN_RESULT" | grep "^PIN:" | cut -d: -f2)
+  echo ""
+  echo "  ┌─────────────────────────────────────────────┐"
+  echo "  │          ADMIN CREDENTIALS — SAVE NOW       │"
+  echo "  │                                             │"
+  echo "  │  Username : admin                           │"
+  echo "  │  PIN      : $ADMIN_PIN                          │"
+  echo "  │                                             │"
+  echo "  │  You will be forced to change this PIN      │"
+  echo "  │  on first login. It will NOT be shown again.│"
+  echo "  └─────────────────────────────────────────────┘"
+  echo ""
+else
+  echo "    Warning: could not create admin account: $ADMIN_RESULT"
+fi
+
 APP_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2 | tr -d ' ' || echo 3001)
 echo ""
 echo "========================================================"
 echo " $APP_NAME installed successfully!"
 echo " Access it at: http://$(hostname -I | awk '{print $1}'):${APP_PORT}"
+echo " Login     : http://$(hostname -I | awk '{print $1}'):${APP_PORT}/login.html"
 echo " Status : sudo -u $APP_USER pm2 status"
 echo " Logs   : sudo -u $APP_USER pm2 logs atlas"
 echo "========================================================"
