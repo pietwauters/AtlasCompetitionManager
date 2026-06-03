@@ -215,7 +215,20 @@
     <div class="card">
       <h2 style="margin-top:0">Add fencers</h2>
       <div class="toolbar">
-        <input type="search" placeholder="Filter by name or club…" x-model="eligSearch">
+        <select x-model="eligClub" style="flex:1;min-width:100px">
+          <option value="">All clubs</option>
+          <template x-for="c in eligClubs" :key="c"><option :value="c" x-text="c"></option></template>
+        </select>
+        <select x-model="eligGender">
+          <option value="">All genders</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="X">Mixed</option>
+        </select>
+        <select x-model="eligAge">
+          <option value="">All ages</option>
+          <template x-for="a in eligAges" :key="a"><option :value="a" x-text="a"></option></template>
+        </select>
         <button class="primary" @click="addSelected()" :disabled="selectedIds.length===0"
           x-text="selectedIds.length?'Add '+selectedIds.length+' selected':'Select fencers'"></button>
       </div>
@@ -226,7 +239,13 @@
         </label>
       </div>
       <table>
-        <thead><tr><th></th><th>Name</th><th>Club</th><th>Age</th><th>Ranking</th></tr></thead>
+        <thead><tr>
+          <th></th>
+          <th @click="eligSort('name')" style="cursor:pointer;user-select:none">Name <span x-text="eligSortIcon('name')"></span></th>
+          <th @click="eligSort('club')" style="cursor:pointer;user-select:none">Club <span x-text="eligSortIcon('club')"></span></th>
+          <th @click="eligSort('age')"  style="cursor:pointer;user-select:none">Age  <span x-text="eligSortIcon('age')"></span></th>
+          <th @click="eligSort('rank')" style="cursor:pointer;user-select:none">Ranking <span x-text="eligSortIcon('rank')"></span></th>
+        </tr></thead>
         <tbody>
           <template x-for="f in filteredEligible" :key="f.fencer_id">
             <tr :class="'elig-row'+(f.is_registered?' registered':'')">
@@ -254,16 +273,41 @@
 function app() {
   const compId = new URLSearchParams(window.location.search).get('id');
   return {
-    compId, comp:null, competitors:[], eligible:[], selectedIds:[], eligSearch:'',
+    compId, comp:null, competitors:[], eligible:[], selectedIds:[],
+    eligClub:'', eligGender:'', eligAge:'', eligSortKey:'rank', eligSortDir:1,
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
     newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club',
     poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
     notice:{text:'',error:false},
 
+    get eligClubs() {
+      return [...new Set(this.eligible.map(f=>f.club_name).filter(Boolean))].sort();
+    },
+    get eligAges() {
+      return [...new Set(this.eligible.map(f=>f.age).filter(Boolean))].sort((a,b)=>a-b);
+    },
     get filteredEligible() {
-      const q=this.eligSearch.toLowerCase();
-      if(!q) return this.eligible;
-      return this.eligible.filter(f=>(f.last_name+' '+f.first_name).toLowerCase().includes(q)||(f.club_name||'').toLowerCase().includes(q));
+      let list = this.eligible;
+      if (this.eligClub)   list = list.filter(f => f.club_name === this.eligClub);
+      if (this.eligGender) list = list.filter(f => f.gender === this.eligGender);
+      if (this.eligAge)    list = list.filter(f => f.age == this.eligAge);
+      const k = this.eligSortKey, d = this.eligSortDir;
+      return [...list].sort((a,b) => {
+        let av, bv;
+        if (k==='name')  { av=a.last_name+a.first_name; bv=b.last_name+b.first_name; }
+        else if (k==='club') { av=a.club_name||''; bv=b.club_name||''; }
+        else if (k==='age')  { av=a.age||999; bv=b.age||999; }
+        else                 { av=a.ranking||9999; bv=b.ranking||9999; }
+        return av<bv ? -d : av>bv ? d : 0;
+      });
+    },
+    eligSort(key) {
+      if (this.eligSortKey===key) this.eligSortDir=-this.eligSortDir;
+      else { this.eligSortKey=key; this.eligSortDir=1; }
+    },
+    eligSortIcon(key) {
+      if (this.eligSortKey!==key) return '↕';
+      return this.eligSortDir===1 ? '↑' : '↓';
     },
 
     async init() {
