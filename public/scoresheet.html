@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Atlas — Scoresheet</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#1a1a2e;color:#eee;font-family:Arial,sans-serif;min-height:100vh}
+
+    /* ── Status bar ── */
+    .status-bar{display:flex;align-items:center;gap:.6rem;padding:.5rem 1rem;font-size:.8rem;font-weight:600}
+    .status-bar.ok{background:#0d3321;color:#4cde80}
+    .status-bar.err{background:#2d0e0e;color:#e74c3c}
+    .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .ok .status-dot{background:#4cde80}
+    .err .status-dot{background:#e74c3c}
+
+    /* ── Bout display ── */
+    .bout-panel{padding:1rem;background:#16213e;margin:.75rem;border-radius:10px}
+    .bout-meta{font-size:.75rem;color:#888;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em}
+    .fencers-row{display:flex;align-items:center;gap:.5rem}
+    .fencer-block{flex:1;min-width:0}
+    .fencer-name{font-size:1.05rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fencer-detail{font-size:.75rem;color:#888;margin-top:.15rem}
+    .score-block{text-align:center;padding:0 .75rem;flex-shrink:0}
+    .score-display{font-size:2.2rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.1em}
+    .cards-row{display:flex;gap:.3rem;margin-top:.4rem;min-height:1.4rem}
+    .card-chip{display:inline-flex;align-items:center;justify-content:center;
+               width:1.4rem;height:1.4rem;border-radius:3px;font-size:.72rem;font-weight:700}
+    .card-chip.yellow{background:#f1c40f;color:#1a1a2e}
+    .card-chip.red{background:#e74c3c;color:#fff}
+    .card-chip.black{background:#1a1a2e;color:#fff;border:1px solid #555}
+    .fencer-block.right .cards-row{flex-direction:row-reverse}
+    .fencer-block.right .fencer-name{text-align:right}
+    .fencer-block.right .fencer-detail{text-align:right}
+
+    .idle-msg{text-align:center;color:#555;padding:2rem 1rem;font-size:.9rem}
+
+    /* ── History ── */
+    .history-section{margin:.75rem;padding:1rem;background:#16213e;border-radius:10px}
+    .section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:.6rem}
+    .history-empty{color:#555;font-size:.85rem}
+    .history-row{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:1px solid #1e2d50;font-size:.88rem}
+    .history-row:last-child{border-bottom:none}
+    .h-side{font-size:.72rem;font-weight:700;text-transform:uppercase;color:#888;width:2.5rem;flex-shrink:0}
+    .h-reason{flex:1}
+    .h-time{font-size:.72rem;color:#555;flex-shrink:0}
+
+    /* ── Dialog overlay ── */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;
+             display:flex;align-items:center;justify-content:center;padding:1rem}
+    .dialog{background:#16213e;border-radius:14px;padding:1.5rem;width:100%;max-width:480px;
+            border:1px solid #2a3a5e;max-height:90vh;overflow-y:auto}
+    .dialog-header{margin-bottom:1rem}
+    .dialog-title{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:.6rem}
+    .card-badge{display:inline-block;padding:.2rem .7rem;border-radius:6px;font-size:.85rem;font-weight:700}
+    .card-badge.yellow{background:#f1c40f;color:#1a1a2e}
+    .card-badge.red{background:#e74c3c;color:#fff}
+    .card-badge.black{background:#1a1a2e;color:#fff;border:1px solid #555}
+    .dialog-fencer{font-size:.85rem;color:#aaa;margin-top:.25rem}
+
+    .reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem}
+    .reason-btn{padding:.6rem .75rem;background:#0f2040;border:1px solid #2a3a5e;border-radius:8px;
+                color:#eee;font-size:.85rem;text-align:left;cursor:pointer;line-height:1.3;transition:background .12s}
+    .reason-btn:hover,.reason-btn:active{background:#1a4a7a}
+
+    .freetext-row{display:flex;gap:.5rem;margin-bottom:.75rem}
+    .freetext-row input{flex:1;padding:.55rem .75rem;background:#0f2040;border:1px solid #2a3a5e;
+                        border-radius:8px;color:#eee;font-size:.9rem;outline:none}
+    .freetext-row input:focus{border-color:#aad4f5}
+    .freetext-row button{padding:.55rem 1rem;background:#1a6bab;color:#fff;border:none;border-radius:8px;
+                         font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+    .freetext-row button:disabled{opacity:.4;cursor:default}
+    .skip-btn{width:100%;padding:.55rem;background:none;border:1px solid #333;border-radius:8px;
+              color:#666;font-size:.85rem;cursor:pointer}
+    .skip-btn:hover{color:#aaa;border-color:#555}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+  <!-- Status bar -->
+  <div class="status-bar" :class="connected ? 'ok' : 'err'">
+    <span class="status-dot"></span>
+    <span x-text="connected ? 'Connected — Piste ' + pisteId : 'Not connected'"></span>
+    <span x-show="!connected" style="margin-left:auto;font-weight:400;color:#888" x-text="pisteId ? '' : 'Add ?piste=NAME to URL'"></span>
+  </div>
+
+  <!-- Bout panel -->
+  <div x-show="currentBout" class="bout-panel">
+    <div class="bout-meta" x-text="boutMeta"></div>
+    <div class="fencers-row">
+      <!-- Left fencer -->
+      <div class="fencer-block left">
+        <div class="fencer-name" x-text="currentBout?.leftName || '—'"></div>
+        <div class="fencer-detail" x-text="currentBout?.leftNation || ''"></div>
+        <div class="cards-row">
+          <span class="card-chip yellow" x-show="score?.left?.yellow_card" title="Yellow card">Y</span>
+          <template x-for="n in (score?.left?.red_cards || 0)" :key="n">
+            <span class="card-chip red" title="Red card">R</span>
+          </template>
+          <span class="card-chip black" x-show="score?.left?.black_card" title="Black card">B</span>
+        </div>
+      </div>
+      <!-- Score -->
+      <div class="score-block">
+        <div class="score-display">
+          <span x-text="score?.left?.score ?? '—'"></span>
+          <span style="color:#555;font-size:1.4rem;margin:0 .2rem">:</span>
+          <span x-text="score?.right?.score ?? '—'"></span>
+        </div>
+      </div>
+      <!-- Right fencer -->
+      <div class="fencer-block right">
+        <div class="fencer-name" x-text="currentBout?.rightName || '—'"></div>
+        <div class="fencer-detail" x-text="currentBout?.rightNation || ''"></div>
+        <div class="cards-row">
+          <span class="card-chip yellow" x-show="score?.right?.yellow_card" title="Yellow card">Y</span>
+          <template x-for="n in (score?.right?.red_cards || 0)" :key="n">
+            <span class="card-chip red" title="Red card">R</span>
+          </template>
+          <span class="card-chip black" x-show="score?.right?.black_card" title="Black card">B</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div x-show="!currentBout" class="idle-msg">Waiting for bout data…</div>
+
+  <!-- Card reason history -->
+  <div class="history-section">
+    <div class="section-title">Card reasons this session</div>
+    <div x-show="history.length === 0" class="history-empty">None recorded yet.</div>
+    <template x-for="(cr, i) in history" :key="i">
+      <div class="history-row">
+        <span class="card-chip" :class="cr.card" x-text="cr.card.charAt(0).toUpperCase()" style="width:1.4rem;height:1.4rem"></span>
+        <span class="h-side" x-text="cr.side.charAt(0).toUpperCase() + cr.side.slice(1)"></span>
+        <span class="h-reason" x-text="cr.reason"></span>
+        <span class="h-time" x-text="cr.time"></span>
+      </div>
+    </template>
+  </div>
+
+  <!-- Card reason dialog -->
+  <div class="overlay" x-show="dialog.open" x-transition.opacity>
+    <div class="dialog" @click.stop>
+      <div class="dialog-header">
+        <div class="dialog-title">
+          <span class="card-badge" :class="dialog.card" x-text="dialog.card?.charAt(0).toUpperCase() + dialog.card?.slice(1) + ' card'"></span>
+          <span x-text="dialog.side === 'left' ? '← Left' : 'Right →'"></span>
+        </div>
+        <div class="dialog-fencer" x-text="dialog.fencerName"></div>
+      </div>
+
+      <div class="reason-grid">
+        <template x-for="r in filteredReasons" :key="r">
+          <button class="reason-btn" @click="submitReason(r)" x-text="r"></button>
+        </template>
+      </div>
+
+      <div class="freetext-row">
+        <input x-model="dialog.custom" placeholder="Other reason…"
+               @keydown.enter="dialog.custom.trim() && submitReason(dialog.custom.trim())">
+        <button @click="submitReason(dialog.custom.trim())" :disabled="!dialog.custom.trim()">Submit</button>
+      </div>
+      <button class="skip-btn" @click="dialog.open = false">Skip — no reason recorded</button>
+    </div>
+  </div>
+
+<script src="/js/mqttws31.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+// ── Reason list ──────────────────────────────────────────────────────────────
+// weapons: null = all weapons; array = only for those weapon codes (F/E/S)
+const REASON_DEFS = {
+  yellow: [
+    { text: 'Corps-à-corps',                 weapons: ['F','S'] },
+    { text: 'Covering the target',            weapons: ['F']     },
+    { text: 'Using non-sword arm',            weapons: null      },
+    { text: 'Turning back on opponent',       weapons: null      },
+    { text: 'Running past opponent',          weapons: null      },
+    { text: 'Displacing the strip',           weapons: ['F','S'] },
+    { text: 'Leaving the piste',              weapons: null      },
+    { text: 'Not being ready / late arrival', weapons: null      },
+    { text: 'Delay of game',                  weapons: null      },
+    { text: 'Passivity',                      weapons: null      },
+    { text: 'Incorrect equipment / uniform',  weapons: null      },
+    { text: 'Offensive behaviour',            weapons: null      },
+  ],
+  red: [
+    { text: 'Repeated Group 1 offence',       weapons: null      },
+    { text: 'Intentional off-target hit',     weapons: ['F']     },
+    { text: 'Forcing a corps-à-corps',        weapons: ['F','S'] },
+    { text: 'Displacing the strip',           weapons: ['F','S'] },
+    { text: 'Violent action',                 weapons: null      },
+    { text: 'Refusing to obey',               weapons: null      },
+    { text: 'Unsportsmanlike conduct',        weapons: null      },
+  ],
+  black: [
+    { text: 'Violence against person',        weapons: null      },
+    { text: 'Doping',                         weapons: null      },
+    { text: 'Corruption / match manipulation',weapons: null      },
+    { text: 'Gross unsportsmanlike conduct',  weapons: null      },
+    { text: 'Abandonment without valid reason', weapons: null    },
+  ],
+};
+
+function reasonsFor(card, weapon) {
+  return (REASON_DEFS[card] || [])
+    .filter(r => !r.weapons || r.weapons.includes(weapon))
+    .map(r => r.text);
+}
+
+// ── Alpine app ───────────────────────────────────────────────────────────────
+function app() {
+  return {
+    pisteId:     new URLSearchParams(location.search).get('piste') || '',
+    connected:   false,
+    mqttClient:  null,
+    brokerWsUrl: null,
+    seq:         0,
+
+    // Current bout state
+    currentBout: null,  // { leftName, rightName, leftNation, rightNation }
+    weapon:      'F',   // current weapon code for reason filtering
+    boutMeta:    '',
+    score:       null,
+    lastScore:   null,  // retained baseline — don't trigger dialog on this
+    baselineSeq: null,  // seq of first score message received (retained)
+
+    // Dialog
+    dialog: { open: false, side: '', card: '', fencerName: '', custom: '' },
+
+    // History of reasons recorded this session
+    history: [],
+
+    async init() {
+      if (!this.pisteId) return;
+      const settings = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
+      const brokerUrl = settings.broker_url || 'mqtt://openpiste.local:1883';
+      // Convert mqtt:// or mqtts:// → ws:// on port 9001
+      this.brokerWsUrl = brokerUrl
+        .replace(/^mqtts?:\/\//, 'ws://')
+        .replace(/:\d+$/, ':9001');
+      this.connectMqtt();
+    },
+
+    connectMqtt() {
+      if (!this.brokerWsUrl || !this.pisteId) return;
+      const host     = this.brokerWsUrl.replace(/^wss?:\/\//, '').replace(/:\d+$/, '');
+      const port     = parseInt(this.brokerWsUrl.match(/:(\d+)$/)?.[1] || '9001');
+      const clientId = 'atlas-scoresheet-' + Math.random().toString(16).slice(2, 8);
+
+      const c = new Paho.MQTT.Client(host, port, clientId);
+
+      c.onConnectionLost = (resp) => {
+        this.connected = false;
+        console.log('[Scoresheet] Connection lost:', resp.errorMessage);
+        setTimeout(() => this.connectMqtt(), 5000);
+      };
+
+      c.onMessageArrived = (msg) => this.onMessage(msg);
+
+      c.connect({
+        onSuccess: () => {
+          this.connected = true;
+          this.mqttClient = c;
+          this.baselineSeq = null;
+          this.lastScore   = null;
+          // Subscribe to this piste's topics
+          c.subscribe(`openpiste/${this.pisteId}/apparatus/score`);
+          c.subscribe(`openpiste/${this.pisteId}/software/fencers`);
+          c.subscribe(`openpiste/${this.pisteId}/software/match`);
+        },
+        onFailure: (err) => {
+          this.connected = false;
+          console.log('[Scoresheet] Connect failed:', err.errorMessage);
+          setTimeout(() => this.connectMqtt(), 5000);
+        },
+        keepAliveInterval: 30,
+        cleanSession:      true,
+      });
+    },
+
+    onMessage(msg) {
+      const topic = msg.destinationName;
+      let payload;
+      try { payload = JSON.parse(msg.payloadString); } catch { return; }
+
+      const parts     = topic.split('/');
+      const publisher = parts[2];
+      const msgType   = parts[3];
+
+      if (publisher === 'software' && msgType === 'fencers') {
+        this.currentBout = {
+          leftName:    payload.left?.fencer?.name  || '?',
+          rightName:   payload.right?.fencer?.name || '?',
+          leftNation:  payload.left?.fencer?.nation || '',
+          rightNation: payload.right?.fencer?.nation || '',
+        };
+      }
+
+      if (publisher === 'software' && msgType === 'match') {
+        this.weapon   = payload.weapon || 'F';
+        this.boutMeta = [
+          { F:'Foil', E:'Épée', S:'Sabre' }[payload.weapon] || payload.weapon,
+          payload.phase_type,
+          payload.poule ? 'Pool ' + payload.poule : '',
+          payload.match ? 'Bout ' + payload.match : '',
+        ].filter(Boolean).join(' · ');
+      }
+
+      if (publisher === 'apparatus' && msgType === 'score') {
+        const incomingSeq = payload.seq ?? null;
+
+        // First message after connect is the retained baseline — set it but don't trigger dialog
+        if (this.baselineSeq === null) {
+          this.baselineSeq = incomingSeq;
+          this.lastScore   = payload;
+          this.score       = payload;
+          return;
+        }
+
+        // Detect new cards by comparing with last known score
+        this.detectCards(this.lastScore, payload);
+        this.lastScore = payload;
+        this.score     = payload;
+      }
+    },
+
+    detectCards(prev, next) {
+      for (const side of ['left', 'right']) {
+        const p = prev?.[side] || {};
+        const n = next?.[side]  || {};
+
+        if (!p.yellow_card && n.yellow_card) {
+          this.triggerDialog(side, 'yellow');
+        }
+        const redBefore = p.red_cards || 0;
+        const redAfter  = n.red_cards || 0;
+        if (redAfter > redBefore) {
+          this.triggerDialog(side, 'red');
+        }
+        if (!p.black_card && n.black_card) {
+          this.triggerDialog(side, 'black');
+        }
+      }
+    },
+
+    triggerDialog(side, card) {
+      this.dialog = {
+        open:       true,
+        side,
+        card,
+        fencerName: side === 'left'
+          ? (this.currentBout?.leftName  || 'Left fencer')
+          : (this.currentBout?.rightName || 'Right fencer'),
+        custom:     '',
+      };
+    },
+
+    get filteredReasons() {
+      return reasonsFor(this.dialog.card, this.weapon);
+    },
+
+    submitReason(reason) {
+      if (!reason?.trim()) return;
+      const { side, card } = this.dialog;
+      this.publishCardReason(side, card, reason.trim());
+      this.history.unshift({
+        side, card, reason: reason.trim(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      this.dialog.open = false;
+    },
+
+    publishCardReason(side, card, reason) {
+      if (!this.mqttClient || !this.connected) return;
+      const payload = JSON.stringify({
+        protocol: 'OPP2',
+        version:  '1.0',
+        seq:      ++this.seq,
+        ts:       Date.now(),
+        event:    'CARD_REASON',
+        side,
+        card,
+        reason,
+      });
+      const msg = new Paho.MQTT.Message(payload);
+      msg.destinationName = `openpiste/${this.pisteId}/scoresheet/event`;
+      msg.qos = 1;
+      this.mqttClient.send(msg);
+    },
+  };
+}
+</script>
+</body>
+</html>

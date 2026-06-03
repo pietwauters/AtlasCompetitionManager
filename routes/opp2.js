@@ -1,8 +1,9 @@
 'use strict';
-const express  = require('express');
-const OPP2     = require('../lib/opp2Client');
-const Settings = require('../services/settings');
-const Pipeline = require('../services/pipeline');
+const express     = require('express');
+const OPP2        = require('../lib/opp2Client');
+const Settings    = require('../services/settings');
+const Pipeline    = require('../services/pipeline');
+const CardReason  = require('../services/cardReasons');
 const SSE      = require('../lib/sse');
 
 const router = express.Router();
@@ -102,6 +103,11 @@ router.delete('/pipeline/slots/:id', (req, res) => {
   const ok = Pipeline.deleteSlot(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Slot not found' });
   res.json({ ok: true });
+});
+
+// Card reasons for the current bout on a piste (read by the scoresheet page)
+router.get('/piste/:pisteId/card-reasons', (req, res) => {
+  res.json(CardReason.findByPiste(req.params.pisteId));
 });
 
 module.exports = router;
