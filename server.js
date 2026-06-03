@@ -1,5 +1,15 @@
 'use strict';
 
+// Load .env file into process.env if it exists (no dependency needed)
+const fs = require('fs');
+const envPath = require('path').join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  });
+}
+
 const express  = require('express');
 const path     = require('path');
 const { migrate } = require('./db/migrator');
