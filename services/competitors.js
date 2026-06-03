@@ -11,7 +11,7 @@ function parseWeapons(raw) {
 const BASE = `
   SELECT
     comp.id AS competitor_id, comp.initial_seed, comp.status AS competitor_status,
-    comp.final_rank, comp.eliminated_after,
+    comp.checked_in, comp.final_rank, comp.eliminated_after,
     f.id AS fencer_id, f.licence, f.weapons, f.handedness, f.ranking,
     p.id, p.first_name, p.last_name, p.date_of_birth, p.gender, p.nationality, p.club_id,
     c.name AS club_name
@@ -128,10 +128,12 @@ const Competitor = {
     const m = { ...current, ...fields };
     db.prepare(`
       UPDATE competitors
-      SET initial_seed=@initial_seed, status=@status, final_rank=@final_rank
+      SET initial_seed=@initial_seed, status=@status, final_rank=@final_rank,
+          checked_in=@checked_in
       WHERE id=@id
     `).run({ id: Number(competitorId), initial_seed: m.initial_seed ?? null,
-             status: m.status, final_rank: m.final_rank ?? null });
+             status: m.status, final_rank: m.final_rank ?? null,
+             checked_in: m.checked_in ?? current.checked_in ?? 0 });
     return this.findById(competitorId);
   },
 

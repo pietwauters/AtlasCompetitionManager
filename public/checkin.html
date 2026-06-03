@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Check-in</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f0f2f5; }
+    .summary {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      background: #fff; border-radius: 8px;
+      padding: .75rem 1.25rem; margin-bottom: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .stat { text-align: center; min-width: 4rem; }
+    .stat-n { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-top: .15rem; }
+    .stat-n.present  { color: #1e8449; }
+    .stat-n.absent   { color: #c0392b; }
+    .stat-n.unknown  { color: #aaa; }
+
+    .search-bar { position: relative; margin-bottom: .75rem; }
+    .search-bar input {
+      width: 100%; padding: .6rem 1rem .6rem 2.4rem;
+      border: 1px solid #ddd; border-radius: 8px;
+      font-size: 1rem; background: #fff;
+      box-sizing: border-box;
+    }
+    .search-bar::before {
+      content: '🔍'; position: absolute; left: .75rem; top: 50%;
+      transform: translateY(-50%); font-size: .9rem; pointer-events: none;
+    }
+
+    .fencer-list { display: flex; flex-direction: column; gap: .4rem; }
+    .fencer-row {
+      display: flex; align-items: center; gap: .75rem;
+      background: #fff; border-radius: 8px;
+      padding: .65rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      border-left: 4px solid #ddd;
+      transition: border-color .15s;
+    }
+    .fencer-row.present  { border-left-color: #1e8449; background: #f0faf4; }
+    .fencer-row.withdrawn { border-left-color: #c0392b; background: #fdf4f4; opacity: .75; }
+
+    .fencer-info { flex: 1; min-width: 0; }
+    .fencer-name { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fencer-meta { font-size: .78rem; color: #888; margin-top: .1rem; }
+
+    .action-btns { display: flex; gap: .4rem; flex-shrink: 0; }
+    .btn-present, .btn-absent {
+      border: none; border-radius: 6px; font-size: .82rem;
+      font-weight: 600; cursor: pointer; padding: .45rem .8rem;
+      transition: opacity .15s;
+    }
+    .btn-present          { background: #d4edda; color: #155724; }
+    .btn-present.active   { background: #1e8449; color: #fff; }
+    .btn-present:hover    { opacity: .85; }
+    .btn-absent           { background: #fde8e8; color: #922b21; }
+    .btn-absent.active    { background: #c0392b; color: #fff; }
+    .btn-absent:hover     { opacity: .85; }
+
+    .club-header {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: #888; margin: 1rem 0 .35rem;
+      padding-left: .25rem;
+    }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+  </template>
+  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/people.html">People</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main>
+
+  <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap">
+    <h2 style="margin:0" x-text="comp?.name || 'Check-in'"></h2>
+    <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Competition</a>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="summary">
+    <div class="stat">
+      <div class="stat-n" x-text="total"></div>
+      <div class="stat-label">Total</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n present" x-text="presentCount"></div>
+      <div class="stat-label">Present</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n unknown" x-text="unknownCount"></div>
+      <div class="stat-label">Not yet</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n absent" x-text="withdrawnCount"></div>
+      <div class="stat-label">Withdrawn</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <button @click="markAllPresent()" style="font-size:.82rem;padding:.35rem .8rem">✓ All present</button>
+      <button @click="clearAll()" style="font-size:.82rem;padding:.35rem .8rem;background:#fde8e8;color:#922b21;border-color:#f5c6cb">Clear all</button>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="search" x-model="query" placeholder="Search by name or club…" autofocus>
+  </div>
+
+  <!-- Filter tabs -->
+  <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
+    <button :class="filter==='all'?'primary':''" @click="filter='all'" style="font-size:.82rem;padding:.3rem .7rem">All</button>
+    <button :class="filter==='unknown'?'primary':''" @click="filter='unknown'" style="font-size:.82rem;padding:.3rem .7rem">Not yet</button>
+    <button :class="filter==='present'?'primary':''" @click="filter='present'" style="font-size:.82rem;padding:.3rem .7rem">Present</button>
+    <button :class="filter==='withdrawn'?'primary':''" @click="filter='withdrawn'" style="font-size:.82rem;padding:.3rem .7rem">Withdrawn</button>
+  </div>
+
+  <!-- Fencer list (grouped by club) -->
+  <div class="fencer-list">
+    <template x-for="group in filteredGroups" :key="group.club">
+      <div>
+        <div class="club-header" x-text="group.club + ' (' + group.items.length + ')'"></div>
+        <template x-for="c in group.items" :key="c.competitor_id">
+          <div class="fencer-row" :class="rowClass(c)">
+            <div class="fencer-info">
+              <div class="fencer-name" x-text="c.last_name + ', ' + c.first_name"></div>
+              <div class="fencer-meta" x-text="[c.licence, calcAge(c.date_of_birth)+' yr'].filter(Boolean).join(' · ')"></div>
+            </div>
+            <div class="action-btns">
+              <button class="btn-present" :class="c.checked_in===1&&c.competitor_status!=='withdrawn'?'active':''"
+                @click="setPresent(c)">Present</button>
+              <button class="btn-absent"  :class="c.competitor_status==='withdrawn'?'active':''"
+                @click="setWithdrawn(c)">Absent</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <div x-show="filteredGroups.length===0" style="text-align:center;color:#aaa;padding:2rem">
+      No fencers match.
+    </div>
+  </div>
+
+</main>
+<script src="/js/nav.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    compId: new URLSearchParams(location.search).get('id'),
+    comp: null,
+    competitors: [],
+    query: '',
+    filter: 'all',
+
+    async init() {
+      if (!this.compId) return;
+      const [compData, compList] = await Promise.all([
+        fetch(`/api/competitions/${this.compId}/competitors`).then(r => r.json()).catch(() => []),
+        fetch(`/api/competitions`).then(r => r.json()).catch(() => []),
+      ]);
+      this.competitors = compData;
+      this.comp = compList.find(c => String(c.id) === String(this.compId)) || null;
+    },
+
+    get total()         { return this.competitors.length; },
+    get presentCount()  { return this.competitors.filter(c => c.checked_in === 1 && c.competitor_status !== 'withdrawn').length; },
+    get withdrawnCount(){ return this.competitors.filter(c => c.competitor_status === 'withdrawn').length; },
+    get unknownCount()  { return this.competitors.filter(c => c.checked_in === 0 && c.competitor_status !== 'withdrawn').length; },
+
+    rowClass(c) {
+      if (c.competitor_status === 'withdrawn') return 'withdrawn';
+      if (c.checked_in === 1) return 'present';
+      return '';
+    },
+
+    get filtered() {
+      let list = this.competitors;
+      if (this.filter === 'unknown')   list = list.filter(c => c.checked_in === 0 && c.competitor_status !== 'withdrawn');
+      if (this.filter === 'present')   list = list.filter(c => c.checked_in === 1 && c.competitor_status !== 'withdrawn');
+      if (this.filter === 'withdrawn') list = list.filter(c => c.competitor_status === 'withdrawn');
+      if (this.query.trim()) {
+        const q = this.query.trim().toLowerCase();
+        list = list.filter(c =>
+          (c.first_name + ' ' + c.last_name).toLowerCase().includes(q) ||
+          (c.last_name + ' ' + c.first_name).toLowerCase().includes(q) ||
+          (c.club_name || '').toLowerCase().includes(q)
+        );
+      }
+      return list;
+    },
+
+    get filteredGroups() {
+      const groups = new Map();
+      for (const c of this.filtered) {
+        const club = c.club_name || '— No club';
+        if (!groups.has(club)) groups.set(club, []);
+        groups.get(club).push(c);
+      }
+      return [...groups.entries()].map(([club, items]) => ({ club, items }))
+        .sort((a, b) => a.club.localeCompare(b.club));
+    },
+
+    async patch(c, fields) {
+      const r = await fetch(`/api/competitions/${this.compId}/competitors/${c.competitor_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      if (!r.ok) return;
+      const updated = await r.json();
+      const idx = this.competitors.findIndex(x => x.competitor_id === c.competitor_id);
+      if (idx >= 0) this.competitors[idx] = updated;
+    },
+
+    setPresent(c) {
+      // Toggle: if already present+active, revert to unknown
+      if (c.checked_in === 1 && c.competitor_status !== 'withdrawn') {
+        this.patch(c, { checked_in: 0, status: 'active' });
+      } else {
+        this.patch(c, { checked_in: 1, status: 'active' });
+      }
+    },
+
+    setWithdrawn(c) {
+      // Toggle: if already withdrawn, revert to unknown
+      if (c.competitor_status === 'withdrawn') {
+        this.patch(c, { checked_in: 0, status: 'active' });
+      } else {
+        this.patch(c, { checked_in: 0, status: 'withdrawn' });
+      }
+    },
+
+    async markAllPresent() {
+      for (const c of this.competitors) {
+        if (c.competitor_status !== 'withdrawn' && c.checked_in !== 1) {
+          await this.patch(c, { checked_in: 1, status: 'active' });
+        }
+      }
+    },
+
+    async clearAll() {
+      if (!confirm('Reset all check-in statuses to "not yet"?')) return;
+      for (const c of this.competitors) {
+        if (c.checked_in !== 0 || c.competitor_status === 'withdrawn') {
+          await this.patch(c, { checked_in: 0, status: 'active' });
+        }
+      }
+    },
+
+    calcAge(dob) {
+      if (!dob) return '?';
+      return new Date().getFullYear() - new Date(dob).getFullYear();
+    },
+  };
+}
+</script>
+</body>
+</html>
