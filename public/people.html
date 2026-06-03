@@ -70,12 +70,21 @@
     <h2>People</h2>
 
     <div class="toolbar">
-      <input type="search" placeholder="Search by name…"
-             x-model="search" @input.debounce.300ms="load()">
-      <select x-model="roleFilter" @change="load()">
+      <input type="search" placeholder="Search by name…" x-model="search" style="flex:1;min-width:140px">
+      <select x-model="filterClub">
+        <option value="">All clubs</option>
+        <template x-for="c in clubs" :key="c.id"><option :value="c.id" x-text="c.name"></option></template>
+      </select>
+      <select x-model="filterGender">
+        <option value="">All genders</option>
+        <option value="M">Male</option>
+        <option value="F">Female</option>
+        <option value="X">Other</option>
+      </select>
+      <select x-model="roleFilter">
         <option value="">All roles</option>
-        <option value="fencer">Fencers only</option>
-        <option value="referee">Referees only</option>
+        <option value="fencer">Fencers</option>
+        <option value="referee">Referees</option>
       </select>
       <button class="primary" @click="openForm()">+ Add person</button>
       <a href="/api/people/export?role=fencer" class="success" download>↓ Export CSV</a>
@@ -84,17 +93,17 @@
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>DOB</th>
-          <th>Gender</th>
-          <th>Nationality</th>
-          <th>Club</th>
+          <th @click="peopleSort('name')"        style="cursor:pointer;user-select:none">Name        <span x-text="peopleSortIcon('name')"></span></th>
+          <th @click="peopleSort('dob')"         style="cursor:pointer;user-select:none">DOB         <span x-text="peopleSortIcon('dob')"></span></th>
+          <th @click="peopleSort('gender')"      style="cursor:pointer;user-select:none">Gender      <span x-text="peopleSortIcon('gender')"></span></th>
+          <th @click="peopleSort('nationality')" style="cursor:pointer;user-select:none">Nationality <span x-text="peopleSortIcon('nationality')"></span></th>
+          <th @click="peopleSort('club')"        style="cursor:pointer;user-select:none">Club        <span x-text="peopleSortIcon('club')"></span></th>
           <th>Roles</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        <template x-for="p in people" :key="p.id">
+        <template x-for="p in filteredPeople" :key="p.id">
           <tr>
             <td x-text="p.last_name + ', ' + p.first_name"></td>
             <td x-text="p.date_of_birth || '—'"></td>
@@ -111,7 +120,7 @@
             </td>
           </tr>
         </template>
-        <tr x-show="people.length === 0">
+        <tr x-show="filteredPeople.length === 0">
           <td colspan="7" style="text-align:center;color:#999;padding:1.5rem">No people found.</td>
         </tr>
       </tbody>
@@ -245,6 +254,10 @@ function app() {
     nocs:        [],
     search:      '',
     roleFilter:  '',
+    filterClub:  '',
+    filterGender:'',
+    sortKey:     'name',
+    sortDir:     1,
     formOpen:    false,
     notice:      { text: '', error: false },
     csvText:     '',
@@ -261,10 +274,39 @@ function app() {
       await Promise.all([this.load(), this.loadClubs(), this.loadNocs()]);
     },
 
+    get filteredPeople() {
+      let list = this.people;
+      if (this.search) {
+        const q = this.search.toLowerCase();
+        list = list.filter(p => (p.last_name+' '+p.first_name).toLowerCase().includes(q));
+      }
+      if (this.roleFilter === 'fencer')  list = list.filter(p => p.is_fencer);
+      if (this.roleFilter === 'referee') list = list.filter(p => p.is_referee);
+      if (this.filterClub)   list = list.filter(p => p.club_id == this.filterClub);
+      if (this.filterGender) list = list.filter(p => p.gender === this.filterGender);
+      const k = this.sortKey, d = this.sortDir;
+      return [...list].sort((a, b) => {
+        let av, bv;
+        if      (k==='name')        { av=a.last_name+a.first_name; bv=b.last_name+b.first_name; }
+        else if (k==='dob')         { av=a.date_of_birth||'';      bv=b.date_of_birth||''; }
+        else if (k==='gender')      { av=a.gender||'';             bv=b.gender||''; }
+        else if (k==='nationality') { av=a.nationality||'';        bv=b.nationality||''; }
+        else                        { av=a.club_name||'';          bv=b.club_name||''; }
+        return av<bv ? -d : av>bv ? d : 0;
+      });
+    },
+
+    peopleSort(key) {
+      if (this.sortKey===key) this.sortDir=-this.sortDir;
+      else { this.sortKey=key; this.sortDir=1; }
+    },
+    peopleSortIcon(key) {
+      if (this.sortKey!==key) return '↕';
+      return this.sortDir===1 ? '↑' : '↓';
+    },
+
     async load() {
-      const params = new URLSearchParams({ search: this.search, role: this.roleFilter });
-      const r = await fetch('/api/people?' + params);
-      this.people = await r.json();
+      this.people = await fetch('/api/people').then(r => r.json());
     },
 
     async loadClubs() {
