@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE BaseCompetitionIndividuelle>
+<BaseCompetitionIndividuelle xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Championnat="FIE" ID="741" Arme="F" Sexe="M" Domaine="I" Federation="FRA" Categorie="S" TitreLong="Championnats d'Europe" Annee="2025/2026" Date="18.06.2026" DateFichierXML="03.06.2026 11:33">
+  <Tireurs>
+    <Tireur ID="22256" Nom="TOFALIDES" Prenom="Alex" Sexe="M" Lateralite="G" Nation="CYP" Licence="13031993001" Statut="N" DateNaissance="13.03.1993" Classement="126" Points="11.500"></Tireur>
+    <Tireur ID="35143" Nom="DE GREEF" Prenom="Stef" Sexe="M" Lateralite="G" Nation="BEL" Licence="10011998001" Statut="N" DateNaissance="10.01.1998" Classement="63" Points="25.000"></Tireur>
+    <Tireur ID="52375" Nom="GEUDVERT" Prenom="Oscar" Sexe="M" Lateralite="G" Nation="BEL" Licence="13112004002" Statut="N" DateNaissance="13.11.2004" Classement="132" Points="10.875"></Tireur>
+    <Tireur ID="46816" Nom="NIJS" Prenom="Mathieu" Sexe="M" Lateralite="G" Nation="BEL" Licence="04022002005" Statut="N" DateNaissance="04.02.2002" Classement="100" Points="15.500"></Tireur>
+    <Tireur ID="37860" Nom="VAN CAMPENHOUT" Prenom="Stef" Sexe="M" Lateralite="G" Nation="BEL" Licence="28051998006" Statut="N" DateNaissance="28.05.1998" Classement="75" Points="22.500"></Tireur>
+    <Tireur ID="54374" Nom="JURAS" Prenom="Danielius" Sexe="M" Lateralite="D" Nation="LTU" Licence="08092006001" Statut="N" DateNaissance="08.09.2006" Classement="610" Points="0.000"></Tireur>
+    <Tireur ID="34833" Nom="BIRD" Prenom="Harry" Sexe="M" Lateralite="D" Nation="GBR" Licence="04021998002" Statut="N" DateNaissance="04.02.1998" Classement="129" Points="11.000"></Tireur>
+    <Tireur ID="47981" Nom="COOK" Prenom="Jaimie" Sexe="M" Lateralite="D" Nation="GBR" Licence="15012005000" Statut="N" DateNaissance="15.01.2005" Classement="32" Points="47.000"></Tireur>
+    <Tireur ID="47687" Nom="DONAGHUE" Prenom="Joe" Sexe="M" Lateralite="G" Nation="GBR" Licence="11032003001" Statut="N" DateNaissance="11.03.2003" Classement="145" Points="9.000"></Tireur>
+    <Tireur ID="54324" Nom="SOSNOV" Prenom="David" Sexe="M" Lateralite="G" Nation="GBR" Licence="20052006000" Statut="N" DateNaissance="20.05.2006" Classement="42" Points="36.500"></Tireur>
+    <Tireur ID="51470" Nom="ANANE" Prenom="Anas" Sexe="M" Lateralite="D" Nation="FRA" Licence="13052004002" Statut="N" DateNaissance="13.05.2004" Classement="11" Points="109.000"></Tireur>
+    <Tireur ID="30808" Nom="SIDO" Prenom="Alexandre" Sexe="M" Lateralite="D" Nation="FRA" Licence="31101996000" Statut="N" DateNaissance="31.10.1996" Classement="60" Points="26.000"></Tireur>
+    <Tireur ID="39650" Nom="SAVIN" Prenom="Rafael" Sexe="M" Lateralite="D" Nation="FRA" Licence="15092000001" Statut="N" DateNaissance="15.09.2000" Classement="23" Points="61.000"></Tireur>
+    <Tireur ID="25513" Nom="PAUTY" Prenom="Maxime" Sexe="M" Lateralite="D" Nation="FRA" Licence="20061993002" Statut="N" DateNaissance="20.06.1993" Classement="16" Points="96.000"></Tireur>
+    <Tireur ID="52278" Nom="MENEZES" Prenom="Duarte" Sexe="M" Lateralite="D" Nation="POR" Licence="15092004002" Statut="N" DateNaissance="15.09.2004" Classement="227" Points="4.250"></Tireur>
+    <Tireur ID="59345" Nom="MARTINS" Prenom="Joao Queiros" Sexe="M" Lateralite="D" Nation="POR" Licence="19052006004" Statut="N" DateNaissance="19.05.2006" Classement="804" Points="0.000"></Tireur>
+    <Tireur ID="57082" Nom="GAUTIER-LOFTUS" Prenom="Leon" Sexe="M" Lateralite="D" Nation="IRL" Licence="09052007001" Statut="N" DateNaissance="09.05.2007" Classement="323" Points="1.500"></Tireur>
+    <Tireur ID="62872" Nom="BADRAK" Prenom="Iaroslav" Sexe="M" Lateralite="D" Nation="LTU" Licence="11111995003" Statut="N" DateNaissance="11.11.1995" Classement="616" Points="0.000"></Tireur>
+    <Tireur ID="69842" Nom="GUIMARAES" Prenom="Jose Miguel" Sexe="M" Lateralite="D" Nation="POR" Licence="26041999007" Statut="N" DateNaissance="26.04.1999" Classement="9999" Points="0.000"></Tireur>
+    <Tireur ID="30087" Nom="FILES" Prenom="Petar" Sexe="M" Lateralite="D" Nation="CRO" Licence="26071997000" Statut="N" DateNaissance="26.07.1997" Classement="94" Points="16.750"></Tireur>
+    <Tireur ID="46551" Nom="LESKOVAC" Prenom="Janko" Sexe="M" Lateralite="D" Nation="CRO" Licence="31082003000" Statut="N" DateNaissance="31.08.2003" Classement="201" Points="5.875"></Tireur>
+    <Tireur ID="45857" Nom="SPOLJAR" Prenom="Borna" Sexe="M" Lateralite="D" Nation="CRO" Licence="23042002001" Statut="N" DateNaissance="23.04.2002" Classement="242" Points="3.750"></Tireur>
+    <Tireur ID="21765" Nom="CHOUPENITCH" Prenom="Alexander" Sexe="M" Lateralite="D" Nation="CZE" Licence="02051994000" Statut="N" DateNaissance="02.05.1994" Classement="4" Points="164.000"></Tireur>
+    <Tireur ID="54881" Nom="HOLY" Prenom="Lev Michael" Sexe="M" Lateralite="D" Nation="CZE" Licence="12082006000" Statut="N" DateNaissance="12.08.2006" Classement="157" Points="8.125"></Tireur>
+    <Tireur ID="54075" Nom="DIJKSTRA" Prenom="Michael" Sexe="M" Lateralite="G" Nation="NED" Licence="30052006000" Statut="N" DateNaissance="30.05.2006" Classement="247" Points="3.500"></Tireur>
+    <Tireur ID="53337" Nom="ASK" Prenom="Henri" Sexe="M" Lateralite="D" Nation="SWE" Licence="01072003002" Statut="N" DateNaissance="01.07.2003" Classement="160" Points="8.000"></Tireur>
+    <Tireur ID="54362" Nom="VALIERE" Prenom="Hugo" Sexe="M" Lateralite="D" Nation="ROU" Licence="08082005004" Statut="N" DateNaissance="08.08.2005" Classement="294" Points="2.125"></Tireur>
+    <Tireur ID="51055" Nom="FAZEKAS" Prenom="Arpad" Sexe="M" Lateralite="D" Nation="SVK" Licence="08052004000" Statut="N" DateNaissance="08.05.2004" Classement="127" Points="11.500"></Tireur>
+    <Tireur ID="36544" Nom="LECHNER" Prenom="Moritz" Sexe="M" Lateralite="D" Nation="AUT" Licence="13032000000" Statut="N" DateNaissance="13.04.2000" Classement="109" Points="14.000"></Tireur>
+    <Tireur ID="26867" Nom="REICHETZER" Prenom="Tobias" Sexe="M" Lateralite="G" Nation="AUT" Licence="08101994003" Statut="N" DateNaissance="08.10.1994" Classement="140" Points="9.500"></Tireur>
+    <Tireur ID="13191" Nom="KONTOCHRISTOPOULOS" Prenom="Nikolaos" Sexe="M" Lateralite="D" Nation="GRE" Licence="11111992000" Statut="N" DateNaissance="11.11.1992" Classement="209" Points="5.250"></Tireur>
+    <Tireur ID="40915" Nom="CUK" Prenom="Veljko" Sexe="M" Lateralite="D" Nation="SRB" Licence="26012000001" Statut="N" DateNaissance="26.01.2000" Classement="173" Points="7.375"></Tireur>
+    <Tireur ID="64733" Nom="RABTSAU" Prenom="Yahor" Sexe="M" Lateralite="G" Nation="AIN_" Licence="05052006006" Statut="N" DateNaissance="05.05.2006" Classement="391" Points="0.625"></Tireur>
+    <Tireur ID="37878" Nom="BORODACHEV" Prenom="Kirill" Sexe="M" Lateralite="G" Nation="_AIN" Licence="23032000001" Statut="N" DateNaissance="23.03.2000" Classement="1" Points="225.000"></Tireur>
+    <Tireur ID="40355" Nom="BORODACHEV" Prenom="Anton" Sexe="M" Lateralite="D" Nation="_AIN" Licence="23032000004" Statut="N" DateNaissance="23.03.2000" Classement="24" Points="61.000"></Tireur>
+    <Tireur ID="49766" Nom="BARANNIKOV" Prenom="Egor" Sexe="M" Lateralite="G" Nation="_AIN" Licence="28112002003" Statut="N" DateNaissance="28.11.2002" Classement="38" Points="42.000"></Tireur>
+    <Tireur ID="43449" Nom="SZEMES" Prenom="Gergo" Sexe="M" Lateralite="G" Nation="HUN" Licence="11022003000" Statut="N" DateNaissance="11.02.2003" Classement="9" Points="111.000"></Tireur>
+    <Tireur ID="29031" Nom="DOSA" Prenom="Daniel" Sexe="M" Lateralite="G" Nation="HUN" Licence="19011996001" Statut="N" DateNaissance="19.01.1996" Classement="14" Points="98.000"></Tireur>
+    <Tireur ID="49825" Nom="TOTH" Prenom="Gergely" Sexe="M" Lateralite="D" Nation="HUN" Licence="03042002005" Statut="N" DateNaissance="03.04.2002" Classement="44" Points="34.000"></Tireur>
+    <Tireur ID="41892" Nom="MIHALYI" Prenom="Andor Istvan" Sexe="M" Lateralite="D" Nation="HUN" Licence="14122002000" Statut="N" DateNaissance="14.12.2002" Classement="91" Points="17.875"></Tireur>
+    <Tireur ID="30314" Nom="KAHL" Prenom="Alexander" Sexe="M" Lateralite="D" Nation="GER" Licence="05101993002" Statut="N" DateNaissance="05.10.1993" Classement="78" Points="21.500"></Tireur>
+    <Tireur ID="51466" Nom="KAPPUS" Prenom="Bastian" Sexe="M" Lateralite="D" Nation="GER" Licence="13092004002" Statut="N" DateNaissance="13.09.2004" Classement="72" Points="23.000"></Tireur>
+    <Tireur ID="54300" Nom="DIESTELKAMP" Prenom="Niklas" Sexe="M" Lateralite="D" Nation="GER" Licence="17052005003" Statut="N" DateNaissance="17.05.2005" Classement="128" Points="11.375"></Tireur>
+    <Tireur ID="38990" Nom="KLEIN" Prenom="Luis" Sexe="M" Lateralite="D" Nation="GER" Licence="06011999003" Statut="N" DateNaissance="06.01.1999" Classement="73" Points="23.000"></Tireur>
+    <Tireur ID="59380" Nom="KIRTAY" Prenom="Kivanc" Sexe="M" Lateralite="D" Nation="TUR" Licence="01012007003" Statut="N" DateNaissance="01.01.2007" Classement="394" Points="0.625"></Tireur>
+    <Tireur ID="21966" Nom="LLAVADOR" Prenom="Carlos" Sexe="M" Lateralite="G" Nation="ESP" Licence="26041992000" Statut="N" DateNaissance="26.04.1992" Classement="13" Points="100.000"></Tireur>
+    <Tireur ID="49385" Nom="ZABALA" Prenom="Juan" Sexe="M" Lateralite="D" Nation="ESP" Licence="15072003003" Statut="N" DateNaissance="15.07.2003" Classement="113" Points="13.250"></Tireur>
+    <Tireur ID="46064" Nom="DIAZ ESCALONA" Prenom="Mario" Sexe="M" Lateralite="D" Nation="ESP" Licence="27122002001" Statut="N" DateNaissance="27.12.2002" Classement="170" Points="7.500"></Tireur>
+    <Tireur ID="32606" Nom="BRETEAU" Prenom="Ignacio" Sexe="M" Lateralite="D" Nation="ESP" Licence="05031999000" Statut="N" DateNaissance="03.08.1999" Classement="158" Points="8.125"></Tireur>
+    <Tireur ID="28616" Nom="SIESS" Prenom="Michal" Sexe="M" Lateralite="D" Nation="POL" Licence="10051994001" Statut="N" DateNaissance="10.05.1994" Classement="41" Points="36.500"></Tireur>
+    <Tireur ID="52165" Nom="NOWAK" Prenom="Jan" Sexe="M" Lateralite="D" Nation="POL" Licence="29092005000" Statut="N" DateNaissance="29.09.2005" Classement="139" Points="9.500"></Tireur>
+    <Tireur ID="30289" Nom="RZADKOWSKI" Prenom="Andrzej" Sexe="M" Lateralite="D" Nation="POL" Licence="04031997000" Statut="N" DateNaissance="04.03.1997" Classement="30" Points="48.000"></Tireur>
+    <Tireur ID="5452" Nom="RAJSKI" Prenom="Leszek" Sexe="M" Lateralite="D" Nation="POL" Licence="25111983000" Statut="N" DateNaissance="25.11.1983" Classement="43" Points="35.000"></Tireur>
+    <Tireur ID="32275" Nom="BIANCHI" Prenom="Guillaume" Sexe="M" Lateralite="D" Nation="ITA" Licence="30071997001" Statut="N" DateNaissance="30.07.1997" Classement="3" Points="212.000"></Tireur>
+    <Tireur ID="45453" Nom="MACCHI" Prenom="Filippo" Sexe="M" Lateralite="G" Nation="ITA" Licence="19092001002" Statut="N" DateNaissance="19.09.2001" Classement="7" Points="131.000"></Tireur>
+    <Tireur ID="41142" Nom="MARINI" Prenom="Tommaso" Sexe="M" Lateralite="D" Nation="ITA" Licence="17042000003" Statut="N" DateNaissance="17.04.2000" Classement="15" Points="96.000"></Tireur>
+    <Tireur ID="46216" Nom="MARTINI" Prenom="Tommaso" Sexe="M" Lateralite="D" Nation="ITA" Licence="17072002001" Statut="N" DateNaissance="17.07.2002" Classement="17" Points="87.000"></Tireur>
+  </Tireurs>
+  <Arbitres></Arbitres>
+  <Coaches>
+    <Coach ID="9641" Nom="COOK" Prenom="Keith" Sexe="M" Nation="GBR" Licence="19011981002" DateNaissance="19.01.1981" FEDID="GBR"></Coach>
+    <Coach ID="1768" Nom="PICHON" Prenom="Marc" Sexe="M" Nation="BEL" Licence="21081977000" DateNaissance="21.08.1977" FEDID="BEL"></Coach>
+    <Coach ID="41263" Nom="HENDRIX" Prenom="Eric" Sexe="M" Nation="BEL" Licence="17021966001" DateNaissance="17.02.1966" FEDID="BEL"></Coach>
+    <Coach ID="62696" Nom="GALESLOOT" Prenom="Chris" Sexe="M" Nation="LTU" Licence="15011976007" DateNaissance="15.01.1976" FEDID="LTU"></Coach>
+    <Coach ID="44862" Nom="RHYS POLLITT" Prenom="Rafael" Sexe="M" Nation="GBR" Licence="25022003000" DateNaissance="25.02.2003" FEDID="CYP"></Coach>
+    <Coach ID="506" Nom="CLOS" Prenom="Emeric" Sexe="M" Nation="FRA" Licence="03091973000" DateNaissance="03.09.1973" FEDID="FRA"></Coach>
+    <Coach ID="57162" Nom="DETIENNE" Prenom="Yann" Sexe="M" Nation="FRA" Licence="06101970002" DateNaissance="06.10.1970" FEDID="FRA"></Coach>
+    <Coach ID="10232" Nom="MELO" Prenom="Filipe" Sexe="M" Nation="POR" Licence="24071972001" DateNaissance="24.07.1972" FEDID="POR"></Coach>
+    <Coach ID="63835" Nom="AUDREN" Prenom="Dimitri" Sexe="M" Nation="FRA" Licence="03061972001" DateNaissance="03.06.1972" FEDID="IRL"></Coach>
+    <Coach ID="2117" Nom="LIMOV" Prenom="Darko" Sexe="M" Nation="CRO" Licence="22121970000" DateNaissance="22.12.1970" FEDID="CRO"></Coach>
+    <Coach ID="364" Nom="KUBISTA" Prenom="Oldrich" Sexe="M" Nation="CZE" Licence="22071960000" DateNaissance="22.07.1960" FEDID="CZE"></Coach>
+    <Coach ID="63911" Nom="BORTOLASO" Prenom="Giovanni" Sexe="M" Nation="CZE" Licence="29031963003" DateNaissance="29.03.1963" FEDID="CZE"></Coach>
+    <Coach ID="603" Nom="WOJCIECHOWSKI" Prenom="Ziemowit" Sexe="M" Nation="GBR" Licence="03101948000" DateNaissance="03.10.1948" FEDID="GBR"></Coach>
+    <Coach ID="19451" Nom="ROTH KRONWALL" Prenom="Martin" Sexe="M" Nation="SWE" Licence="22041978001" DateNaissance="22.04.1978" FEDID="SWE"></Coach>
+    <Coach ID="1141" Nom="DUCU" Prenom="Petre" Sexe="M" Nation="ROU" Licence="14061967001" DateNaissance="14.06.1967" FEDID="ROU"></Coach>
+    <Coach ID="46544" Nom="NINI" Prenom="Lorenzo" Sexe="M" Nation="AUT" Licence="09081987005" DateNaissance="09.08.1987" FEDID="AUT"></Coach>
+    <Coach ID="1611" Nom="HINTERSEER" Prenom="Moritz" Sexe="M" Nation="AUT" Licence="18071984000" DateNaissance="18.07.1984" FEDID="AUT"></Coach>
+    <Coach ID="28651" Nom="KONTOCHRISTOPOULOU" Prenom="Aikaterini-Maria" Sexe="F" Nation="GRE" Licence="10061997000" DateNaissance="10.06.1997" FEDID="GRE"></Coach>
+    <Coach ID="16397" Nom="AKHMATKHUZIN" Prenom="Artur" Sexe="M" Nation="_AIN" Licence="21051988002" DateNaissance="21.05.1988" FEDID="RUS"></Coach>
+    <Coach ID="1195" Nom="SHEVCHENKO" Prenom="Dmitriy" Sexe="M" Nation="_AIN" Licence="13111967000" DateNaissance="13.11.1967" FEDID="RUS"></Coach>
+    <Coach ID="5835" Nom="SEDOV" Prenom="Artem" Sexe="M" Nation="_AIN" Licence="26031984000" DateNaissance="26.03.1984" FEDID="_AIN"></Coach>
+    <Coach ID="3643" Nom="KLEIBRINK" Prenom="Benjamin" Sexe="M" Nation="GER" Licence="30071985000" DateNaissance="30.07.1985" FEDID="GER"></Coach>
+    <Coach ID="17481" Nom="KLEIBRINK" Prenom="Anne" Sexe="F" Nation="GER" Licence="01041991000" DateNaissance="01.04.1991" FEDID="GER"></Coach>
+    <Coach ID="24117" Nom="SANITA" Prenom="Andre" Sexe="M" Nation="GER" Licence="28031992003" DateNaissance="28.03.1992" FEDID="GER"></Coach>
+    <Coach ID="41049" Nom="SZIRMAI" Prenom="Benedek" Sexe="M" Nation="HUN" Licence="25021989001" DateNaissance="25.02.1989" FEDID="HUN"></Coach>
+    <Coach ID="4160" Nom="MAZZA" Prenom="Lorenzo" Sexe="M" Nation="HUN" Licence="15071985000" DateNaissance="15.07.1985" FEDID="HUN"></Coach>
+    <Coach ID="17449" Nom="MERTINE" Prenom="Julien" Sexe="M" Nation="FRA" Licence="25061988004" DateNaissance="25.06.1988" FEDID="FRA"></Coach>
+    <Coach ID="62474" Nom="ATMACA" Prenom="Onur" Sexe="M" Nation="TUR" Licence="05011981004" DateNaissance="05.01.1981" FEDID="TUR"></Coach>
+    <Coach ID="2516" Nom="MENENDEZ" Prenom="Javier" Sexe="M" Nation="ESP" Licence="18061981001" DateNaissance="18.06.1981" FEDID="ESP"></Coach>
+    <Coach ID="9467" Nom="GLONEK" Prenom="Radoslaw" Sexe="M" Nation="POL" Licence="24091983003" DateNaissance="24.09.1983" FEDID="POL"></Coach>
+    <Coach ID="5347" Nom="CIEPLY" Prenom="Tomasz" Sexe="M" Nation="POL" Licence="07041980000" DateNaissance="07.04.1980" FEDID="POL"></Coach>
+    <Coach ID="4728" Nom="VANNI" Prenom="Simone" Sexe="M" Nation="ITA" Licence="16021979002" DateNaissance="16.02.1979" FEDID="ITA"></Coach>
+    <Coach ID="44335" Nom="GALLI" Prenom="Fabio Maria" Sexe="M" Nation="ITA" Licence="07071968000" DateNaissance="07.07.1968" FEDID="ITA"></Coach>
+    <Coach ID="59633" Nom="PUCCINI" Prenom="Alessandro" Sexe="M" Nation="ITA" Licence="28081968000" DateNaissance="28.08.1968" FEDID="ITA"></Coach>
+    <Coach ID="4648" Nom="RAMACCI" Prenom="Marco" Sexe="M" Nation="ITA" Licence="24041977000" DateNaissance="24.04.1977" FEDID="ITA"></Coach>
+  </Coaches>
+</BaseCompetitionIndividuelle>
