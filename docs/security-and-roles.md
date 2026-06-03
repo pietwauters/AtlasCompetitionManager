@@ -26,30 +26,54 @@ Two distinct concepts must be kept separate throughout the design:
 
 ### Access matrix
 
-| Capability | Public | Referee | Director | Admin |
-|---|:---:|:---:|:---:|:---:|
-| View pools, results, bracket, schedule | ✓ | ✓ | ✓ | ✓ |
-| View own assignment / schedule | — | ✓ | ✓ | ✓ |
-| Enter / confirm bout scores | — | ✓ | ✓ | ✓ |
-| Electronic scoresheet (future) | — | ✓ | ✓ | ✓ |
-| Create / manage phases | — | — | ✓ | ✓ |
-| Close / reopen competitions | — | — | ✓ | ✓ |
-| Manage competitors, seeding | — | — | ✓ | ✓ |
-| Manage people, fencers, clubs | — | — | — | ✓ |
-| OPP2 / MQTT configuration | — | — | — | ✓ |
-| Strips configuration | — | — | — | ✓ |
-| User account management | — | — | — | ✓ |
-| System settings | — | — | — | ✓ |
+| Capability | Public | Assistant | Referee | Director | Admin |
+|---|:---:|:---:|:---:|:---:|:---:|
+| View pools, results, bracket, schedule | ✓ | ✓ | ✓ | ✓ | ✓ |
+| View own assignment / schedule | — | — | ✓ | ✓ | ✓ |
+| Check in / withdraw competitors | — | ✓ | — | ✓ | ✓ |
+| Correct people records (limited) | — | ✓ | — | ✓ | ✓ |
+| Enter / confirm bout scores | — | — | ✓ | ✓ | ✓ |
+| Electronic scoresheet (future) | — | — | ✓ | ✓ | ✓ |
+| Create / manage phases | — | — | — | ✓ | ✓ |
+| Close / reopen competitions | — | — | — | ✓ | ✓ |
+| Manage competitors, seeding | — | — | — | ✓ | ✓ |
+| Full people / fencers DB management | — | — | — | — | ✓ |
+| OPP2 / MQTT configuration | — | — | — | — | ✓ |
+| Strips configuration | — | — | — | — | ✓ |
+| User account management | — | — | — | — | ✓ |
+| System settings | — | — | — | — | ✓ |
 
 ### Role notes
 
 - **Public** — no login; anyone on the network. Read-only pages only.
+- **Assistant** — entrance desk staff. Check-in, withdrawals, and limited
+  people record corrections (see below). Global scope — not restricted to
+  a single competition. QR+PIN authentication, never shared accounts.
 - **Referee** — must be linked to an existing record in the `referees` table.
-  Cannot exist as a standalone account.
-- **Director** — multiple director accounts are allowed (chief director +
-  assistants). Not required to be linked to a people record.
+  Cannot exist as a standalone account. Phase-scoped session.
+- **Director** — multiple accounts allowed (chief director + assistants).
+  Not required to be linked to a people record.
 - **Admin** — full access including OPP2 and user management. Should be at
   most one or two people.
+
+### Assistant: people record correction scope
+
+Assistants can correct existing records at the entrance desk. They cannot
+create or delete people records.
+
+| Field | Assistant access | Notes |
+|---|---|---|
+| `first_name`, `last_name` | ✓ Edit freely | Spelling errors |
+| `nationality`, `club_id` | ✓ Edit freely | Registration errors |
+| `weapons` | ✓ Edit freely | Wrong weapon at registration, or last-minute weapon change |
+| `date_of_birth` | ⚠ Edit + flag | Affects age category eligibility — change is saved but logged and shown as pending review to Director/Admin |
+| `gender` | ⚠ Edit + flag | Same reason |
+| `ranking`, `licence` | ✗ Read-only | Admin only |
+| Create new person | ✗ Blocked | Admin only |
+| Delete person | ✗ Blocked | Admin only |
+
+Flagged changes appear in a "Pending corrections" list visible to Director
+and Admin, who can acknowledge or revert them.
 
 ---
 
@@ -120,6 +144,7 @@ The admin account is created by `install.sh`:
 |---|---|
 | Admin | Fixed duration (e.g. 8 hours) or explicit logout. Configurable. |
 | Director | Fixed duration (competition day, e.g. 12 hours). |
+| Assistant | Fixed duration (competition day, e.g. 12 hours). |
 | Referee | **Phase-scoped** — session expires automatically when all bouts assigned to that referee in the current phase are marked done. Referee must re-authenticate for the next phase. |
 
 ### Referee phase-scoped sessions
@@ -148,7 +173,7 @@ New table `users`:
 |---|---|---|
 | `id` | INTEGER PK | |
 | `person_id` | INTEGER FK → people | NULL for Director/Admin without a people record |
-| `role` | TEXT | `'admin'` \| `'director'` \| `'referee'` |
+| `role` | TEXT | `'admin'` \| `'director'` \| `'assistant'` \| `'referee'` |
 | `username` | TEXT UNIQUE | Human-readable handle; pre-filled from QR at login |
 | `user_token` | TEXT UNIQUE | Opaque token encoded in QR code |
 | `pin_hash` | TEXT | bcrypt hash of PIN |
@@ -192,6 +217,8 @@ QR codes are generated inside Atlas (no external service):
 | `/`, `/results.html`, `/pool.html`, `/de.html` | Public |
 | `/me/{token}` | None (token = identity) |
 | `/phase.html`, `/competition-detail.html` (read) | Public |
+| Check-in / withdrawal endpoints | Assistant |
+| Limited people record correction | Assistant |
 | Score entry endpoints | Referee |
 | Phase creation, competition management | Director |
 | `/people.html`, `/admin.html` | Admin |
