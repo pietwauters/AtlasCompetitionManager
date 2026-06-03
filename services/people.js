@@ -32,7 +32,8 @@ const Person = {
         p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
         p.nationality, p.club_id, c.name AS club_name,
         CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END AS is_fencer,
-        CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END AS is_referee
+        CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END AS is_referee,
+        f.weapons
       FROM people p
       LEFT JOIN clubs    c ON c.id = p.club_id
       LEFT JOIN fencers  f ON f.person_id = p.id

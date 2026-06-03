@@ -81,6 +81,12 @@
         <option value="F">Female</option>
         <option value="X">Other</option>
       </select>
+      <select x-model="filterWeapon">
+        <option value="">All weapons</option>
+        <option value="foil">Foil</option>
+        <option value="epee">Épée</option>
+        <option value="sabre">Sabre</option>
+      </select>
       <select x-model="roleFilter">
         <option value="">All roles</option>
         <option value="fencer">Fencers</option>
@@ -98,6 +104,7 @@
           <th @click="peopleSort('gender')"      style="cursor:pointer;user-select:none">Gender      <span x-text="peopleSortIcon('gender')"></span></th>
           <th @click="peopleSort('nationality')" style="cursor:pointer;user-select:none">Nationality <span x-text="peopleSortIcon('nationality')"></span></th>
           <th @click="peopleSort('club')"        style="cursor:pointer;user-select:none">Club        <span x-text="peopleSortIcon('club')"></span></th>
+          <th @click="peopleSort('weapon')"      style="cursor:pointer;user-select:none">Weapon      <span x-text="peopleSortIcon('weapon')"></span></th>
           <th>Roles</th>
           <th></th>
         </tr>
@@ -110,6 +117,7 @@
             <td x-text="p.gender || '—'"></td>
             <td x-text="p.nationality || '—'"></td>
             <td x-text="p.club_name || '—'"></td>
+            <td x-text="p.weapons ? JSON.parse(p.weapons).join(', ') : '—'"></td>
             <td>
               <span class="badge badge-fencer"  x-show="p.is_fencer">fencer</span>
               <span class="badge badge-referee" x-show="p.is_referee">referee</span>
@@ -254,8 +262,9 @@ function app() {
     nocs:        [],
     search:      '',
     roleFilter:  '',
-    filterClub:  '',
-    filterGender:'',
+    filterClub:   '',
+    filterGender: '',
+    filterWeapon: '',
     sortKey:     'name',
     sortDir:     1,
     formOpen:    false,
@@ -284,6 +293,7 @@ function app() {
       if (this.roleFilter === 'referee') list = list.filter(p => p.is_referee);
       if (this.filterClub)   list = list.filter(p => p.club_id == this.filterClub);
       if (this.filterGender) list = list.filter(p => p.gender === this.filterGender);
+      if (this.filterWeapon) list = list.filter(p => p.weapons && p.weapons.includes(this.filterWeapon));
       const k = this.sortKey, d = this.sortDir;
       return [...list].sort((a, b) => {
         let av, bv;
@@ -291,6 +301,7 @@ function app() {
         else if (k==='dob')         { av=a.date_of_birth||'';      bv=b.date_of_birth||''; }
         else if (k==='gender')      { av=a.gender||'';             bv=b.gender||''; }
         else if (k==='nationality') { av=a.nationality||'';        bv=b.nationality||''; }
+        else if (k==='weapon')      { av=a.weapons||'';            bv=b.weapons||''; }
         else                        { av=a.club_name||'';          bv=b.club_name||''; }
         return av<bv ? -d : av>bv ? d : 0;
       });
