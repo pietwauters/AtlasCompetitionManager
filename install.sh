@@ -4,6 +4,8 @@
 # PURPOSE: Full deployment script for a fresh Raspberry Pi (or any Debian/Ubuntu Linux).
 # Run as root or with sudo: sudo bash install.sh
 #
+# Prerequisites: git clone the repo first, then run this script from inside it.
+#
 # This script is the living record of every manual step required.
 # Update it whenever a new dependency or setup step is added.
 #
@@ -26,12 +28,15 @@ echo "    App user: $APP_USER"
 echo "==> Installing system packages"
 apt-get update -y
 apt-get install -y \
+  git \
   nodejs \
   npm \
-  sqlite3
+  sqlite3 \
+  build-essential \
+  python3
 
 # Check Node.js version (18+ required)
-NODE_VERSION=$(node -e "process.exit(parseInt(process.versions.node.split('.')[0]))" 2>/dev/null || echo 0)
+NODE_VERSION=$(node -e "console.log(parseInt(process.versions.node.split('.')[0]))")
 if (( NODE_VERSION < 18 )); then
   echo "==> Node.js 18+ required. Installing via NodeSource..."
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
