@@ -17,19 +17,26 @@
 
     /* ── Matrix ──────────────────────────────────────────────────────────── */
     .matrix-wrap{overflow-x:auto;padding:0 1.5rem 1rem}
-    .mtx{border-collapse:collapse;font-size:.82rem;white-space:nowrap}
-    .mtx th,.mtx td{border:1px solid #2a3a5e;padding:.3rem .45rem;text-align:center}
-    .mtx thead th{background:#0d0d1f;color:#aad4f5;font-weight:600}
-    .mtx .td-name{text-align:left;padding-left:.6rem;min-width:9rem;color:#eee}
-    .mtx .td-num{color:#aad4f5;font-weight:600;min-width:1.6rem}
+    .mtx{border-collapse:collapse;font-size:1rem;white-space:nowrap}
+    .mtx th,.mtx td{border:1px solid #2a3a5e;padding:.45rem .65rem;text-align:center}
+    .mtx thead th{background:#0d0d1f;color:#aad4f5;font-weight:600;font-size:.85rem}
+    .mtx .td-name{text-align:left;padding-left:.75rem;min-width:11rem;color:#eee}
+    .mtx .td-num{color:#aad4f5;font-weight:600;min-width:2rem}
     .mtx .td-diag{background:#0a0a1a}
-    .mtx .td-won{color:#4cde80;font-weight:700}
+    .mtx .td-won{color:#4cde80;font-weight:700;font-size:1.05rem}
     .mtx .td-lost{color:#ccc}
     .mtx .td-empty{color:#333}
-    .mtx .td-stat{color:#aad4f5;min-width:2.4rem}
+    .mtx .td-stat{color:#aad4f5;min-width:2.8rem}
     .mtx .td-ind-pos{color:#4cde80}
     .mtx .td-ind-neg{color:#e74c3c}
-    .mtx .td-rank{font-weight:700;color:#fff;min-width:2rem}
+    .mtx .td-rank{font-weight:700;color:#fff;min-width:2.4rem}
+    /* toggle button in section header */
+    .section-toggle{display:flex;align-items:center;gap:.5rem;padding:.5rem 1.5rem .3rem;
+                    cursor:pointer;user-select:none;border:none;background:none;color:#888;
+                    font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;width:100%}
+    .section-toggle:hover{color:#aad4f5}
+    .toggle-arrow{font-size:.9rem;transition:transform .2s;display:inline-block}
+    .toggle-arrow.open{transform:rotate(90deg)}
 
     /* ── Scoresheet ──────────────────────────────────────────────────────── */
     .scoresheet{padding:0 1.5rem 1rem}
@@ -79,8 +86,12 @@
 <div class="progress" x-show="notice.text" :style="notice.error?'color:#e74c3c':''" x-text="notice.text"></div>
 
 <!-- ── Pool matrix ─────────────────────────────────────────────────────── -->
-<div x-show="pool">
-  <div class="section-label">Results</div>
+<div x-show="pool" x-data="{ open: localStorage.getItem('pool-matrix-open') !== '0' }">
+  <button class="section-toggle" @click="open=!open; localStorage.setItem('pool-matrix-open', open?'1':'0')">
+    <span class="toggle-arrow" :class="open?'open':''">▶</span>
+    Results matrix
+  </button>
+  <div x-show="open" x-transition.duration.150ms>
   <div class="matrix-wrap">
     <table class="mtx">
       <thead>
@@ -116,11 +127,16 @@
       </tbody>
     </table>
   </div>
+  </div>
 </div>
 
 <!-- ── Scoresheet ─────────────────────────────────────────────────────── -->
-<div x-show="pool">
-  <div class="section-label">Scoresheet</div>
+<div x-show="pool" x-data="{ open: localStorage.getItem('pool-sheet-open') !== '0' }">
+  <button class="section-toggle" @click="open=!open; localStorage.setItem('pool-sheet-open', open?'1':'0')">
+    <span class="toggle-arrow" :class="open?'open':''">▶</span>
+    Scoresheet
+  </button>
+  <div x-show="open" x-transition.duration.150ms>
   <div class="scoresheet">
     <template x-for="bout in bouts" :key="bout.id">
       <div class="bout-row" :class="bout.status">
@@ -161,6 +177,7 @@
         <button class="btn-undo" @click="undo(bout)" title="Undo last score entry">↩</button>
       </div>
     </template>
+  </div>
   </div>
 </div>
 
