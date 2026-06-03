@@ -272,41 +272,53 @@
   <div class="card" x-show="ganttData.hasData">
     <h2 style="margin-top:0">Piste schedule</h2>
     <div style="overflow-x:auto">
-      <div :style="'min-width:600px'">
-        <!-- Time axis -->
-        <div style="display:flex;margin-left:110px;position:relative;height:22px;border-bottom:2px solid #ddd;margin-bottom:2px">
-          <template x-for="tick in ganttData.ticks" :key="tick.left">
-            <div style="position:absolute;transform:translateX(-50%);font-size:.72rem;color:#888;white-space:nowrap"
-                 :style="'left:'+tick.left+'%'" x-text="tick.label"></div>
+      <div style="min-width:500px;display:flex">
+        <!-- Label column -->
+        <div style="width:110px;flex-shrink:0">
+          <div style="height:26px"></div>
+          <template x-for="row in ganttData.rows" :key="row.name+'_l'">
+            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid #f0f0f0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                 x-text="row.name"></div>
           </template>
         </div>
-        <!-- Strip rows -->
-        <template x-for="row in ganttData.rows" :key="row.name">
-          <div style="display:flex;align-items:center;height:34px;border-bottom:1px solid #f0f0f0">
-            <div style="width:110px;flex-shrink:0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
-                 x-text="row.name"></div>
-            <div style="flex:1;position:relative;height:26px;background:#fafafa;border-radius:3px">
-              <!-- "Now" line -->
-              <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
-                   :style="{ left: ganttData.nowLeft + '%' }"></div>
-              <!-- Slot bars -->
+        <!-- Chart area — single position:relative reference for header, gridlines, now-line and bars -->
+        <div style="flex:1;position:relative;min-width:0">
+          <!-- Hour labels -->
+          <div style="height:26px;position:relative;border-bottom:2px solid #ddd">
+            <template x-for="tick in ganttData.ticks" :key="'lbl'+tick.left">
+              <div x-show="tick.isHour"
+                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:#666;white-space:nowrap;pointer-events:none"
+                   :style="{ left: tick.left+'%' }" x-text="tick.label"></div>
+            </template>
+          </div>
+          <!-- Vertical gridlines spanning all rows -->
+          <template x-for="tick in ganttData.ticks" :key="'grid'+tick.left">
+            <div style="position:absolute;top:26px;bottom:0;pointer-events:none"
+                 :style="{ left: tick.left+'%', width: tick.isHour ? '1px' : '1px', background: tick.isHour ? '#ddd' : '#f0f0f0' }"></div>
+          </template>
+          <!-- Now line -->
+          <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
+               :style="{ left: ganttData.nowLeft+'%' }"></div>
+          <!-- Rows -->
+          <template x-for="row in ganttData.rows" :key="row.name">
+            <div style="height:34px;position:relative;border-bottom:1px solid #f0f0f0">
               <template x-for="bar in row.bars" :key="bar.id">
-                <div style="position:absolute;top:3px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box"
+                <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
                      :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
-                     :title="bar.label+(bar.start?' ('+bar.start+' → '+(bar.end||'?')+')')">
+                     :title="bar.label+(bar.start?' ('+bar.start+' → '+(bar.end||'?')+')':'')">
                   <span x-text="bar.label"></span>
                 </div>
               </template>
             </div>
-          </div>
-        </template>
-        <!-- Legend -->
-        <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
-          <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
-          <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
-          <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
-          <span style="margin-left:auto;color:#aaa">Only slots with a scheduled start time are shown.</span>
+          </template>
         </div>
+      </div>
+      <!-- Legend -->
+      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
+        <span style="margin-left:auto;color:#aaa">Only slots with a scheduled start time are shown.</span>
       </div>
     </div>
   </div>
@@ -455,7 +467,7 @@ function app() {
 
       const ticks = [];
       for (let t = axisStart; t <= axisEnd; t += 30)
-        ticks.push({ label: fmtMin(t), left: (t - axisStart) / total * 100 });
+        ticks.push({ label: fmtMin(t), left: (t - axisStart) / total * 100, isHour: t % 60 === 0 });
 
       const rows = this.strips
         .filter(strip => strip.slots.some(s => s.scheduled_start))
