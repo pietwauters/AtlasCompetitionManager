@@ -64,6 +64,10 @@
     .reason-btn{padding:.6rem .75rem;background:#0f2040;border:1px solid #2a3a5e;border-radius:8px;
                 color:#eee;font-size:.85rem;text-align:left;cursor:pointer;line-height:1.3;transition:background .12s}
     .reason-btn:hover,.reason-btn:active{background:#1a4a7a}
+    .reason-btn.drilldown{border-color:#5a7abf;color:#aad4f5}
+    .reason-btn.drilldown:hover,.reason-btn.drilldown:active{background:#1a3a6a}
+    .back-btn{background:none;border:none;color:#888;font-size:.9rem;cursor:pointer;padding:.2rem 0;margin-bottom:.5rem}
+    .back-btn:hover{color:#aaa}
 
     .freetext-row{display:flex;gap:.5rem;margin-bottom:.75rem}
     .freetext-row input{flex:1;padding:.55rem .75rem;background:#0f2040;border:1px solid #2a3a5e;
@@ -144,16 +148,20 @@
   <div class="overlay" x-show="dialog.open" x-transition.opacity>
     <div class="dialog" @click.stop>
       <div class="dialog-header">
+        <button class="back-btn" x-show="dialog.step === 2" @click="dialog.step = 1">← Back</button>
         <div class="dialog-title">
           <span class="card-badge" :class="dialog.card" x-text="dialog.card?.charAt(0).toUpperCase() + dialog.card?.slice(1) + ' card'"></span>
-          <span x-text="dialog.side === 'left' ? '← Left' : 'Right →'"></span>
+          <span x-show="dialog.step === 1" x-text="dialog.side === 'left' ? '← Left' : 'Right →'"></span>
+          <span x-show="dialog.step === 2" style="color:#aad4f5">Which Group 1 offence?</span>
         </div>
         <div class="dialog-fencer" x-text="dialog.fencerName"></div>
       </div>
 
       <div class="reason-grid">
-        <template x-for="r in filteredReasons" :key="r">
-          <button class="reason-btn" @click="submitReason(r)" x-text="r"></button>
+        <template x-for="r in filteredReasons" :key="r.text">
+          <button class="reason-btn" :class="r.drilldown ? 'drilldown' : ''"
+                  @click="r.drilldown ? enterDrilldown() : submitReason(r.text)"
+                  x-text="r.drilldown ? r.text + ' ▸' : r.text"></button>
         </template>
       </div>
 
@@ -187,7 +195,7 @@ const REASON_DEFS = {
     { text: 'Offensive behaviour',            weapons: null      },
   ],
   red: [
-    { text: 'Repeated Group 1 offence',       weapons: null      },
+    { text: 'Repeated Group 1 offence',       weapons: null,      drilldown: true },
     { text: 'Intentional off-target hit',     weapons: ['F']     },
     { text: 'Forcing a corps-à-corps',        weapons: ['F','S'] },
     { text: 'Displacing the strip',           weapons: ['F','S'] },
@@ -204,10 +212,15 @@ const REASON_DEFS = {
   ],
 };
 
-function reasonsFor(card, weapon) {
+function reasonsFor(card, weapon, step) {
+  if (step === 2) {
+    return (REASON_DEFS.yellow || [])
+      .filter(r => !r.weapons || r.weapons.includes(weapon))
+      .map(r => ({ text: r.text, drilldown: false }));
+  }
   return (REASON_DEFS[card] || [])
     .filter(r => !r.weapons || r.weapons.includes(weapon))
-    .map(r => r.text);
+    .map(r => ({ text: r.text, drilldown: r.drilldown || false }));
 }
 
 // ── Alpine app ───────────────────────────────────────────────────────────────
@@ -228,7 +241,7 @@ function app() {
     baselineSeq: null,  // seq of first score message received (retained)
 
     // Dialog
-    dialog: { open: false, side: '', card: '', fencerName: '', custom: '' },
+    dialog: { open: false, side: '', card: '', fencerName: '', custom: '', step: 1 },
 
     // History of reasons recorded this session
     history: [],
@@ -355,22 +368,29 @@ function app() {
           ? (this.currentBout?.leftName  || 'Left fencer')
           : (this.currentBout?.rightName || 'Right fencer'),
         custom:     '',
+        step:       1,
       };
     },
 
+    enterDrilldown() {
+      this.dialog.step = 2;
+    },
+
     get filteredReasons() {
-      return reasonsFor(this.dialog.card, this.weapon);
+      return reasonsFor(this.dialog.card, this.weapon, this.dialog.step);
     },
 
     submitReason(reason) {
       if (!reason?.trim()) return;
-      const { side, card } = this.dialog;
-      this.publishCardReason(side, card, reason.trim());
+      const { side, card, step } = this.dialog;
+      const finalReason = step === 2 ? 'Repeated Group 1: ' + reason.trim() : reason.trim();
+      this.publishCardReason(side, card, finalReason);
       this.history.unshift({
-        side, card, reason: reason.trim(),
+        side, card, reason: finalReason,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
       this.dialog.open = false;
+      this.dialog.step = 1;
     },
 
     publishCardReason(side, card, reason) {
