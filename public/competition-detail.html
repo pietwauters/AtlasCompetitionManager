@@ -84,12 +84,12 @@
   <!-- ── Phases ───────────────────────────────────── -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-      <h2 style="margin:0;flex:1">Phases</h2>
-      <button class="primary" @click="phaseFormOpen=!phaseFormOpen" x-show="comp?.status!=='finished'">+ New phase</button>
+      <h2 style="margin:0;flex:1">Rounds</h2>
+      <button class="primary" @click="phaseFormOpen=!phaseFormOpen" x-show="comp?.status!=='finished'">+ New round</button>
     </div>
 
     <!-- Existing phases -->
-    <div x-show="phases.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No phases yet.</div>
+    <div x-show="phases.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No rounds yet.</div>
     <template x-for="ph in phases" :key="ph.id">
       <div class="phase-row">
         <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
@@ -105,8 +105,8 @@
     <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
       <!-- Phase type selector -->
       <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
-        <button :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool phase</button>
-        <button :class="newPhaseType==='de'?'primary':''" @click="newPhaseType='de';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">DE phase</button>
+        <button :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool round</button>
+        <button :class="newPhaseType==='de'?'primary':''" @click="newPhaseType='de';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">DE round</button>
       </div>
 
       <!-- Pool phase form -->
@@ -168,11 +168,11 @@
           <strong style="font-size:.85rem">DE seeding</strong>
           <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
             <input type="radio" x-model="deSeedingMethod" value="last">
-            Use last pool phase ranking only
+            Use last pool round ranking only
           </label>
           <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
             <input type="radio" x-model="deSeedingMethod" value="combined">
-            Combined ranking across all pool phases (aggregate V/M, indicator, touches)
+            Combined ranking across all pool rounds (aggregate V/M, indicator, touches)
           </label>
         </div>
         <div x-show="deOptions" style="margin-top:.75rem;font-size:.85rem;color:#555">
@@ -419,15 +419,15 @@ function app() {
       });
       const data = await r.json();
       if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}
-      this.showNotice('Phase created with '+this.chosenSizes.length+' pools');
+      this.showNotice('Round created with '+this.chosenSizes.length+' pools');
       this.phaseFormOpen=false; this.poolOptions=null; this.chosenSizes=null; this.newRuleDoc='';
       await this.loadPhases();
     },
     async deletePhase(ph) {
-      if(!confirm('Delete this phase and all its pools and bouts?'))return;
+      if(!confirm('Delete this round and all its pools and bouts?'))return;
       const r = await fetch('/api/competitions/'+compId+'/phases/'+ph.id,{method:'DELETE'});
       if(!r.ok){this.showNotice('Delete failed',true);return;}
-      this.showNotice('Phase deleted'); await this.loadPhases();
+      this.showNotice('Round deleted'); await this.loadPhases();
     },
     formatOption(opt) {
       const counts={};

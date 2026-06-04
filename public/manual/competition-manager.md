@@ -33,13 +33,92 @@ A fencer's starting rank within a round, derived from their national ranking or 
 
 ## 2. Before Competition Day
 
+This section covers everything to prepare in the days before the event: clubs, fencer records, and verifying the start list. Do this in advance — competition morning is not the right time to add 40 fencers.
+
 ### 2.1 Clubs and NOCs
+
+Before adding fencers you need the clubs and nationalities in place, because fencer records reference them.
+
+**Clubs** are managed from the **People** page via the navigation bar. Clubs have a name and an optional short code. Add one club per entry — there is no bulk import for clubs.
+
+**NOCs** (National Olympic Committees) are the nationality codes used for international events. A standard list of IOC country codes is pre-loaded; you only need to add custom entries if your federation uses non-standard codes.
+
+---
 
 ### 2.2 Adding fencers manually
 
+Go to **People** in the navigation bar. Click **+ Add person**.
+
+Fill in the personal details:
+
+| Field | Required | Notes |
+|---|---|---|
+| First name | Yes | |
+| Last name | Yes | |
+| Date of birth | No | Used for age-category eligibility checks |
+| Gender | No | Used to filter eligible competitors |
+| Nationality | No | Choose from the NOC list |
+| Club | No | Choose from the clubs list |
+
+Tick the **Fencer** checkbox to reveal the fencer profile fields:
+
+| Field | Notes |
+|---|---|
+| Licence | Your federation's licence number — used as the unique key during CSV import |
+| Handedness | Left or Right |
+| Weapons | Comma-separated: `foil`, `epee`, `sabre` |
+| Ranking | National ranking number (lower = better) — used for auto-seeding |
+| Points | Ranking points (for display; not used in seeding calculations) |
+
+Click **Save**. The person appears in the list immediately.
+
+A person can hold both the **Fencer** and **Referee** roles at the same time — tick both checkboxes and fill in each profile section.
+
+![People list with filters and add button](images/people-list.png)
+
+---
+
 ### 2.3 Importing fencers from CSV
 
+For larger start lists, CSV import is faster than manual entry. On the **People** page, expand the **Import fencers from CSV** section at the bottom.
+
+**Required columns:**
+
+```
+first_name, last_name
+```
+
+**Optional columns:**
+
+```
+date_of_birth, gender, nationality, club, licence, weapons, handedness, ranking, points
+```
+
+Column order does not matter as long as the header row is present. The `club` column takes the club name as a string — Atlas matches it to an existing club by name, or creates the club if it does not exist yet.
+
+**Update behaviour:** if a row has a `licence` value that matches an existing fencer, that record is updated in place. If there is no licence, Atlas matches on `first_name + last_name + date_of_birth`. Rows that do not match any existing record are created as new fencers.
+
+Paste your CSV text into the text area and click **Import**. A summary line appears showing how many records were created and updated.
+
+> **Tip:** Export your existing fencer list first (**↓ Export CSV** button in the toolbar) to see the exact column format Atlas uses. This is also useful for keeping a backup or sharing the list with another system.
+
+---
+
 ### 2.4 Reviewing and editing fencer records
+
+Use the toolbar filters to find fencers quickly:
+
+- **Search box** — matches on first or last name
+- **Club** dropdown — filter to one club
+- **Gender** dropdown
+- **Weapon** dropdown
+- **Role** dropdown — show only fencers or only referees
+
+Click any column header to sort by that column. Click again to reverse the sort.
+
+To correct a record, click **Edit** on that row. The same form used for adding opens with the existing values pre-filled. Click **Save** when done.
+
+> **Before the competition:** check that every fencer who should compete has the correct weapon, gender, and date of birth set. These are the fields Atlas uses to decide who is eligible when you add competitors to a competition. A fencer with the wrong weapon will not appear in the eligible list.
 
 ---
 

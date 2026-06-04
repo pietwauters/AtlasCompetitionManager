@@ -61,10 +61,10 @@
       <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
-      <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate phase</button>
+      <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate round</button>
       <button x-show="phase?.status==='finished'"
               style="background:#fff3cd;color:#856404;border-color:#ffc107"
-              @click="reopenPhase()">↩ Reopen phase</button>
+              @click="reopenPhase()">↩ Reopen round</button>
       <template x-if="phase?.status==='active'">
         <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <button @click="loadRankings()" style="background:#f0f2f5">⟳ Refresh rankings</button>
@@ -83,7 +83,7 @@
                  style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
                  :placeholder="closeMethod==='percentage'?'%':'N'">
           <button class="success" :disabled="!allBoutsComplete" @click="closePhase()"
-                  :title="allBoutsComplete?'':'Complete all bouts first'">✓ Close phase</button>
+                  :title="allBoutsComplete?'':'Complete all bouts first'">✓ Close round</button>
         </span>
       </template>
     </div>
@@ -221,7 +221,7 @@ function app() {
     async activate() {
       const r = await fetch('/api/phases/'+phaseId+'/activate',{method:'POST'});
       if(!r.ok){this.showNotice('Activate failed',true);return;}
-      this.showNotice('Phase activated');
+      this.showNotice('Round activated');
       await this.loadPhase();
     },
 
@@ -238,7 +238,7 @@ function app() {
       const r = await fetch('/api/phases/'+phaseId+'/reopen', { method: 'POST' });
       const data = await r.json();
       if (!r.ok) { this.showNotice(data.error || 'Reopen failed', true); return; }
-      this.showNotice('Phase reopened — rankings cleared, scores intact');
+      this.showNotice('Round reopened — rankings cleared, scores intact');
       await Promise.all([this.loadPhase(), this.loadRankings()]);
     },
 
@@ -253,7 +253,7 @@ function app() {
       });
       const data = await r.json();
       if(!r.ok){this.showNotice(data.error||'Close failed',true);return;}
-      this.showNotice('Phase closed — advanced: '+data.advanced+', eliminated: '+data.eliminated);
+      this.showNotice('Round closed — advanced: '+data.advanced+', eliminated: '+data.eliminated);
       await Promise.all([this.loadPhase(), this.loadRankings()]);
     },
 
