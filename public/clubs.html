@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Clubs</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th    { text-align: left; padding: 0.5rem 0.75rem; background: #f0f2f5; border-bottom: 2px solid #ddd; }
+    td    { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+    tr:hover td { background: #f9f9f9; }
+    .count { font-weight: 600; color: #1a6bab; }
+    .count-zero { color: #aaa; }
+    .inline-edit { display: flex; gap: .4rem; align-items: center; }
+    .inline-edit input { padding: .3rem .5rem; border: 1px solid #1a6bab; border-radius: 4px;
+                         font-size: .9rem; width: 100%; }
+    .notice-bar { padding: 0.6rem 1rem; border-radius: 5px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .notice-ok  { background: #d4edda; color: #155724; }
+    .notice-err { background: #f8d7da; color: #721c24; }
+    .merge-panel { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px;
+                   padding: .85rem 1rem; margin-top: .5rem; }
+    .merge-panel select { padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 4px;
+                          font-size: .9rem; margin: 0 .4rem; }
+    .btn-merge { background: #e65100; color: #fff; border: none; border-radius: 4px;
+                 padding: .35rem .85rem; cursor: pointer; font-size: .85rem; }
+    .btn-merge:hover { background: #bf360c; }
+    .btn-cancel { background: #eee; border: none; border-radius: 4px;
+                  padding: .35rem .75rem; cursor: pointer; font-size: .85rem; }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <nav>
+    <template x-for="comp in activeComps" :key="comp.phase_id">
+      <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+         style="font-size:.85rem;background:#1a4a7a;padding:.2rem .6rem;border-radius:4px"></a>
+    </template>
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html" class="active">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </nav>
+</header>
+
+<main>
+
+  <div class="notice-bar notice-ok" x-show="notice.text && !notice.error" x-text="notice.text"></div>
+  <div class="notice-bar notice-err" x-show="notice.text && notice.error"  x-text="notice.text"></div>
+
+  <!-- Club list -->
+  <div class="card">
+    <h2>Clubs</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Short name</th>
+          <th>Country</th>
+          <th style="text-align:right">Fencers</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="c in clubs" :key="c.id">
+          <tr>
+            <!-- Name cell — normal or editing -->
+            <td>
+              <template x-if="editId !== c.id">
+                <span x-text="c.name"></span>
+              </template>
+              <template x-if="editId === c.id">
+                <div class="inline-edit">
+                  <input x-model="editForm.name" @keydown.enter="saveEdit()" @keydown.escape="cancelEdit()" placeholder="Club name">
+                </div>
+              </template>
+            </td>
+            <td>
+              <template x-if="editId !== c.id">
+                <span x-text="c.short_name || '—'" style="color:#888"></span>
+              </template>
+              <template x-if="editId === c.id">
+                <div class="inline-edit">
+                  <input x-model="editForm.short_name" @keydown.enter="saveEdit()" @keydown.escape="cancelEdit()" placeholder="Optional">
+                </div>
+              </template>
+            </td>
+            <td>
+              <template x-if="editId !== c.id">
+                <span x-text="c.country || '—'" style="color:#888"></span>
+              </template>
+              <template x-if="editId === c.id">
+                <div class="inline-edit">
+                  <input x-model="editForm.country" @keydown.enter="saveEdit()" @keydown.escape="cancelEdit()" placeholder="BEL" style="width:5rem">
+                </div>
+              </template>
+            </td>
+            <td style="text-align:right">
+              <span :class="c.fencer_count > 0 ? 'count' : 'count-zero'" x-text="c.fencer_count"></span>
+            </td>
+            <td style="white-space:nowrap">
+              <template x-if="editId !== c.id">
+                <span style="display:flex;gap:.4rem;justify-content:flex-end">
+                  <button @click="startEdit(c)">Edit</button>
+                  <button @click="startMerge(c)"
+                          title="Move all fencers to another club and delete this one"
+                          style="background:#fff3e0;border-color:#ffb74d;color:#e65100">Merge →</button>
+                  <button class="danger" @click="deleteClub(c)"
+                          :disabled="c.fencer_count > 0"
+                          :title="c.fencer_count > 0 ? 'Club has fencers — merge first' : 'Delete club'"
+                          :style="c.fencer_count > 0 ? 'opacity:.4;cursor:not-allowed' : ''">Delete</button>
+                </span>
+              </template>
+              <template x-if="editId === c.id">
+                <span style="display:flex;gap:.4rem;justify-content:flex-end">
+                  <button class="success" @click="saveEdit()">Save</button>
+                  <button @click="cancelEdit()">Cancel</button>
+                </span>
+              </template>
+            </td>
+          </tr>
+          <!-- Merge panel — shown inline below the row -->
+          <template x-if="mergeId === c.id">
+            <tr>
+              <td colspan="5" style="padding:.5rem .75rem 1rem">
+                <div class="merge-panel">
+                  <strong>Merge "<span x-text="c.name"></span>" into:</strong>
+                  <select x-model="mergeTargetId">
+                    <option value="">— choose target club —</option>
+                    <template x-for="other in clubs.filter(x => x.id !== c.id)" :key="other.id">
+                      <option :value="other.id" x-text="other.name + ' (' + other.fencer_count + ' fencers)'"></option>
+                    </template>
+                  </select>
+                  <span style="font-size:.85rem;color:#666" x-show="mergeTargetId">
+                    <span x-text="c.fencer_count"></span> fencer(s) will move.
+                    "<span x-text="c.name"></span>" will be deleted.
+                  </span>
+                  <br><br>
+                  <button class="btn-merge" :disabled="!mergeTargetId" @click="confirmMerge(c)">Merge and delete "<span x-text="c.name"></span>"</button>
+                  <button class="btn-cancel" @click="cancelMerge()">Cancel</button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </template>
+        <tr x-show="clubs.length === 0">
+          <td colspan="5" style="text-align:center;color:#999;padding:1.5rem">No clubs yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Add club -->
+  <div class="card">
+    <h3 style="margin-top:0">Add club</h3>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Name *
+        <input x-model="newForm.name" placeholder="Club Namur" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px">
+      </label>
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Short name
+        <input x-model="newForm.short_name" placeholder="NAM" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:6rem">
+      </label>
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Country
+        <input x-model="newForm.country" placeholder="BEL" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:5rem">
+      </label>
+      <button class="primary" @click="addClub()" :disabled="!newForm.name.trim()">Add club</button>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
+<script src="/js/nav.js"></script>
+<script>
+function app() {
+  return {
+    clubs: [],
+    notice: { text: '', error: false },
+    editId: null,
+    editForm: { name: '', short_name: '', country: '' },
+    mergeId: null,
+    mergeTargetId: '',
+    newForm: { name: '', short_name: '', country: '' },
+
+    async init() {
+      await this.load();
+    },
+
+    async load() {
+      this.clubs = await fetch('/api/clubs?counts=1').then(r => r.json()).catch(() => []);
+    },
+
+    showNotice(text, error = false) {
+      this.notice = { text, error };
+      setTimeout(() => { this.notice.text = ''; }, 3500);
+    },
+
+    startEdit(c) {
+      this.mergeId = null;
+      this.editId = c.id;
+      this.editForm = { name: c.name, short_name: c.short_name || '', country: c.country || '' };
+    },
+
+    cancelEdit() { this.editId = null; },
+
+    async saveEdit() {
+      const r = await fetch('/api/clubs/' + this.editId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.editForm),
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Save failed', true); return; }
+      this.editId = null;
+      await this.load();
+      this.showNotice('Club updated');
+    },
+
+    startMerge(c) {
+      this.editId = null;
+      this.mergeId = c.id;
+      this.mergeTargetId = '';
+    },
+
+    cancelMerge() { this.mergeId = null; this.mergeTargetId = ''; },
+
+    async confirmMerge(c) {
+      if (!this.mergeTargetId) return;
+      const target = this.clubs.find(x => String(x.id) === String(this.mergeTargetId));
+      if (!confirm(`Move ${c.fencer_count} fencer(s) from "${c.name}" to "${target?.name}" and delete "${c.name}"?`)) return;
+      const r = await fetch('/api/clubs/' + c.id + '/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_id: this.mergeTargetId }),
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Merge failed', true); return; }
+      this.mergeId = null; this.mergeTargetId = '';
+      await this.load();
+      this.showNotice(`Merged — ${data.moved} fencer(s) moved to "${data.target.name}"`);
+    },
+
+    async deleteClub(c) {
+      if (c.fencer_count > 0) return;
+      if (!confirm(`Delete "${c.name}"?`)) return;
+      const r = await fetch('/api/clubs/' + c.id, { method: 'DELETE' });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Delete failed', true); return; }
+      await this.load();
+      this.showNotice(`"${c.name}" deleted`);
+    },
+
+    async addClub() {
+      const name = this.newForm.name.trim();
+      if (!name) return;
+      const r = await fetch('/api/clubs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.newForm),
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Failed to add club', true); return; }
+      this.newForm = { name: '', short_name: '', country: '' };
+      await this.load();
+      this.showNotice(`"${data.name}" added`);
+    },
+  };
+}
+</script>
+</body>
+</html>
