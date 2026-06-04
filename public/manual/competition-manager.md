@@ -39,7 +39,15 @@ This section covers everything to prepare in the days before the event: clubs, f
 
 Before adding fencers you need the clubs and nationalities in place, because fencer records reference them.
 
-**Clubs** are managed from the **People** page via the navigation bar. Clubs have a name and an optional short code. Add one club per entry — there is no bulk import for clubs.
+**Clubs** have their own page — click **Clubs** in the navigation bar. Each club has a name, an optional short name (used on scoresheets), and an optional country code.
+
+![Clubs page with fencer counts and merge option](images/clubs.png)
+
+Click **Add club** at the bottom to create a new entry. Atlas blocks duplicate names case-insensitively — *Club Namur* and *CLUB NAMUR* are treated as the same club.
+
+If you discover two clubs that should be one (a common result of CSV imports from different sources), use **Merge →**. Select the club to keep as the target; all fencers are moved to the target club and the source club is deleted. This is the correct way to fix spelling variants — do not simply delete a club that has fencers.
+
+The **Delete** button is disabled on any club that still has fencers assigned to it.
 
 **NOCs** (National Olympic Committees) are the nationality codes used for international events. A standard list of IOC country codes is pre-loaded; you only need to add custom entries if your federation uses non-standard codes.
 
@@ -124,15 +132,76 @@ To correct a record, click **Edit** on that row. The same form used for adding o
 
 ## 3. Setting Up a Competition
 
+Everything starts on the **Tournaments & Competitions** page — click **Competitions** or **Tournaments** in the main nav (they share the same page, with two tabs).
+
+---
+
 ### 3.1 Creating a tournament
 
-### 3.2 Creating a competition (weapon, gender, age category)
+A tournament is optional but recommended if you are running several competitions on the same day — it keeps them grouped in the list and in exports.
+
+Click the **Tournaments** tab, then **+ New tournament**. Fill in the fields you need:
+
+| Field | Notes |
+|---|---|
+| Name | e.g. *Belgian Championship 2026* |
+| City / Country | For display and exports |
+| Start / End date | The dates the event runs |
+| Organizer | Club or federation running the event |
+| Level | e.g. *Regional*, *National*, *International* |
+
+Click **Save**. The tournament appears in the list and is available as a grouping option when you create competitions.
+
+---
+
+### 3.2 Creating a competition
+
+Click the **Competitions** tab, then **+ New competition**.
+
+| Field | Required | Notes |
+|---|---|---|
+| Name | Yes | e.g. *U17 Foil Men* — shown throughout the app |
+| Weapon | Yes | Foil, Épée, or Sabre |
+| Gender | Yes | Male, Female, or Mixed/Open — used to filter eligible fencers |
+| Date | No | The competition date |
+| Tournament | No | Link this competition to a tournament for grouping |
+| Age categories | No | Tick one or more; used together with date of birth to filter eligible fencers |
+
+Click **Save**. The competition appears in the list with status *draft*.
+
+> **Age categories** are defined by your federation (e.g. U17 means born no more than 17 years before the competition year). If no age category is selected, all fencers of the right weapon and gender are eligible regardless of age.
+
+---
 
 ### 3.3 Adding competitors
 
+Click the competition name to open the competition detail page.
+
+The right panel shows **Eligible fencers** — everyone in Atlas whose weapon, gender, and age match this competition. Use the search box or the club filter to find fencers quickly.
+
+Click **+ Add** next to a fencer's name to register them as a competitor. Their national ranking becomes their initial seed. You can add fencers one at a time or work through the list systematically.
+
+To remove a competitor, click **Remove** next to their name in the competitors list on the left panel.
+
+![Competition detail page with eligible fencers and competitors list](images/competition-detail.png)
+
+> **Tip:** click **⚡ Auto-seed by ranking** after you have added all competitors. Atlas re-assigns seeds in national ranking order (lowest number = best). Do this last — adding more competitors after auto-seeding will place new arrivals at the end of the list.
+
+---
+
 ### 3.4 Seeding from national ranking
 
+Click **⚡ Auto-seed by ranking** on the competition detail page. Atlas sorts all registered competitors by their national ranking field (set on each fencer record) and assigns seed 1 to the highest-ranked fencer, seed 2 to the next, and so on.
+
+Fencers with no ranking are placed at the end, in the order they were added.
+
+---
+
 ### 3.5 Manual seed adjustments
+
+The seed numbers in the competitors list are editable. Click on a seed number, type the new value, and press Enter. Seeds do not need to be unique at this stage — if you assign the same number to two fencers, Atlas will warn you when you try to create a pool round.
+
+> Once a pool round has been created, changing seeds has no effect on that round's pool assignments. Adjust seeds before creating the first round.
 
 ---
 
