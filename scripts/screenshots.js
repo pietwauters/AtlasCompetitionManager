@@ -84,10 +84,49 @@ const SHOTS = [
     },
   },
 
+  // --- Pool formation form with options loaded ---
+  {
+    name: 'pool-formation',
+    note: 'Competition detail page with pool options calculated and displayed',
+    url: '/competition-detail.html',
+    waitFor: 'body',
+    viewport: DESKTOP,
+    beforeShot: async page => {
+      const comps = await page.evaluate(async () => {
+        const r = await fetch('/api/competitions'); return r.ok ? r.json() : [];
+      });
+      if (!comps.length) return;
+      await page.goto(`${BASE_URL}/competition-detail.html?id=${comps[0].id}`, { waitUntil: 'networkidle0' });
+      await page.waitForTimeout(500);
+      // Open the new phase form
+      const newBtn = await page.$('button[\\@click*="phaseFormOpen"], button');
+      const buttons = await page.$$('button');
+      for (const btn of buttons) {
+        const txt = await page.evaluate(el => el.textContent, btn);
+        if (txt.includes('New')) { await btn.click(); break; }
+      }
+      await page.waitForTimeout(300);
+      // Select first pool rule doc
+      const ruleSelect = await page.$('select[x-model="newRuleDoc"]');
+      if (ruleSelect) {
+        const options = await page.$$eval('select[x-model="newRuleDoc"] option', os => os.map(o => o.value).filter(Boolean));
+        if (options.length) await page.select('select[x-model="newRuleDoc"]', options[0]);
+      }
+      await page.waitForTimeout(200);
+      // Click calculate
+      const calcButtons = await page.$$('button');
+      for (const btn of calcButtons) {
+        const txt = await page.evaluate(el => el.textContent, btn);
+        if (txt.includes('Calculate')) { await btn.click(); break; }
+      }
+      await page.waitForTimeout(600);
+    },
+  },
+
   // --- Phase overview ---
   {
     name: 'phase-overview',
-    note: 'Phase page showing pool list with strip assignments',
+    note: 'Phase page showing pool cards with strip/referee assignments',
     url: '/phase.html',
     waitFor: 'body',
     viewport: DESKTOP,
