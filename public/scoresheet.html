@@ -492,6 +492,7 @@ function app() {
         }
         this.detectCards(this.lastScore, payload);
         this.lastScore = payload; this.score = payload;
+        this.checkDialogCancelled(payload);
       }
     },
 
@@ -560,6 +561,15 @@ function app() {
         ? (this.fencerDisplayName(active?.left)  || this.currentBout?.leftName  || 'Left fencer')
         : (this.fencerDisplayName(active?.right) || this.currentBout?.rightName || 'Right fencer');
       this.dialog = { open: true, side, card, fencerName: fn, custom: '', step: 1 };
+    },
+
+    checkDialogCancelled(score) {
+      if (!this.dialog.open) return;
+      const s = score?.[this.dialog.side] || {};
+      const gone = (this.dialog.card === 'yellow' && !s.yellow_card)
+                || (this.dialog.card === 'red'    && !(s.red_cards > 0))
+                || (this.dialog.card === 'black'  && !s.black_card);
+      if (gone) { this.dialog.open = false; this.dialog.step = 1; }
     },
 
     toggleBout(id) { const b = this.bouts.find(b => b.id === id); if (b) b.expanded = !b.expanded; },
