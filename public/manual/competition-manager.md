@@ -307,9 +307,27 @@ The round status changes to *finished*. Advancing competitors carry their seedin
 
 ## 5. Running a Second Pool Round
 
+A second pool round is common in larger competitions — it lets you see everyone fence twice before cutting to DE, and produces a more reliable seeding for the bracket.
+
 ### 5.1 Creating a follow-on pool round
 
+Close the first pool round (§4.6). The competition detail page will show the first round with status *finished*.
+
+Click **+ New round**, choose **Pool round**, select a rule document, and click **Calculate pool options**. Atlas automatically uses the final ranking of the previous round as the seeding input — seed 1 in the new round is the fencer who ranked first overall in the previous round.
+
+Everything else works identically to the first pool round: choose pool sizes, set separation, assign strips, enter scores, close. Only advancing competitors from the first round appear in the second round — eliminated fencers do not re-enter.
+
+---
+
 ### 5.2 Combined seeding across pool rounds
+
+When you create the DE round after two pool rounds, Atlas offers a choice of seeding method:
+
+**Use last pool round ranking only** — the DE seed is taken from the second pool round results alone. A fencer who had a bad first round but recovered is seeded purely on their second-round performance.
+
+**Combined ranking across all pool rounds** — Atlas aggregates each fencer's V/M, indicator, and touches scored across both rounds and ranks them on the combined totals. This is the FIE standard approach and is fairer to fencers who performed consistently across both rounds.
+
+The choice only appears when there are two or more finished pool rounds. For a single pool round there is nothing to choose — the seeding is always taken from that round's results.
 
 ---
 
@@ -317,13 +335,76 @@ The round status changes to *finished*. Advancing competitors carry their seedin
 
 ### 6.1 Creating a DE round
 
+Close all pool rounds first. On the competition detail page, click **+ New round** and choose **DE round**.
+
+Select a rule document, then click **Preview bracket**. Atlas calculates:
+
+- **N competitors** — the number of fencers who advanced from the pool rounds
+- **Tableau size** — the smallest power of 2 that fits N (e.g. 45 fencers → 64-person tableau)
+- **Bye count** — the number of byes needed to fill the tableau (64 − 45 = 19 byes)
+
+If two or more pool rounds were finished, the seeding method choice appears here (see §5.2).
+
+Click **Create DE bracket**. Atlas builds the entire bracket immediately — all rounds from the round of 64 through to the final — and automatically scores all bye bouts. The phase opens with status *pending*.
+
+Click **▶ Activate phase** on the DE page to begin scoring.
+
+---
+
 ### 6.2 Reading the bracket
+
+The bracket is displayed as columns from left (earliest round) to right (final). Each column is labelled: *Round of 64*, *Round of 32*, *Quarter-final*, *Semi-final*, *Final*.
+
+Each box (bout card) shows two fencers and, once scored, their scores with the winner highlighted. Fencers are identified by name; their seed is shown in the results table at the bottom of the page once bouts are completed.
+
+Click any bout card to open the score panel below the bracket.
+
+---
 
 ### 6.3 Byes and their placement
 
+Byes go to the **highest-seeded fencers**. If there are 19 byes in a 64-person tableau, seeds 1 through 19 each receive a bye in the first round and advance automatically to the second round.
+
+Bye bouts are displayed in the bracket with the label *bye* and are already marked finished — you do not need to enter any score for them. The advancing fencer moves into the next round's slot automatically.
+
+> **Why top seeds get byes:** this is FIE standard. Byes reward the best-ranked fencers from the pool rounds; lower-ranked fencers must fence an extra bout to advance.
+
+---
+
 ### 6.4 Entering scores and advancing winners
 
+Click a bout card to select it. The score panel appears below the bracket with the two fencers' names and number inputs.
+
+Enter the left score and right score and click **Save score**. The winner advances automatically to the correct slot in the next round — you do not need to do anything else. The next round's bout card updates as soon as the score is saved.
+
+**Ties (overtime):** if both scores are equal, two buttons appear — click the fencer who won priority. The result is saved with equal scores and the selected fencer as winner.
+
+**Undo:** click **↩ Undo** on a finished bout to clear its score and the winner's advancement. This also clears any subsequent scores that depended on this bout (it removes the winner from the next round). Use this to correct a score entry mistake.
+
+> Undo works through the bracket — if a fencer has already won their next bout, you must undo that result first before undoing the earlier one.
+
+---
+
 ### 6.5 Simulating results (testing / demo)
+
+Click **🎲 Simulate** to fill in all remaining bouts with random scores. This is useful for testing the bracket or demonstrating the app without real competition data.
+
+Simulate can be run on a partially completed bracket — it only fills bouts that have no result yet.
+
+---
+
+### 6.6 Results table
+
+As bouts are completed, a results table appears at the bottom of the DE page showing the current standings:
+
+| Place | Fencer |
+|---|---|
+| 🥇 1st | Winner of the final |
+| 🥈 2nd | Loser of the final |
+| 3rd (shared) | Both semi-final losers — no bronze bout is held unless the rule document specifies one |
+| 5th, 6th, 7th, 8th… | Quarter-final losers ranked by their pool-round seed |
+
+The full competition results page (§7) combines these DE results with the pool-eliminated fencers for a complete ranking.
 
 ---
 
