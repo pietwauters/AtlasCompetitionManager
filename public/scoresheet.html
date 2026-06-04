@@ -160,7 +160,7 @@
       <div class="reason-grid">
         <template x-for="r in filteredReasons" :key="r.text">
           <button class="reason-btn" :class="r.drilldown ? 'drilldown' : ''"
-                  @click="r.drilldown ? enterDrilldown() : submitReason(r.text)"
+                  @click="clickReason(r)"
                   x-text="r.drilldown ? r.text + ' ▸' : r.text"></button>
         </template>
       </div>
@@ -177,48 +177,14 @@
 <script src="/js/mqttws31.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
-// ── Reason list ──────────────────────────────────────────────────────────────
-// weapons: null = all weapons; array = only for those weapon codes (F/E/S)
-const REASON_DEFS = {
-  yellow: [
-    { text: 'Corps-à-corps',                 weapons: ['F','S'] },
-    { text: 'Covering the target',            weapons: ['F']     },
-    { text: 'Using non-sword arm',            weapons: null      },
-    { text: 'Turning back on opponent',       weapons: null      },
-    { text: 'Running past opponent',          weapons: null      },
-    { text: 'Displacing the strip',           weapons: ['F','S'] },
-    { text: 'Leaving the piste',              weapons: null      },
-    { text: 'Not being ready / late arrival', weapons: null      },
-    { text: 'Delay of game',                  weapons: null      },
-    { text: 'Passivity',                      weapons: null      },
-    { text: 'Incorrect equipment / uniform',  weapons: null      },
-    { text: 'Offensive behaviour',            weapons: null      },
-  ],
-  red: [
-    { text: 'Repeated Group 1 offence',       weapons: null,      drilldown: true },
-    { text: 'Intentional off-target hit',     weapons: ['F']     },
-    { text: 'Forcing a corps-à-corps',        weapons: ['F','S'] },
-    { text: 'Displacing the strip',           weapons: ['F','S'] },
-    { text: 'Violent action',                 weapons: null      },
-    { text: 'Refusing to obey',               weapons: null      },
-    { text: 'Unsportsmanlike conduct',        weapons: null      },
-  ],
-  black: [
-    { text: 'Violence against person',        weapons: null      },
-    { text: 'Doping',                         weapons: null      },
-    { text: 'Corruption / match manipulation',weapons: null      },
-    { text: 'Gross unsportsmanlike conduct',  weapons: null      },
-    { text: 'Abandonment without valid reason', weapons: null    },
-  ],
-};
-
-function reasonsFor(card, weapon, step) {
+function reasonsFor(defs, card, weapon, step) {
+  if (!defs) return [];
   if (step === 2) {
-    return (REASON_DEFS.yellow || [])
+    return (defs.yellow || [])
       .filter(r => !r.weapons || r.weapons.includes(weapon))
       .map(r => ({ text: r.text, drilldown: false }));
   }
-  return (REASON_DEFS[card] || [])
+  return (defs[card] || [])
     .filter(r => !r.weapons || r.weapons.includes(weapon))
     .map(r => ({ text: r.text, drilldown: r.drilldown || false }));
 }
@@ -240,6 +206,9 @@ function app() {
     lastScore:   null,  // retained baseline — don't trigger dialog on this
     baselineSeq: null,  // seq of first score message received (retained)
 
+    // Localised reason list (loaded from /data/reasons.json)
+    reasonDefs: null,
+
     // Dialog
     dialog: { open: false, side: '', card: '', fencerName: '', custom: '', step: 1 },
 
@@ -248,6 +217,10 @@ function app() {
 
     async init() {
       if (!this.pisteId) return;
+      const lang = new URLSearchParams(location.search).get('lang') || 'en';
+      const allReasons = await fetch('/data/reasons.json').then(r => r.json()).catch(() => ({}));
+      this.reasonDefs = allReasons[lang] || allReasons['en'] || null;
+
       const settings = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
       const brokerUrl = settings.broker_url || 'mqtt://openpiste.local:1883';
       // Convert mqtt:// or mqtts:// → ws:// on port 9001
@@ -372,18 +345,24 @@ function app() {
       };
     },
 
+    clickReason(r) {
+      if (r.drilldown) this.enterDrilldown();
+      else this.submitReason(r.text);
+    },
+
     enterDrilldown() {
       this.dialog.step = 2;
     },
 
     get filteredReasons() {
-      return reasonsFor(this.dialog.card, this.weapon, this.dialog.step);
+      return reasonsFor(this.reasonDefs, this.dialog.card, this.weapon, this.dialog.step);
     },
 
     submitReason(reason) {
       if (!reason?.trim()) return;
       const { side, card, step } = this.dialog;
-      const finalReason = step === 2 ? 'Repeated Group 1: ' + reason.trim() : reason.trim();
+      const prefix = this.reasonDefs?.strings?.repeated_group1_prefix ?? 'Repeated Group 1: ';
+      const finalReason = step === 2 ? prefix + reason.trim() : reason.trim();
       this.publishCardReason(side, card, finalReason);
       this.history.unshift({
         side, card, reason: finalReason,

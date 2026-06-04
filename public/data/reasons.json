@@ -1,0 +1,107 @@
+{
+  "en": {
+    "strings": {
+      "repeated_group1_prefix": "Repeated Group 1: "
+    },
+    "yellow": [
+      { "text": "Corps-à-corps",                 "weapons": ["F","S"] },
+      { "text": "Covering the target",            "weapons": ["F"]     },
+      { "text": "Using non-sword arm",            "weapons": null      },
+      { "text": "Turning back on opponent",       "weapons": null      },
+      { "text": "Running past opponent",          "weapons": null      },
+      { "text": "Displacing the strip",           "weapons": ["F","S"] },
+      { "text": "Leaving the piste",              "weapons": null      },
+      { "text": "Not being ready / late arrival", "weapons": null      },
+      { "text": "Delay of game",                  "weapons": null      },
+      { "text": "Passivity",                      "weapons": null      },
+      { "text": "Incorrect equipment / uniform",  "weapons": null      },
+      { "text": "Offensive behaviour",            "weapons": null      }
+    ],
+    "red": [
+      { "text": "Repeated Group 1 offence",       "weapons": null,      "drilldown": true },
+      { "text": "Intentional off-target hit",     "weapons": ["F"]      },
+      { "text": "Forcing a corps-à-corps",        "weapons": ["F","S"]  },
+      { "text": "Displacing the strip",           "weapons": ["F","S"]  },
+      { "text": "Violent action",                 "weapons": null       },
+      { "text": "Refusing to obey",               "weapons": null       },
+      { "text": "Unsportsmanlike conduct",        "weapons": null       }
+    ],
+    "black": [
+      { "text": "Violence against person",          "weapons": null },
+      { "text": "Doping",                           "weapons": null },
+      { "text": "Corruption / match manipulation",  "weapons": null },
+      { "text": "Gross unsportsmanlike conduct",    "weapons": null },
+      { "text": "Abandonment without valid reason", "weapons": null }
+    ]
+  },
+  "fr": {
+    "strings": {
+      "repeated_group1_prefix": "Récidive groupe 1 : "
+    },
+    "yellow": [
+      { "text": "Corps-à-corps",                          "weapons": ["F","S"] },
+      { "text": "Couvrir la cible",                       "weapons": ["F"]     },
+      { "text": "Utilisation du bras non armé",           "weapons": null      },
+      { "text": "Tourner le dos à l'adversaire",          "weapons": null      },
+      { "text": "Passer en courant devant l'adversaire",  "weapons": null      },
+      { "text": "Déplacer la piste",                      "weapons": ["F","S"] },
+      { "text": "Quitter la piste",                       "weapons": null      },
+      { "text": "Ne pas être prêt / arrivée tardive",     "weapons": null      },
+      { "text": "Retard de jeu",                          "weapons": null      },
+      { "text": "Passivité",                              "weapons": null      },
+      { "text": "Équipement / tenue incorrect(e)",        "weapons": null      },
+      { "text": "Comportement offensant",                 "weapons": null      }
+    ],
+    "red": [
+      { "text": "Récidive d'une faute du groupe 1",  "weapons": null,      "drilldown": true },
+      { "text": "Touche hors-cible intentionnelle",  "weapons": ["F"]      },
+      { "text": "Provoquer un corps-à-corps",        "weapons": ["F","S"]  },
+      { "text": "Déplacer la piste",                 "weapons": ["F","S"]  },
+      { "text": "Action violente",                   "weapons": null       },
+      { "text": "Refus d'obéir",                     "weapons": null       },
+      { "text": "Conduite antisportive",             "weapons": null       }
+    ],
+    "black": [
+      { "text": "Violence contre une personne",          "weapons": null },
+      { "text": "Dopage",                                "weapons": null },
+      { "text": "Corruption / manipulation du combat",   "weapons": null },
+      { "text": "Conduite grossièrement antisportive",   "weapons": null },
+      { "text": "Abandon sans raison valable",           "weapons": null }
+    ]
+  },
+  "es": {
+    "strings": {
+      "repeated_group1_prefix": "Reincidencia grupo 1: "
+    },
+    "yellow": [
+      { "text": "Cuerpo a cuerpo",                  "weapons": ["F","S"] },
+      { "text": "Cubrir el blanco",                 "weapons": ["F"]     },
+      { "text": "Uso del brazo sin arma",           "weapons": null      },
+      { "text": "Dar la espalda al adversario",     "weapons": null      },
+      { "text": "Pasar corriendo al adversario",    "weapons": null      },
+      { "text": "Desplazar la pista",               "weapons": ["F","S"] },
+      { "text": "Abandonar la pista",               "weapons": null      },
+      { "text": "No estar listo / llegada tardía",  "weapons": null      },
+      { "text": "Demora del combate",               "weapons": null      },
+      { "text": "Pasividad",                        "weapons": null      },
+      { "text": "Equipo / uniforme incorrecto",     "weapons": null      },
+      { "text": "Comportamiento ofensivo",          "weapons": null      }
+    ],
+    "red": [
+      { "text": "Reincidencia en infracción del grupo 1", "weapons": null,      "drilldown": true },
+      { "text": "Tocado fuera de blanco intencional",     "weapons": ["F"]      },
+      { "text": "Provocar un cuerpo a cuerpo",            "weapons": ["F","S"]  },
+      { "text": "Desplazar la pista",                     "weapons": ["F","S"]  },
+      { "text": "Acción violenta",                        "weapons": null       },
+      { "text": "Negativa a obedecer",                    "weapons": null       },
+      { "text": "Conducta antideportiva",                 "weapons": null       }
+    ],
+    "black": [
+      { "text": "Violencia contra una persona",          "weapons": null },
+      { "text": "Dopaje",                                "weapons": null },
+      { "text": "Corrupción / manipulación del combate", "weapons": null },
+      { "text": "Conducta groseramente antideportiva",   "weapons": null },
+      { "text": "Abandono sin motivo válido",            "weapons": null }
+    ]
+  }
+}

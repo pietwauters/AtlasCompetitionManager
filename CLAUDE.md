@@ -212,6 +212,12 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Assigning a strip sets `strips.status = 'assigned'`; clearing it resets to `'idle'`
 - UI: `public/strips.html`
 
+### OPP2 design principle — ecosystem independence
+
+Every component in the OPP2 ecosystem (scoring apparatus, remote control, scoresheet tablet, display, CMS) can be from different and independent implementers who have no knowledge of each other's implementation details. Everything must work if communication follows the spec.
+
+**Consequence for Atlas OPP2 work:** never put Atlas-internal identifiers (DB row IDs, `pool_id`, `phase_id`, `pipeline_slot_id`) into MQTT payloads. Any compliant CMS must be able to produce the message; any compliant display must be able to consume it without knowing anything about Atlas.
+
 ### OPP2 / MQTT integration (foundational layer complete as of 2026-05-31)
 
 **Protocol:** OpenPiste Protocol 2 (OPP2) — native JSON over MQTT.
