@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas Manual</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px; line-height: 1.65;
+      background: #f5f7fa; color: #1a2a3a;
+    }
+    #sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 240px;
+      background: #1a2a3a; color: #cdd6e0; overflow-y: auto;
+      padding: 1.5rem 0;
+    }
+    #sidebar .logo {
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      padding: 0 1.25rem 1.25rem; border-bottom: 1px solid #2a3d50;
+      margin-bottom: 1rem;
+    }
+    #sidebar .logo span { color: #4aa3df; }
+    #sidebar a {
+      display: block; padding: .45rem 1.25rem;
+      color: #cdd6e0; text-decoration: none; font-size: .9rem;
+    }
+    #sidebar a:hover, #sidebar a.active { color: #fff; background: #243550; }
+    #sidebar .section-head {
+      font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: #5a7a9a;
+      padding: .9rem 1.25rem .3rem;
+    }
+    #toc { margin-top: 1rem; border-top: 1px solid #2a3d50; padding-top: .75rem; }
+    #toc a {
+      display: block; padding: .3rem 1.25rem .3rem 2rem;
+      color: #8aaacc; text-decoration: none; font-size: .82rem;
+    }
+    #toc a:hover { color: #cdd6e0; }
+    #toc a.h3 { padding-left: 3rem; font-size: .78rem; color: #6a8aaa; }
+    #content {
+      margin-left: 240px; padding: 2.5rem 3rem;
+      max-width: 900px;
+    }
+    /* Markdown rendering */
+    #md h1 { font-size: 2rem; font-weight: 700; margin-bottom: .5rem; color: #0d1f30; border-bottom: 2px solid #4aa3df; padding-bottom: .4rem; }
+    #md h2 { font-size: 1.4rem; font-weight: 700; margin: 2.5rem 0 .75rem; color: #1a2a3a; border-bottom: 1px solid #d0dae4; padding-bottom: .3rem; }
+    #md h3 { font-size: 1.1rem; font-weight: 600; margin: 1.75rem 0 .5rem; color: #243550; }
+    #md h4 { font-size: .95rem; font-weight: 600; margin: 1.25rem 0 .4rem; color: #3a5570; }
+    #md p { margin-bottom: 1rem; }
+    #md ul, #md ol { margin: .5rem 0 1rem 1.5rem; }
+    #md li { margin-bottom: .3rem; }
+    #md code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: .875em; background: #e8edf2; padding: .15em .4em; border-radius: 3px; }
+    #md pre { background: #1a2a3a; color: #cdd6e0; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+    #md pre code { background: none; padding: 0; font-size: .85rem; }
+    #md blockquote { border-left: 3px solid #4aa3df; margin: 1rem 0; padding: .5rem 1rem; background: #eef4fb; color: #2a4a6a; border-radius: 0 4px 4px 0; }
+    #md table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
+    #md th { background: #1a2a3a; color: #fff; padding: .5rem .85rem; text-align: left; font-size: .9rem; }
+    #md td { padding: .45rem .85rem; border-bottom: 1px solid #d0dae4; font-size: .9rem; }
+    #md tr:nth-child(even) td { background: #f0f4f9; }
+    #md img { max-width: 100%; border-radius: 6px; border: 1px solid #d0dae4; margin: 1rem 0; display: block; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    #md hr { border: none; border-top: 1px solid #d0dae4; margin: 2rem 0; }
+    .callout { border-radius: 6px; padding: .75rem 1rem; margin: 1rem 0; font-size: .93rem; }
+    .callout.tip    { background: #eaf7ee; border-left: 3px solid #2a8a4a; }
+    .callout.warn   { background: #fdf5e6; border-left: 3px solid #d4851a; }
+    .callout.danger { background: #fdecea; border-left: 3px solid #c0392b; }
+    @media print {
+      #sidebar { display: none; }
+      #content { margin-left: 0; padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav id="sidebar">
+    <div class="logo">Atlas <span>Manual</span></div>
+    <div class="section-head">Documents</div>
+    <a href="?doc=competition-manager" id="link-cm">Competition Manager</a>
+    <a href="?doc=referee" id="link-ref">Referee / Scoresheet</a>
+    <div class="section-head" style="margin-top:1rem">On this page</div>
+    <div id="toc"></div>
+  </nav>
+  <div id="content">
+    <div id="md"></div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const doc = params.get('doc') || 'competition-manager';
+    document.getElementById('link-cm').classList.toggle('active', doc === 'competition-manager');
+    document.getElementById('link-ref').classList.toggle('active', doc === 'referee');
+    document.title = doc === 'referee' ? 'Referee Guide — Atlas' : 'Competition Manager Guide — Atlas';
+
+    fetch(doc + '.md')
+      .then(r => r.ok ? r.text() : Promise.reject(r.status))
+      .then(md => {
+        document.getElementById('md').innerHTML = marked.parse(md, { gfm: true });
+        buildToc();
+        if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+      })
+      .catch(e => { document.getElementById('md').innerHTML = `<p style="color:red">Failed to load ${doc}.md (${e})</p>`; });
+
+    function buildToc() {
+      const toc = document.getElementById('toc');
+      toc.innerHTML = '';
+      document.querySelectorAll('#md h2, #md h3').forEach(h => {
+        if (!h.id) h.id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        if (h.tagName === 'H3') a.classList.add('h3');
+        a.addEventListener('click', e => { e.preventDefault(); h.scrollIntoView({ behavior: 'smooth' }); history.pushState(null, '', '#' + h.id); });
+        toc.appendChild(a);
+      });
+    }
+  </script>
+</body>
+</html>
