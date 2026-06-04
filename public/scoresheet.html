@@ -5,144 +5,368 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Atlas — Scoresheet</title>
   <style>
+    /* ── Theme tokens ── */
+    :root {
+      --bg:          #1a1a2e;
+      --surface:     #0d1728;
+      --surface-alt: #0f1a2e;
+      --dialog-bg:   #16213e;
+      --input-bg:    #0f2040;
+      --border:      #1e2d50;
+      --border-2:    #2a3a5e;
+      --border-3:    #1a2540;
+      --text:        #eeeeee;
+      --text-2:      #aaaaaa;
+      --text-3:      #888888;
+      --text-4:      #555555;
+      --text-num:    #aad4f5;
+      --text-order:  #667788;
+      --sep-color:   #555555;
+
+      --ok-bg:    #0d3321;  --ok:    #4cde80;
+      --err-bg:   #2d0e0e;  --err:   #e74c3c;
+      --slot-lbl: #8aabbf;
+
+      --active-bg:       #0d1f35;  --active-border:   #4aa3df;
+      --finished-border: #2a6e3a;
+      --hover:           #0d1a30;
+      --toggle-bg:       #0f1a2e;
+
+      --live-bg: #2a1a00;  --live: #f39c12;
+
+      --mtx-head-bg:   #0d0d1f;  --mtx-head: #aad4f5;
+      --mtx-num-color: #aad4f5;
+      --mtx-name-color:#eeeeee;
+      --mtx-diag-bg:   #0a1020;
+      --mtx-won:       #4cde80;
+      --mtx-lost:      #cccccc;
+      --mtx-stat:      #aad4f5;
+      --mtx-rank:      #ffffff;
+      --ind-pos:       #4cde80;
+      --ind-neg:       #e74c3c;
+
+      --chip-black-border: #555;
+      --theme-icon: '☀';
+    }
+
+    body.light {
+      --bg:          #f0f4f9;
+      --surface:     #ffffff;
+      --surface-alt: #e4ecf5;
+      --dialog-bg:   #ffffff;
+      --input-bg:    #f0f4fb;
+      --border:      #c4d0e0;
+      --border-2:    #aabcd0;
+      --border-3:    #ccd8e8;
+      --text:        #1a2a3a;
+      --text-2:      #3a5068;
+      --text-3:      #607080;
+      --text-4:      #8090a8;
+      --text-num:    #2a5080;
+      --text-order:  #8090a8;
+      --sep-color:   #aabbcc;
+
+      --ok-bg:    #eaf5ee;  --ok:    #1a7a3a;
+      --err-bg:   #fdecea;  --err:   #c0392b;
+      --slot-lbl: #4a6a80;
+
+      --active-bg:       #ddeeff;  --active-border:   #2a7abf;
+      --finished-border: #1a7a3a;
+      --hover:           #e4ecf5;
+      --toggle-bg:       #e4ecf5;
+
+      --live-bg: #fff3e0;  --live: #d35400;
+
+      --mtx-head-bg:   #dce8f4;  --mtx-head: #2a4a68;
+      --mtx-num-color: #2a5080;
+      --mtx-name-color:#1a2a3a;
+      --mtx-diag-bg:   #e8eef6;
+      --mtx-won:       #1a7a3a;
+      --mtx-lost:      #777777;
+      --mtx-stat:      #2a4a68;
+      --mtx-rank:      #1a2a3a;
+      --ind-pos:       #1a7a3a;
+      --ind-neg:       #c0392b;
+
+      --chip-black-border: #999;
+      --theme-icon: '🌙';
+    }
+
+    /* ── Reset ── */
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#1a1a2e;color:#eee;font-family:Arial,sans-serif;min-height:100vh}
+    body{background:var(--bg);color:var(--text);font-family:Arial,sans-serif;min-height:100vh;font-size:16px}
 
     /* ── Status bar ── */
-    .status-bar{display:flex;align-items:center;gap:.6rem;padding:.5rem 1rem;font-size:.8rem;font-weight:600}
-    .status-bar.ok{background:#0d3321;color:#4cde80}
-    .status-bar.err{background:#2d0e0e;color:#e74c3c}
-    .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-    .ok .status-dot{background:#4cde80}
-    .err .status-dot{background:#e74c3c}
+    .status-bar{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;font-size:.85rem;font-weight:600}
+    .status-bar.ok{background:var(--ok-bg);color:var(--ok)}
+    .status-bar.err{background:var(--err-bg);color:var(--err)}
+    .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .ok .status-dot{background:var(--ok)}
+    .err .status-dot{background:var(--err)}
+    .slot-label{margin-left:auto;font-size:.78rem;font-weight:400;color:var(--slot-lbl)}
+    .theme-btn{background:none;border:1px solid var(--border-2);border-radius:5px;color:var(--text-3);
+               cursor:pointer;font-size:.82rem;padding:.2rem .55rem;margin-left:.75rem;flex-shrink:0;
+               transition:background .1s}
+    .theme-btn:hover{background:var(--hover)}
 
-    /* ── Bout display ── */
-    .bout-panel{padding:1rem;background:#16213e;margin:.75rem;border-radius:10px}
-    .bout-meta{font-size:.75rem;color:#888;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em}
-    .fencers-row{display:flex;align-items:center;gap:.5rem}
+    /* ── Idle ── */
+    .idle-msg{text-align:center;color:var(--text-4);padding:2.5rem 1rem;font-size:1rem}
+
+    /* ── Section toggle ── */
+    .section-toggle{display:flex;align-items:center;gap:.5rem;width:100%;background:var(--toggle-bg);
+                    border:none;border-bottom:1px solid var(--border);
+                    color:var(--text-2);font-size:.8rem;font-weight:700;text-transform:uppercase;
+                    letter-spacing:.07em;padding:.6rem 1rem;cursor:pointer;text-align:left}
+    .section-toggle:hover{background:var(--hover)}
+    .toggle-arrow{display:inline-block;transition:transform .15s;font-size:.7rem;color:var(--text-4)}
+    .toggle-arrow.open{transform:rotate(90deg)}
+
+    /* ── Pool matrix ── */
+    .matrix-wrap{overflow-x:auto;padding:0 1rem 1rem}
+    .mtx{border-collapse:collapse;font-size:1rem;white-space:nowrap}
+    .mtx th,.mtx td{border:1px solid var(--border-2);padding:.45rem .65rem;text-align:center}
+    .mtx thead th{background:var(--mtx-head-bg);color:var(--mtx-head);font-weight:600;font-size:.85rem}
+    .mtx .td-name{text-align:left;padding-left:.75rem;min-width:10rem;color:var(--mtx-name-color)}
+    .mtx .td-num{color:var(--mtx-num-color);font-weight:600;min-width:2rem}
+    .mtx .td-diag{background:var(--mtx-diag-bg)}
+    .mtx .td-empty{color:var(--text-4)}
+    .mtx .td-won{color:var(--mtx-won);font-weight:700;font-size:1.05rem}
+    .mtx .td-lost{color:var(--mtx-lost)}
+    .mtx .td-stat{color:var(--mtx-stat);min-width:2.8rem}
+    .mtx .td-ind-pos{color:var(--ind-pos)}
+    .mtx .td-ind-neg{color:var(--ind-neg)}
+    .mtx .td-rank{font-weight:700;color:var(--mtx-rank);min-width:2.4rem}
+
+    /* ── Bout list ── */
+    .bout-list{padding:.25rem 0}
+    .bout-item{border-bottom:1px solid var(--border-3)}
+
+    .bout-header{display:flex;align-items:center;gap:.5rem;padding:.75rem .85rem;
+                 cursor:pointer;user-select:none;transition:background .1s;
+                 border-left:3px solid transparent}
+    .bout-header:hover{background:var(--hover)}
+    .bout-header.bout-active{border-left-color:var(--active-border);background:var(--active-bg)}
+    .bout-header.bout-finished{border-left-color:var(--finished-border);opacity:.85}
+
+    .bout-order{font-size:.85rem;color:var(--text-order);font-weight:700;flex-shrink:0;width:2.2rem}
+    .bout-fname{font-size:1.1rem;font-weight:600;white-space:nowrap;overflow:hidden;
+                text-overflow:ellipsis;flex:1;min-width:0;color:var(--text)}
+    .bout-fname.right{text-align:right}
+    .bout-inline-score{font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums;
+                       color:var(--text-3);flex-shrink:0;text-align:center;min-width:3.8rem}
+    .bout-inline-score.live{color:var(--live)}
+    .bout-inline-score.finished{color:var(--mtx-won)}
+    .live-badge{font-size:.72rem;font-weight:700;color:var(--live);background:var(--live-bg);
+                padding:.15rem .45rem;border-radius:3px;letter-spacing:.05em;flex-shrink:0}
+
+    /* ── Bout body ── */
+    .bout-body{background:var(--surface);padding:.9rem;border-top:1px solid var(--border-3)}
+
+    .fencers-row{display:flex;align-items:center;gap:.6rem}
     .fencer-block{flex:1;min-width:0}
-    .fencer-name{font-size:1.05rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .fencer-detail{font-size:.75rem;color:#888;margin-top:.15rem}
-    .score-block{text-align:center;padding:0 .75rem;flex-shrink:0}
-    .score-display{font-size:2.2rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.1em}
-    .cards-row{display:flex;gap:.3rem;margin-top:.4rem;min-height:1.4rem}
+    .fencer-name{font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;
+                 text-overflow:ellipsis;color:var(--text)}
+    .fencer-name.winner{color:var(--mtx-won)}
+    .fencer-detail{font-size:.8rem;color:var(--text-3);margin-top:.15rem}
+    .score-block{text-align:center;padding:0 1rem;flex-shrink:0}
+    .score-display{font-size:2.8rem;font-weight:700;font-variant-numeric:tabular-nums;
+                   letter-spacing:.1em;color:var(--text)}
+    .score-sep{color:var(--sep-color);font-size:1.8rem;margin:0 .25rem}
+    .cards-row{display:flex;gap:.35rem;margin-top:.45rem;min-height:1.8rem}
     .card-chip{display:inline-flex;align-items:center;justify-content:center;
-               width:1.4rem;height:1.4rem;border-radius:3px;font-size:.72rem;font-weight:700}
+               width:1.8rem;height:1.8rem;border-radius:4px;font-size:.85rem;font-weight:700}
     .card-chip.yellow{background:#f1c40f;color:#1a1a2e}
     .card-chip.red{background:#e74c3c;color:#fff}
-    .card-chip.black{background:#1a1a2e;color:#fff;border:1px solid #555}
+    .card-chip.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)}
     .fencer-block.right .cards-row{flex-direction:row-reverse}
     .fencer-block.right .fencer-name{text-align:right}
     .fencer-block.right .fencer-detail{text-align:right}
 
-    .idle-msg{text-align:center;color:#555;padding:2rem 1rem;font-size:.9rem}
-
-    /* ── History ── */
-    .history-section{margin:.75rem;padding:1rem;background:#16213e;border-radius:10px}
-    .section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;margin-bottom:.6rem}
-    .history-empty{color:#555;font-size:.85rem}
-    .history-row{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:1px solid #1e2d50;font-size:.88rem}
+    /* ── Annotations ── */
+    .bout-annotations{margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border-3)}
+    .annotations-title{font-size:.75rem;font-weight:700;text-transform:uppercase;
+                        letter-spacing:.07em;color:var(--text-4);margin-bottom:.45rem}
+    .history-row{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;
+                 border-bottom:1px solid var(--border);font-size:.92rem;color:var(--text)}
     .history-row:last-child{border-bottom:none}
-    .h-side{font-size:.72rem;font-weight:700;text-transform:uppercase;color:#888;width:2.5rem;flex-shrink:0}
+    .h-side{font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-3);
+            width:2.8rem;flex-shrink:0}
     .h-reason{flex:1}
-    .h-time{font-size:.72rem;color:#555;flex-shrink:0}
+    .h-time{font-size:.75rem;color:var(--text-4);flex-shrink:0}
 
     /* ── Dialog overlay ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;
              display:flex;align-items:center;justify-content:center;padding:1rem}
-    .dialog{background:#16213e;border-radius:14px;padding:1.5rem;width:100%;max-width:480px;
-            border:1px solid #2a3a5e;max-height:90vh;overflow-y:auto}
+    .dialog{background:var(--dialog-bg);border-radius:14px;padding:1.5rem;width:100%;
+            max-width:480px;border:1px solid var(--border-2);max-height:90vh;overflow-y:auto}
     .dialog-header{margin-bottom:1rem}
-    .dialog-title{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:.6rem}
-    .card-badge{display:inline-block;padding:.2rem .7rem;border-radius:6px;font-size:.85rem;font-weight:700}
+    .dialog-title{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:.6rem;
+                  color:var(--text)}
+    .card-badge{display:inline-block;padding:.25rem .8rem;border-radius:6px;font-size:.9rem;font-weight:700}
     .card-badge.yellow{background:#f1c40f;color:#1a1a2e}
     .card-badge.red{background:#e74c3c;color:#fff}
-    .card-badge.black{background:#1a1a2e;color:#fff;border:1px solid #555}
-    .dialog-fencer{font-size:.85rem;color:#aaa;margin-top:.25rem}
+    .card-badge.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)}
+    .dialog-fencer{font-size:.9rem;color:var(--text-2);margin-top:.3rem}
 
-    .reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem}
-    .reason-btn{padding:.6rem .75rem;background:#0f2040;border:1px solid #2a3a5e;border-radius:8px;
-                color:#eee;font-size:.85rem;text-align:left;cursor:pointer;line-height:1.3;transition:background .12s}
-    .reason-btn:hover,.reason-btn:active{background:#1a4a7a}
+    .reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:1rem}
+    .reason-btn{padding:.7rem .8rem;background:var(--input-bg);border:1px solid var(--border-2);
+                border-radius:8px;color:var(--text);font-size:.9rem;text-align:left;cursor:pointer;
+                line-height:1.35;transition:background .12s}
+    .reason-btn:hover,.reason-btn:active{background:var(--hover)}
     .reason-btn.drilldown{border-color:#5a7abf;color:#aad4f5}
-    .reason-btn.drilldown:hover,.reason-btn.drilldown:active{background:#1a3a6a}
-    .back-btn{background:none;border:none;color:#888;font-size:.9rem;cursor:pointer;padding:.2rem 0;margin-bottom:.5rem}
-    .back-btn:hover{color:#aaa}
+    body.light .reason-btn.drilldown{border-color:#2a5a8a;color:#2a5a8a}
+    .reason-btn.drilldown:hover,.reason-btn.drilldown:active{background:var(--hover)}
+    .back-btn{background:none;border:none;color:var(--text-3);font-size:.95rem;cursor:pointer;
+              padding:.2rem 0;margin-bottom:.5rem}
+    .back-btn:hover{color:var(--text)}
 
     .freetext-row{display:flex;gap:.5rem;margin-bottom:.75rem}
-    .freetext-row input{flex:1;padding:.55rem .75rem;background:#0f2040;border:1px solid #2a3a5e;
-                        border-radius:8px;color:#eee;font-size:.9rem;outline:none}
-    .freetext-row input:focus{border-color:#aad4f5}
-    .freetext-row button{padding:.55rem 1rem;background:#1a6bab;color:#fff;border:none;border-radius:8px;
-                         font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+    .freetext-row input{flex:1;padding:.6rem .8rem;background:var(--input-bg);
+                        border:1px solid var(--border-2);border-radius:8px;
+                        color:var(--text);font-size:.95rem;outline:none}
+    .freetext-row input:focus{border-color:var(--active-border)}
+    .freetext-row button{padding:.6rem 1rem;background:#1a6bab;color:#fff;border:none;
+                         border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;
+                         white-space:nowrap}
+    body.light .freetext-row button{background:#2a7abf}
     .freetext-row button:disabled{opacity:.4;cursor:default}
-    .skip-btn{width:100%;padding:.55rem;background:none;border:1px solid #333;border-radius:8px;
-              color:#666;font-size:.85rem;cursor:pointer}
-    .skip-btn:hover{color:#aaa;border-color:#555}
+    .skip-btn{width:100%;padding:.6rem;background:none;border:1px solid var(--border);
+              border-radius:8px;color:var(--text-4);font-size:.9rem;cursor:pointer}
+    .skip-btn:hover{color:var(--text-2);border-color:var(--border-2)}
   </style>
 </head>
-<body x-data="app()" x-init="init()">
+<body x-data="app()" x-init="init()" :class="darkTheme ? '' : 'light'">
 
   <!-- Status bar -->
   <div class="status-bar" :class="connected ? 'ok' : 'err'">
     <span class="status-dot"></span>
-    <span x-text="connected ? 'Connected — Piste ' + pisteId : 'Not connected'"></span>
-    <span x-show="!connected" style="margin-left:auto;font-weight:400;color:#888" x-text="pisteId ? '' : 'Add ?piste=NAME to URL'"></span>
+    <span x-text="connected ? 'Connected — Piste ' + pisteId : (pisteId ? 'Not connected' : 'Add ?piste=NAME to URL')"></span>
+    <span x-show="slotLabel" class="slot-label" x-text="slotLabel"></span>
+    <button class="theme-btn" @click="toggleTheme()" x-text="darkTheme ? '☀ Light' : '🌙 Dark'"></button>
   </div>
 
-  <!-- Bout panel -->
-  <div x-show="currentBout" class="bout-panel">
-    <div class="bout-meta" x-text="boutMeta"></div>
-    <div class="fencers-row">
-      <!-- Left fencer -->
-      <div class="fencer-block left">
-        <div class="fencer-name" x-text="currentBout?.leftName || '—'"></div>
-        <div class="fencer-detail" x-text="currentBout?.leftNation || ''"></div>
-        <div class="cards-row">
-          <span class="card-chip yellow" x-show="score?.left?.yellow_card" title="Yellow card">Y</span>
-          <template x-for="n in (score?.left?.red_cards || 0)" :key="n">
-            <span class="card-chip red" title="Red card">R</span>
-          </template>
-          <span class="card-chip black" x-show="score?.left?.black_card" title="Black card">B</span>
-        </div>
-      </div>
-      <!-- Score -->
-      <div class="score-block">
-        <div class="score-display">
-          <span x-text="score?.left?.score ?? '—'"></span>
-          <span style="color:#555;font-size:1.4rem;margin:0 .2rem">:</span>
-          <span x-text="score?.right?.score ?? '—'"></span>
-        </div>
-      </div>
-      <!-- Right fencer -->
-      <div class="fencer-block right">
-        <div class="fencer-name" x-text="currentBout?.rightName || '—'"></div>
-        <div class="fencer-detail" x-text="currentBout?.rightNation || ''"></div>
-        <div class="cards-row">
-          <span class="card-chip yellow" x-show="score?.right?.yellow_card" title="Yellow card">Y</span>
-          <template x-for="n in (score?.right?.red_cards || 0)" :key="n">
-            <span class="card-chip red" title="Red card">R</span>
-          </template>
-          <span class="card-chip black" x-show="score?.right?.black_card" title="Black card">B</span>
-        </div>
+  <!-- Pool matrix -->
+  <div x-show="phaseType === 'pool' && matrix">
+    <button class="section-toggle" @click="matrixOpen = !matrixOpen">
+      <span class="toggle-arrow" :class="matrixOpen ? 'open' : ''">▶</span>
+      Results matrix
+    </button>
+    <div x-show="matrixOpen" x-transition.duration.100ms>
+      <div class="matrix-wrap">
+        <table class="mtx">
+          <thead>
+            <tr>
+              <th class="td-num">#</th>
+              <th class="td-name" style="text-align:left">Name</th>
+              <template x-for="(_, j) in (matrix?.participants || [])" :key="'h' + j">
+                <th x-text="j + 1"></th>
+              </template>
+              <th class="td-stat">V</th>
+              <th class="td-stat">Ind</th>
+              <th class="td-stat">TS</th>
+              <th class="td-stat">TR</th>
+              <th class="td-rank">Rank</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="(p, i) in (matrix?.participants || [])" :key="'r' + p.id">
+              <tr>
+                <td class="td-num" x-text="i + 1"></td>
+                <td class="td-name" x-text="fencerDisplayName(p)"></td>
+                <template x-for="(_, j) in (matrix?.participants || [])" :key="'c' + j">
+                  <td :class="matrixCellClass(i, j)" x-text="matrixCellText(i, j)"></td>
+                </template>
+                <td class="td-stat" x-text="matrix?.stats?.[i]?.v ?? ''"></td>
+                <td class="td-stat"
+                    :class="matrixInd(i) > 0 ? 'td-ind-pos' : matrixInd(i) < 0 ? 'td-ind-neg' : ''"
+                    x-text="matrixInd(i) > 0 ? '+' + matrixInd(i) : matrixInd(i)"></td>
+                <td class="td-stat" x-text="matrix?.stats?.[i]?.ts ?? ''"></td>
+                <td class="td-stat" x-text="matrix?.stats?.[i]?.tr ?? ''"></td>
+                <td class="td-rank" x-text="matrixRank(i)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
-  <div x-show="!currentBout" class="idle-msg">Waiting for bout data…</div>
 
-  <!-- Card reason history -->
-  <div class="history-section">
-    <div class="section-title">Card reasons this session</div>
-    <div x-show="history.length === 0" class="history-empty">None recorded yet.</div>
-    <template x-for="(cr, i) in history" :key="i">
-      <div class="history-row">
-        <span class="card-chip" :class="cr.card" x-text="cr.card.charAt(0).toUpperCase()" style="width:1.4rem;height:1.4rem"></span>
-        <span class="h-side" x-text="cr.side.charAt(0).toUpperCase() + cr.side.slice(1)"></span>
-        <span class="h-reason" x-text="cr.reason"></span>
-        <span class="h-time" x-text="cr.time"></span>
+  <!-- Bout list -->
+  <div x-show="bouts.length > 0" class="bout-list">
+    <template x-for="bout in bouts" :key="bout.id">
+      <div class="bout-item">
+
+        <div class="bout-header"
+             :class="{ 'bout-active': bout.id === activeBoutId && !bout.result, 'bout-finished': !!bout.result }"
+             @click="toggleBout(bout.id)">
+          <span class="bout-order" x-text="bout.order || ''"></span>
+          <span class="bout-fname" x-text="fencerDisplayName(bout.left)"></span>
+          <span class="bout-inline-score"
+                :class="{ live: bout.id === activeBoutId && !bout.result, finished: !!bout.result }"
+                x-text="boutHeaderScore(bout)"></span>
+          <span class="bout-fname right" x-text="fencerDisplayName(bout.right)"></span>
+          <span x-show="bout.id === activeBoutId && !bout.result" class="live-badge">LIVE</span>
+          <span class="toggle-arrow" :class="{ open: bout.expanded }">▶</span>
+        </div>
+
+        <div class="bout-body" x-show="bout.expanded" x-transition.duration.100ms>
+
+          <!-- Live score with cards: active unfinished bout only -->
+          <div x-show="bout.id === activeBoutId && !bout.result">
+            <div class="fencers-row">
+              <div class="fencer-block left">
+                <div class="fencer-name" x-text="fencerDisplayName(bout.left)"></div>
+                <div class="fencer-detail" x-text="bout.left?.nation || ''"></div>
+                <div class="cards-row">
+                  <span class="card-chip yellow" x-show="score?.left?.yellow_card">Y</span>
+                  <template x-for="n in (score?.left?.red_cards || 0)" :key="'lr' + n">
+                    <span class="card-chip red">R</span>
+                  </template>
+                  <span class="card-chip black" x-show="score?.left?.black_card">B</span>
+                </div>
+              </div>
+              <div class="score-block">
+                <div class="score-display">
+                  <span x-text="score?.left?.score ?? '—'"></span>
+                  <span class="score-sep">:</span>
+                  <span x-text="score?.right?.score ?? '—'"></span>
+                </div>
+              </div>
+              <div class="fencer-block right">
+                <div class="fencer-name" x-text="fencerDisplayName(bout.right)"></div>
+                <div class="fencer-detail" x-text="bout.right?.nation || ''"></div>
+                <div class="cards-row">
+                  <span class="card-chip yellow" x-show="score?.right?.yellow_card">Y</span>
+                  <template x-for="n in (score?.right?.red_cards || 0)" :key="'rr' + n">
+                    <span class="card-chip red">R</span>
+                  </template>
+                  <span class="card-chip black" x-show="score?.right?.black_card">B</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Annotations -->
+          <div x-show="bout.annotations && bout.annotations.length > 0" class="bout-annotations">
+            <div class="annotations-title">Card reasons</div>
+            <template x-for="(ann, i) in (bout.annotations || [])" :key="'ann' + i">
+              <div class="history-row">
+                <span class="card-chip" :class="ann.card"
+                      x-text="ann.card?.charAt(0).toUpperCase()"></span>
+                <span class="h-side"
+                      x-text="ann.side?.charAt(0).toUpperCase() + ann.side?.slice(1)"></span>
+                <span class="h-reason" x-text="ann.reason"></span>
+                <span class="h-time" x-text="ann.time || ''"></span>
+              </div>
+            </template>
+          </div>
+
+        </div>
       </div>
     </template>
   </div>
+
+  <div x-show="connected && bouts.length === 0" class="idle-msg">Waiting for bout data…</div>
 
   <!-- Card reason dialog -->
   <div class="overlay" x-show="dialog.open" x-transition.opacity>
@@ -150,9 +374,10 @@
       <div class="dialog-header">
         <button class="back-btn" x-show="dialog.step === 2" @click="dialog.step = 1">← Back</button>
         <div class="dialog-title">
-          <span class="card-badge" :class="dialog.card" x-text="dialog.card?.charAt(0).toUpperCase() + dialog.card?.slice(1) + ' card'"></span>
+          <span class="card-badge" :class="dialog.card"
+                x-text="dialog.card?.charAt(0).toUpperCase() + dialog.card?.slice(1) + ' card'"></span>
           <span x-show="dialog.step === 1" x-text="dialog.side === 'left' ? '← Left' : 'Right →'"></span>
-          <span x-show="dialog.step === 2" style="color:#aad4f5">Which Group 1 offence?</span>
+          <span x-show="dialog.step === 2" style="color:#4a8abf">Which Group 1 offence?</span>
         </div>
         <div class="dialog-fencer" x-text="dialog.fencerName"></div>
       </div>
@@ -189,7 +414,6 @@ function reasonsFor(defs, card, weapon, step) {
     .map(r => ({ text: r.text, drilldown: r.drilldown || false }));
 }
 
-// ── Alpine app ───────────────────────────────────────────────────────────────
 function app() {
   return {
     pisteId:     new URLSearchParams(location.search).get('piste') || '',
@@ -197,25 +421,20 @@ function app() {
     mqttClient:  null,
     brokerWsUrl: null,
     seq:         0,
+    darkTheme:   true,
 
-    // Current bout state
-    currentBout: null,  // { leftName, rightName, leftNation, rightNation }
-    weapon:      'F',   // current weapon code for reason filtering
-    boutMeta:    '',
-    score:       null,
-    lastScore:   null,  // retained baseline — don't trigger dialog on this
-    baselineSeq: null,  // seq of first score message received (retained)
+    slotId: null, phaseType: null, slotLabel: '', activeBoutId: null,
+    participants: [], bouts: [], matrixOpen: true,
 
-    // Localised reason list (loaded from /data/reasons.json)
+    weapon: 'F', score: null, lastScore: null, baselineSeq: null,
+    currentBout: null,
+    dialog: { open: false, side: '', card: '', fencerName: '', custom: '', step: 1 },
     reasonDefs: null,
 
-    // Dialog
-    dialog: { open: false, side: '', card: '', fencerName: '', custom: '', step: 1 },
-
-    // History of reasons recorded this session
-    history: [],
-
     async init() {
+      // Restore theme
+      this.darkTheme = localStorage.getItem('scoresheet-theme') !== 'light';
+
       if (!this.pisteId) return;
       const lang = new URLSearchParams(location.search).get('lang') || 'en';
       const allReasons = await fetch('/data/reasons.json').then(r => r.json()).catch(() => ({}));
@@ -223,11 +442,13 @@ function app() {
 
       const settings = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
       const brokerUrl = settings.broker_url || 'mqtt://openpiste.local:1883';
-      // Convert mqtt:// or mqtts:// → ws:// on port 9001
-      this.brokerWsUrl = brokerUrl
-        .replace(/^mqtts?:\/\//, 'ws://')
-        .replace(/:\d+$/, ':9001');
+      this.brokerWsUrl = brokerUrl.replace(/^mqtts?:\/\//, 'ws://').replace(/:\d+$/, ':9001');
       this.connectMqtt();
+    },
+
+    toggleTheme() {
+      this.darkTheme = !this.darkTheme;
+      localStorage.setItem('scoresheet-theme', this.darkTheme ? 'dark' : 'light');
     },
 
     connectMqtt() {
@@ -235,128 +456,173 @@ function app() {
       const host     = this.brokerWsUrl.replace(/^wss?:\/\//, '').replace(/:\d+$/, '');
       const port     = parseInt(this.brokerWsUrl.match(/:(\d+)$/)?.[1] || '9001');
       const clientId = 'atlas-scoresheet-' + Math.random().toString(16).slice(2, 8);
+      const c        = new Paho.MQTT.Client(host, port, clientId);
 
-      const c = new Paho.MQTT.Client(host, port, clientId);
-
-      c.onConnectionLost = (resp) => {
-        this.connected = false;
-        console.log('[Scoresheet] Connection lost:', resp.errorMessage);
-        setTimeout(() => this.connectMqtt(), 5000);
-      };
-
+      c.onConnectionLost = () => { this.connected = false; setTimeout(() => this.connectMqtt(), 5000); };
       c.onMessageArrived = (msg) => this.onMessage(msg);
-
       c.connect({
         onSuccess: () => {
-          this.connected = true;
-          this.mqttClient = c;
-          this.baselineSeq = null;
-          this.lastScore   = null;
-          // Subscribe to this piste's topics
+          this.connected = true; this.mqttClient = c;
+          this.baselineSeq = null; this.lastScore = null;
           c.subscribe(`openpiste/${this.pisteId}/apparatus/score`);
           c.subscribe(`openpiste/${this.pisteId}/software/fencers`);
           c.subscribe(`openpiste/${this.pisteId}/software/match`);
+          c.subscribe(`openpiste/${this.pisteId}/software/record`);
+          c.subscribe(`openpiste/${this.pisteId}/scoresheet/record`);
         },
-        onFailure: (err) => {
-          this.connected = false;
-          console.log('[Scoresheet] Connect failed:', err.errorMessage);
-          setTimeout(() => this.connectMqtt(), 5000);
-        },
-        keepAliveInterval: 30,
-        cleanSession:      true,
+        onFailure: () => { this.connected = false; setTimeout(() => this.connectMqtt(), 5000); },
+        keepAliveInterval: 30, cleanSession: true,
       });
     },
 
     onMessage(msg) {
-      const topic = msg.destinationName;
       let payload;
       try { payload = JSON.parse(msg.payloadString); } catch { return; }
+      const parts = msg.destinationName.split('/'), pub = parts[2], type = parts[3];
 
-      const parts     = topic.split('/');
-      const publisher = parts[2];
-      const msgType   = parts[3];
-
-      if (publisher === 'software' && msgType === 'fencers') {
-        this.currentBout = {
-          leftName:    payload.left?.fencer?.name  || '?',
-          rightName:   payload.right?.fencer?.name || '?',
-          leftNation:  payload.left?.fencer?.nation || '',
-          rightNation: payload.right?.fencer?.nation || '',
-        };
+      if (pub === 'software'   && type === 'record') { this.onRecord(payload); return; }
+      if (pub === 'scoresheet' && type === 'record') { this.onScoresheetRecord(payload); return; }
+      if (pub === 'software'   && type === 'fencers') {
+        this.currentBout = { leftName: payload.left?.fencer?.name || '?', rightName: payload.right?.fencer?.name || '?' };
       }
-
-      if (publisher === 'software' && msgType === 'match') {
-        this.weapon   = payload.weapon || 'F';
-        this.boutMeta = [
-          { F:'Foil', E:'Épée', S:'Sabre' }[payload.weapon] || payload.weapon,
-          payload.phase_type,
-          payload.poule ? 'Pool ' + payload.poule : '',
-          payload.match ? 'Bout ' + payload.match : '',
-        ].filter(Boolean).join(' · ');
-      }
-
-      if (publisher === 'apparatus' && msgType === 'score') {
-        const incomingSeq = payload.seq ?? null;
-
-        // First message after connect is the retained baseline — set it but don't trigger dialog
+      if (pub === 'software'   && type === 'match') { this.weapon = payload.weapon || 'F'; }
+      if (pub === 'apparatus'  && type === 'score') {
         if (this.baselineSeq === null) {
-          this.baselineSeq = incomingSeq;
-          this.lastScore   = payload;
-          this.score       = payload;
-          return;
+          this.baselineSeq = payload.seq ?? null; this.lastScore = payload; this.score = payload; return;
         }
-
-        // Detect new cards by comparing with last known score
         this.detectCards(this.lastScore, payload);
-        this.lastScore = payload;
-        this.score     = payload;
+        this.lastScore = payload; this.score = payload;
+      }
+    },
+
+    onRecord(payload) {
+      const newSlotId = payload.slot_id;
+      if (!newSlotId) return;
+      const prevActive = this.activeBoutId, slotChanged = newSlotId !== this.slotId;
+
+      if (slotChanged) {
+        this.slotId = newSlotId; this.phaseType = payload.phase_type || null;
+        this.slotLabel = payload.label || ''; this.participants = payload.participants || [];
+        if (payload.weapon) this.weapon = payload.weapon;
+        const newActive = payload.active_bout || null;
+        this.activeBoutId = newActive;
+        this.bouts = (payload.bouts || []).map(b => ({
+          id: b.id, order: b.order, left: b.left || null, right: b.right || null,
+          result: b.result || null, expanded: b.id === newActive, annotations: [],
+        }));
+        this.score = null; this.lastScore = null; this.baselineSeq = null;
+      } else {
+        const newActive = payload.active_bout || null;
+        this.activeBoutId = newActive;
+        this.slotLabel = payload.label || this.slotLabel;
+        if (payload.participants?.length) this.participants = payload.participants;
+        if (payload.weapon) this.weapon = payload.weapon;
+        for (const b of this.bouts) {
+          const pb = (payload.bouts || []).find(x => x.id === b.id);
+          if (!pb) continue;
+          if (pb.left) b.left = pb.left; if (pb.right) b.right = pb.right;
+          b.result = pb.result || null;
+          if (b.id === newActive && !b.expanded) b.expanded = true;
+        }
+        if (newActive !== prevActive) { this.score = null; this.lastScore = null; this.baselineSeq = null; }
+      }
+      const active = this.bouts.find(b => b.id === this.activeBoutId);
+      if (active) this.currentBout = { leftName: active.left?.name || 'Left', rightName: active.right?.name || 'Right' };
+    },
+
+    onScoresheetRecord(payload) {
+      if (!payload.slot_id || payload.slot_id !== this.slotId) return;
+      this.applyAnnotations(payload.annotations || []);
+    },
+
+    applyAnnotations(annotations) {
+      const byBout = {};
+      for (const a of annotations) { if (!byBout[a.bout_id]) byBout[a.bout_id] = []; byBout[a.bout_id].push(a); }
+      for (const b of this.bouts) {
+        b.annotations = (byBout[b.id] || []).map(a => ({
+          ...a, time: a.ts ? new Date(a.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '',
+        }));
       }
     },
 
     detectCards(prev, next) {
       for (const side of ['left', 'right']) {
-        const p = prev?.[side] || {};
-        const n = next?.[side]  || {};
-
-        if (!p.yellow_card && n.yellow_card) {
-          this.triggerDialog(side, 'yellow');
-        }
-        const redBefore = p.red_cards || 0;
-        const redAfter  = n.red_cards || 0;
-        if (redAfter > redBefore) {
-          this.triggerDialog(side, 'red');
-        }
-        if (!p.black_card && n.black_card) {
-          this.triggerDialog(side, 'black');
-        }
+        const p = prev?.[side] || {}, n = next?.[side] || {};
+        if (!p.yellow_card && n.yellow_card)         this.triggerDialog(side, 'yellow');
+        if ((n.red_cards || 0) > (p.red_cards || 0)) this.triggerDialog(side, 'red');
+        if (!p.black_card && n.black_card)            this.triggerDialog(side, 'black');
       }
     },
 
     triggerDialog(side, card) {
-      this.dialog = {
-        open:       true,
-        side,
-        card,
-        fencerName: side === 'left'
-          ? (this.currentBout?.leftName  || 'Left fencer')
-          : (this.currentBout?.rightName || 'Right fencer'),
-        custom:     '',
-        step:       1,
-      };
+      const active = this.bouts.find(b => b.id === this.activeBoutId);
+      const fn = side === 'left'
+        ? (this.fencerDisplayName(active?.left)  || this.currentBout?.leftName  || 'Left fencer')
+        : (this.fencerDisplayName(active?.right) || this.currentBout?.rightName || 'Right fencer');
+      this.dialog = { open: true, side, card, fencerName: fn, custom: '', step: 1 };
     },
 
-    clickReason(r) {
-      if (r.drilldown) this.enterDrilldown();
-      else this.submitReason(r.text);
+    toggleBout(id) { const b = this.bouts.find(b => b.id === id); if (b) b.expanded = !b.expanded; },
+
+    fencerDisplayName(f) {
+      if (!f) return 'TBD';
+      if (f.last_name) return f.last_name + (f.first_name ? ', ' + f.first_name : '');
+      return f.name || 'TBD';
     },
 
-    enterDrilldown() {
-      this.dialog.step = 2;
+    boutHeaderScore(bout) {
+      if (bout.result) return `${bout.result.left_score} : ${bout.result.right_score}`;
+      if (bout.id === this.activeBoutId && this.score)
+        return `${this.score.left?.score ?? '—'} : ${this.score.right?.score ?? '—'}`;
+      return '— : —';
     },
 
-    get filteredReasons() {
-      return reasonsFor(this.reasonDefs, this.dialog.card, this.weapon, this.dialog.step);
+    get matrix() {
+      if (this.phaseType !== 'pool' || !this.participants.length) return null;
+      const N = this.participants.length, idxOf = {};
+      this.participants.forEach((p, i) => { idxOf[p.id] = i; });
+      const grid  = Array.from({ length: N }, () => Array(N).fill(null));
+      const stats = Array.from({ length: N }, () => ({ v: 0, ts: 0, tr: 0, m: 0 }));
+      for (const bout of this.bouts) {
+        if (!bout.result || !bout.left || !bout.right) continue;
+        const li = idxOf[bout.left.id], ri = idxOf[bout.right.id];
+        if (li === undefined || ri === undefined) continue;
+        const { left_score: ls, right_score: rs, winner_id: wId } = bout.result;
+        const lWon = wId ? wId === bout.left.id : ls > rs;
+        const rWon = wId ? wId === bout.right.id : rs > ls;
+        grid[li][ri] = { score: ls, won: lWon }; grid[ri][li] = { score: rs, won: rWon };
+        stats[li].ts += ls; stats[li].tr += rs; stats[li].m++; if (lWon) stats[li].v++;
+        stats[ri].ts += rs; stats[ri].tr += ls; stats[ri].m++; if (rWon) stats[ri].v++;
+      }
+      const order = [...Array(N).keys()];
+      order.sort((a, b) => {
+        if (!stats[a].m) return 1; if (!stats[b].m) return -1;
+        const vmA = stats[a].v / stats[a].m, vmB = stats[b].v / stats[b].m;
+        if (vmA !== vmB) return vmB - vmA;
+        const iA = stats[a].ts - stats[a].tr, iB = stats[b].ts - stats[b].tr;
+        if (iA !== iB) return iB - iA;
+        return stats[b].ts - stats[a].ts;
+      });
+      const rankOf = {};
+      order.forEach((idx, pos) => { rankOf[idx] = pos + 1; });
+      return { participants: this.participants, grid, stats, rankOf };
     },
+
+    matrixCellClass(i, j) {
+      if (i === j) return 'td-diag';
+      const d = this.matrix?.grid?.[i]?.[j];
+      return d ? (d.won ? 'td-won' : 'td-lost') : 'td-empty';
+    },
+    matrixCellText(i, j) {
+      if (i === j) return '';
+      const d = this.matrix?.grid?.[i]?.[j];
+      return d ? (d.won ? `V${d.score}` : String(d.score)) : '';
+    },
+    matrixInd(i) { const s = this.matrix?.stats?.[i]; return s ? s.ts - s.tr : 0; },
+    matrixRank(i) { const s = this.matrix?.stats?.[i]; return (!s || s.m === 0) ? '—' : (this.matrix?.rankOf?.[i] ?? '—'); },
+
+    clickReason(r) { if (r.drilldown) this.dialog.step = 2; else this.submitReason(r.text); },
+    get filteredReasons() { return reasonsFor(this.reasonDefs, this.dialog.card, this.weapon, this.dialog.step); },
 
     submitReason(reason) {
       if (!reason?.trim()) return;
@@ -364,30 +630,40 @@ function app() {
       const prefix = this.reasonDefs?.strings?.repeated_group1_prefix ?? 'Repeated Group 1: ';
       const finalReason = step === 2 ? prefix + reason.trim() : reason.trim();
       this.publishCardReason(side, card, finalReason);
-      this.history.unshift({
-        side, card, reason: finalReason,
+      const ann = {
+        bout_id: this.activeBoutId || '', event: 'CARD_REASON', side, card,
+        reason: finalReason, ts: Date.now(),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      });
-      this.dialog.open = false;
-      this.dialog.step = 1;
+      };
+      if (this.activeBoutId) {
+        const ab = this.bouts.find(b => b.id === this.activeBoutId);
+        if (ab) ab.annotations = [ann, ...ab.annotations];
+      }
+      this.publishAnnotationRecord();
+      this.dialog.open = false; this.dialog.step = 1;
     },
 
     publishCardReason(side, card, reason) {
       if (!this.mqttClient || !this.connected) return;
-      const payload = JSON.stringify({
-        protocol: 'OPP2',
-        version:  '1.0',
-        seq:      ++this.seq,
-        ts:       Date.now(),
-        event:    'CARD_REASON',
-        side,
-        card,
-        reason,
-      });
-      const msg = new Paho.MQTT.Message(payload);
+      const msg = new Paho.MQTT.Message(JSON.stringify({
+        protocol:'OPP2', version:'1.0', seq:++this.seq, ts:Date.now(),
+        event:'CARD_REASON', bout_id:this.activeBoutId||'', side, card, reason,
+      }));
       msg.destinationName = `openpiste/${this.pisteId}/scoresheet/event`;
-      msg.qos = 1;
-      this.mqttClient.send(msg);
+      msg.qos = 1; this.mqttClient.send(msg);
+    },
+
+    publishAnnotationRecord() {
+      if (!this.mqttClient || !this.connected || !this.slotId) return;
+      const annotations = this.bouts.flatMap(b =>
+        b.annotations.map(a => ({ bout_id:b.id, event:a.event||'CARD_REASON',
+                                   side:a.side, card:a.card, reason:a.reason, ts:a.ts }))
+      );
+      const msg = new Paho.MQTT.Message(JSON.stringify({
+        protocol:'OPP2', version:'1.0', seq:++this.seq, slot_id:this.slotId, annotations,
+      }));
+      msg.destinationName = `openpiste/${this.pisteId}/scoresheet/record`;
+      msg.qos = 1; msg.retained = true; this.mqttClient.send(msg);
     },
   };
 }
