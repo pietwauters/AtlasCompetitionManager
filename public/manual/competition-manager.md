@@ -410,11 +410,45 @@ The full competition results page (§7) combines these DE results with the pool-
 
 ## 7. Results
 
-### 7.1 Viewing the final results page
+### 7.1 Viewing the results page
+
+The results page is available at any point during the competition — it updates live as bouts are scored. Access it from the **📋 Results** link on the competition detail page or from the DE page.
+
+The table shows every competitor in the competition, ordered by final place, with columns for place, DE seed, name, club, and a note explaining how the rank was determined.
+
+![Final results page](images/results.png)
+
+The page refreshes automatically when new scores come in — no manual reload needed.
+
+---
 
 ### 7.2 How ranks are assigned
 
+**Fencers who reached the DE bracket** are ranked by their DE result:
+
+| Place | Assigned to |
+|---|---|
+| 1st | Winner of the final |
+| 2nd | Loser of the final |
+| 3rd (shared) | Both semi-final losers |
+| 5th, 6th… | Quarter-final losers, ranked by DE seed |
+| 9th–16th… | Round of 16 losers, ranked by DE seed |
+
+3rd place is always shared between the two semi-final losers — no bronze bout is fenced unless the rule document explicitly requires one.
+
+Within each eliminated group (everyone who lost in the same round), fencers are ranked by their DE seed — which is itself derived from their pool-round performance. Two fencers who lost in the same round cannot be separated by DE results alone.
+
+**Fencers who were eliminated in the pool rounds** appear below the DE fencers and are ranked by their final pool standing (see §7.3).
+
+---
+
 ### 7.3 Pool-eliminated fencers
+
+Not every competitor advances to the DE — the advancement rule in the pool round closes off a percentage of the field. Eliminated fencers are appended to the results table below the DE rankings, in pool-ranking order.
+
+The **Note** column shows which round eliminated them and their pool rank (e.g. *Pool round 1 (rank 28)*). This makes it clear how each fencer's place was determined.
+
+> If you want to produce a printed results sheet, use your browser's print function (Ctrl+P / Cmd+P) from the results page. The sidebar is hidden in print view, giving a clean single-column layout.
 
 ---
 
