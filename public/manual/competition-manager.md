@@ -454,9 +454,70 @@ The **Note** column shows which round eliminated them and their pool rank (e.g. 
 
 ## 8. Running Multiple Competitions Simultaneously
 
+Atlas can run several competitions at the same time — for example Men's Foil U17 and Women's Épée Senior on the same set of strips. Each strip has an independent schedule called a **pipeline** that determines which bouts it fences and in what order.
+
+> This section requires OPP2-connected apparatus. If you are entering scores manually on the pool scoresheet, strip assignment through the pipeline is not needed — use the simpler **Assign strip/ref** button on the phase page (§4.3) instead.
+
+---
+
 ### 8.1 Strip pipeline overview
 
-### 8.2 Assigning strips across competitions
+A pipeline is an ordered list of **slots** for one strip. A slot is either:
+
+- A **pool** — all bouts from one pool, sent to the apparatus in FIE order
+- A **DE range** — a selection of bouts from one round of a DE bracket (useful when multiple strips share a DE bracket, each fencing a different portion)
+
+When the referee presses **NEXT** on the apparatus remote, Atlas finds the next pending bout in that strip's pipeline and sends the fencer names and match settings to the apparatus automatically. When all bouts in a slot are done, Atlas advances to the next slot without any manual intervention.
+
+Each slot can carry optional timing information:
+
+| Field | What it does |
+|---|---|
+| **Start** | The scheduled start time for this slot (HH:MM) |
+| **Min/bout** | Estimated minutes per bout — used to calculate predicted end time |
+| **Predicted end** | Displayed automatically as *start + (bout count × min/bout)* |
+| **Referee** | The referee assigned to this slot — shown in the referee schedule view |
+
+A ⚠ warning appears on a slot if its scheduled start time is earlier than the predicted end of the previous slot, flagging a scheduling overlap.
+
+---
+
+### 8.2 Building a strip pipeline
+
+Open the **Schedule** page from the navigation bar. Each strip is shown as a card with its current pipeline.
+
+**To add a slot:**
+
+1. Click **+ Add slot** at the bottom of a strip's card
+2. Choose the slot type: **Pool** or **DE range**
+
+For a **Pool** slot:
+- Select the competition and pool from the dropdown (only pools not already scheduled elsewhere are shown)
+- Optionally set a start time, minutes per bout, and referee
+- Click **Add**
+
+For a **DE range** slot:
+- Select the competition and DE phase
+- Select the round (Round of 32, Quarter-final, etc.)
+- Select the bout range — which bouts within that round this strip will fence
+- Optionally set timing and referee
+- Click **Add**
+
+**To reorder slots:** use the **▲** and **▼** buttons. Slots are sent to the apparatus in the order they appear.
+
+**To remove a slot:** click **Remove**. This does not affect any scores already recorded — it only removes the slot from the pipeline.
+
+Completed slots collapse automatically into a compact *✓ done* row. Click the row to expand it again if you need to review it.
+
+![Schedule page showing strip pipelines](images/opp2-admin.png)
+
+---
+
+### 8.3 Referee schedule
+
+The bottom of the Schedule page shows a **referee schedule** — all slots across all strips filtered by referee. Use the dropdown to select a referee and see their full assignment for the day: which pools and DE rounds they are assigned to, on which strips, and at what times.
+
+This view is read-only; assignments are set per slot using the Referee dropdown in the slot detail (see §8.2).
 
 ---
 
