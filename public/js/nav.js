@@ -5,8 +5,21 @@ function navApp() {
 
     async initNav() {
       this._injectFullscreen();
+      this._injectManualLink();
       await Promise.all([ this.loadActiveComps(), this._injectUserWidget() ]);
       setInterval(() => this.loadActiveComps(), 20000);
+    },
+
+    _injectManualLink() {
+      const navRight = document.querySelector('header > div[style*="margin-left"]');
+      if (!navRight) return;
+      const a = document.createElement('a');
+      a.href = '/manual/index.html';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'Manual';
+      a.style.cssText = 'opacity:.65;font-size:.85rem';
+      navRight.insertBefore(a, navRight.firstChild);
     },
 
     _injectFullscreen() {

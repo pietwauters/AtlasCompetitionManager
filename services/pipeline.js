@@ -378,6 +378,7 @@ const Pipeline = {
   },
 
   // Previous bout (for PREV command) — walks back one step in the slot's order.
+  // Does NOT wrap around: returns null when already at the first bout.
   prevBout(slot, beforeBoutId) {
     if (!beforeBoutId) return null;
     if (slot.type === 'pool') {
@@ -387,6 +388,7 @@ const Pipeline = {
           lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
           rp.first_name AS right_first, rp.last_name  AS right_last,
           rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
           po.pool_number, ph.phase_order,
           co.name AS competition_name, co.weapon
         FROM bouts b
@@ -401,19 +403,14 @@ const Pipeline = {
         LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
         LEFT JOIN people      rp  ON rp.id  = rf.person_id
         LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+        LEFT JOIN pools       po2 ON po2.id = b.pool_id
+        LEFT JOIN referees    ref ON ref.id  = po2.referee_id
+        LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
       `;
 
-      // Backward in bout_order
-      const backward = db.prepare(`${POOL_JOIN}
+      return db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
           AND b.bout_order < (SELECT bout_order FROM bouts WHERE id = ?)
-        ORDER BY b.bout_order DESC LIMIT 1
-      `).get(slot.pool_id, beforeBoutId);
-      if (backward) return backward;
-
-      // Wrap around: already at the first bout; jump to the last one in the pool
-      return db.prepare(`${POOL_JOIN}
-        WHERE b.pool_id = ? AND b.id != ?
         ORDER BY b.bout_order DESC LIMIT 1
       `).get(slot.pool_id, beforeBoutId) || null;
     }

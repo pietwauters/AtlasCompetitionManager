@@ -574,7 +574,7 @@ function app() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields),
       });
-      if (!r.ok) { this.showNotice('Update failed', true); return; }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Update failed', true); return; }
       await this.loadStrips();
     },
 
@@ -583,13 +583,14 @@ function app() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction }),
       });
-      if (!r.ok) return;
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Move failed', true); return; }
       await this.loadStrips();
     },
 
     async deleteSlot(id, strip) {
       if (!confirm('Remove this slot from the pipeline?')) return;
-      await fetch(`/api/opp2/pipeline/slots/${id}`, { method: 'DELETE' });
+      const r = await fetch(`/api/opp2/pipeline/slots/${id}`, { method: 'DELETE' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Delete failed', true); return; }
       await this.loadStrips();
     },
 
