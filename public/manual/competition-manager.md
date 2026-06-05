@@ -523,6 +523,56 @@ This view is read-only; assignments are set per slot using the Referee dropdown 
 
 ## Appendix A — CSV Import Format
 
+### A.1 Column reference
+
+| Column | Required | Notes |
+|---|---|---|
+| `first_name` | **Yes** | |
+| `last_name` | **Yes** | |
+| `date_of_birth` | No | See format note below |
+| `gender` | No | `M`, `F`, or `X` |
+| `nationality` | No | IOC 3-letter code (e.g. `BEL`, `FRA`, `NED`) |
+| `club` | No | Matched by name; created if not found |
+| `licence` | No | Federation licence number — used as the unique merge key |
+| `weapons` | No | Comma-separated: `foil`, `epee`, `sabre` |
+| `handedness` | No | `R` or `L` |
+| `ranking` | No | Integer national ranking |
+| `points` | No | Numeric ranking points |
+
+Column order does not matter as long as the header row is present.
+
+### A.2 Date of birth format
+
+> **Important — international date format differences**
+>
+> Atlas stores and expects dates in **ISO 8601 format: `YYYY-MM-DD`** (e.g. `2005-03-17` for 17 March 2005).
+>
+> Many national federations and the FIE export dates in country-specific formats:
+>
+> | Convention | Example | Risk |
+> |---|---|---|
+> | Day/Month/Year (Belgium, France, UK, …) | `17/03/2005` | **Not accepted** — convert before importing |
+> | Month/Day/Year (USA) | `03/17/2005` | **Not accepted** — and easily confused with DD/MM |
+> | `YYYY-MM-DD` (ISO 8601) | `2005-03-17` | ✓ Accepted |
+> | `DD-MM-YYYY` | `17-03-2005` | **Not accepted** |
+>
+> If dates import incorrectly (wrong age category, wrong eligibility), a format mismatch is almost always the cause.
+> Inspect a few rows before importing a large file. Tools like Excel, LibreOffice, and most scripting languages can reformat dates in bulk.
+>
+> **Day/Month ambiguity:** a date like `03/05/2005` looks like 3 May in a European file but 5 March in a US file. There is no way for Atlas to detect this automatically — you must know the source convention.
+
+### A.3 Merge behaviour
+
+- If a row has a `licence` value that matches an existing fencer, that record is **updated in place**.
+- If there is no `licence`, Atlas matches on `first_name + last_name + date_of_birth`. Both the name and the date must match exactly.
+- Rows that do not match any existing record are **created** as new fencers.
+
+> **Tip:** Export your existing fencer list first (**↓ Export CSV** button) to see the exact column format Atlas uses. Use this as a template when preparing an import from an external source.
+
+### A.4 RFC-4180 compliance
+
+The CSV parser follows RFC-4180. Fields containing commas or line breaks must be enclosed in double quotes. A literal double quote inside a quoted field is represented as two double quotes (`""`). The file must be UTF-8 encoded to correctly handle accented characters (é, ü, ñ, …).
+
 ## Appendix B — Keyboard and Navigation Tips
 
 ## Appendix C — Strips and OPP2
