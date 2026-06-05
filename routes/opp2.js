@@ -66,6 +66,11 @@ router.get('/pipeline/strip/:stripId', (req, res) => {
   res.json(Pipeline.findByStrip(req.params.stripId));
 });
 
+// DE slots for a specific phase — used by de.html to show round assignments
+router.get('/pipeline/phase/:phaseId', (req, res) => {
+  res.json(Pipeline.findByPhase(req.params.phaseId));
+});
+
 // Referee schedule (derived view)
 router.get('/pipeline/referee/:refereeId', (req, res) => {
   res.json(Pipeline.findAllForReferee(req.params.refereeId));

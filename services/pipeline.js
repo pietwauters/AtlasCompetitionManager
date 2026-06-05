@@ -60,6 +60,17 @@ const Pipeline = {
     return db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(poolId) || null;
   },
 
+  // All DE pipeline slots for a phase, with strip names. Used by de.html.
+  findByPhase(phaseId) {
+    return db.prepare(`
+      SELECT ps.*, st.name AS strip_name, st.strip_number
+      FROM pipeline_slots ps
+      JOIN strips st ON st.id = ps.strip_id
+      WHERE ps.phase_id = ? AND ps.type = 'de'
+      ORDER BY ps.tableau DESC
+    `).all(phaseId);
+  },
+
   findByStrip(stripId) {
     const slots = db.prepare(`
       SELECT ps.*,
@@ -140,6 +151,21 @@ const Pipeline = {
 
   addSlot(stripId, data) {
     return db.transaction(() => {
+      // A DE round (phase_id + bracket + tableau + partition) can only live on one strip.
+      if (data.type === 'de' && data.phase_id && data.tableau) {
+        const existing = db.prepare(`
+          SELECT * FROM pipeline_slots
+          WHERE phase_id = ? AND type = 'de'
+            AND COALESCE(bracket, 'main') = ?
+            AND COALESCE(tableau, 0) = ?
+            AND COALESCE(partition, 'full') = ?
+        `).get(data.phase_id, data.bracket ?? 'main', data.tableau, data.partition ?? 'full');
+        if (existing) {
+          if (existing.strip_id === Number(stripId)) return this.findById(existing.id);
+          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
+        }
+      }
+
       // A pool may only live in one pipeline slot.
       if (data.pool_id) {
         const existing = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(data.pool_id);

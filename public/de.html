@@ -101,6 +101,15 @@
         <template x-for="(round, ri) in rounds" :key="ri">
           <div class="round-col">
             <h3 x-text="roundLabel(ri, rounds.length)"></h3>
+            <div style="padding:.15rem .5rem .4rem;text-align:center">
+              <select x-model="roundStrip[ri]" @change="assignStrip(ri)"
+                      style="width:100%;font-size:.74rem;padding:.2rem .3rem;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;color:#555">
+                <option value="">— no piste —</option>
+                <template x-for="s in strips" :key="s.id">
+                  <option :value="String(s.id)" x-text="s.name || ('Piste ' + s.strip_number)"></option>
+                </template>
+              </select>
+            </div>
             <template x-for="bout in round" :key="bout.id">
               <div class="bout-slot">
                 <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
@@ -253,6 +262,9 @@ function app() {
     tableauSize: 0,
     nameMap: {},       // competitor_id → display name
     seedMap: {},       // competitor_id → seed number (1 = top rank)
+    strips: [],        // all strips (for piste assignment picker)
+    deSlots: [],       // pipeline_slots for this phase (DE type)
+    roundStrip: [],    // parallel to rounds[]; each entry is strip_id string or ''
     selected: null,
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
@@ -279,6 +291,7 @@ function app() {
       if (this.phase.competition_id) {
         this.comp = await fetch('/api/competitions/' + this.phase.competition_id).then(r => r.json());
       }
+      this.strips = await fetch('/api/strips').then(r => r.json());
       document.title = 'Atlas — DE — ' + (this.comp?.name || '');
       await this.loadBouts();
     },
@@ -327,10 +340,36 @@ function app() {
       }
       // Update selected bout if open
       if (this.selected) {
-        const allBouts = [...bouts];
-        this.selected = allBouts.find(b => b.id === this.selected.id) || null;
+        this.selected = bouts.find(b => b.id === this.selected.id) || null;
       }
       this.computeFinalResults();
+      await this.loadDeSlots();
+    },
+
+    async loadDeSlots() {
+      this.deSlots = await fetch('/api/opp2/pipeline/phase/' + phaseId).then(r => r.json());
+      this.roundStrip = this.rounds.map((_, ri) => {
+        const tableau = this.tableauSize >> ri;
+        const slot = this.deSlots.find(s => s.tableau === tableau);
+        return slot ? String(slot.strip_id) : '';
+      });
+    },
+
+    async assignStrip(ri) {
+      const stripId = this.roundStrip[ri];
+      const tableau = this.tableauSize >> ri;
+      if (stripId) {
+        await fetch('/api/opp2/pipeline/strip/' + stripId, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'de', phase_id: Number(phaseId),
+                                 bracket: 'main', tableau, partition: 'full' }),
+        });
+      } else {
+        const existing = this.deSlots.find(s => s.tableau === tableau);
+        if (existing) await fetch('/api/opp2/pipeline/slots/' + existing.id, { method: 'DELETE' });
+      }
+      await this.loadDeSlots();
     },
 
     computeFinalResults() {
