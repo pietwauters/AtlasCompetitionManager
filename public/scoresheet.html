@@ -300,11 +300,11 @@
              :class="{ 'bout-active': bout.id === activeBoutId && !bout.result, 'bout-finished': !!bout.result }"
              @click="toggleBout(bout.id)">
           <span class="bout-order" x-text="bout.order || ''"></span>
-          <span class="bout-fname" x-show="!(bout.expanded && bout.id === activeBoutId && !bout.result)" x-text="fencerDisplayName(bout.left)"></span>
+          <span class="bout-fname" x-text="fencerDisplayName(bout.left)"></span>
           <span class="bout-inline-score"
                 :class="{ live: bout.id === activeBoutId && !bout.result, finished: !!bout.result }"
                 x-text="boutHeaderScore(bout)"></span>
-          <span class="bout-fname right" x-show="!(bout.expanded && bout.id === activeBoutId && !bout.result)" x-text="fencerDisplayName(bout.right)"></span>
+          <span class="bout-fname right" x-text="fencerDisplayName(bout.right)"></span>
           <span x-show="bout.id === activeBoutId && !bout.result" class="live-badge">LIVE</span>
           <span class="toggle-arrow" :class="{ open: bout.expanded }">▶</span>
         </div>
@@ -315,7 +315,6 @@
           <div x-show="bout.id === activeBoutId && !bout.result">
             <div class="fencers-row">
               <div class="fencer-block left">
-                <div class="fencer-name" x-text="fencerDisplayName(bout.left)"></div>
                 <div class="fencer-detail" x-text="bout.left?.nation || ''"></div>
                 <div class="cards-row">
                   <span class="card-chip yellow" x-show="score?.left?.yellow_card">Y</span>
@@ -333,7 +332,6 @@
                 </div>
               </div>
               <div class="fencer-block right">
-                <div class="fencer-name" x-text="fencerDisplayName(bout.right)"></div>
                 <div class="fencer-detail" x-text="bout.right?.nation || ''"></div>
                 <div class="cards-row">
                   <span class="card-chip yellow" x-show="score?.right?.yellow_card">Y</span>
@@ -524,6 +522,7 @@ function app() {
           if (pb.left) b.left = pb.left; if (pb.right) b.right = pb.right;
           b.result = pb.result || null;
           if (b.id === newActive && !b.expanded) b.expanded = true;
+          if (b.id !== newActive && b.expanded && newActive !== prevActive) b.expanded = false;
         }
         if (newActive !== prevActive) { this.score = null; this.lastScore = null; this.baselineSeq = null; }
       }
