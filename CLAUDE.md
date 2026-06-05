@@ -281,15 +281,45 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ---
 
-## What is NOT yet built
+## What is NOT yet built — priority order
 
-| Feature | Priority | Notes |
-|---|---|---|
-| OPP2 cloud bridge | **next** | Mosquitto bridge config; `tournament_id`/`competition_id` from Atlas |
-| Cyrano scoring machine | 3rd | Lower than OPP2 |
-| Authentication | 4th | `express-session` + `bcryptjs` installed, not wired |
-| Team competitions | — | Out of scope for now |
-| FIE Engarde import/export | — | Out of scope for MVP |
+### 1. Full functional DE tableau
+- `allPlacesFenced`: all places fenced off from 1st to last (T8+, common in youth events)
+- Repechage: losers re-enter the bracket from a defined round
+- `de.html` full redesign to accommodate both of the above
+- Bronze bout for placement bouts in pipeline (strip picker doesn't yet cover placement/repechage)
+
+### 2. Run a full tournament locally (no cloud needed)
+- Direct competition import — federation/FIE start lists without touching the local people DB
+- Registration desk — review `checkin.html` for competition-day check-in completeness
+- Card reasons — full FIE t.170 text, English + French; store OPP2 `ts` + clock at card time
+- Manual appendices B and C
+
+### 3. Architecture / code hygiene
+- `bout_duration_standards` table empty — fill for automatic `predicted_end`
+- DE referee assignment in pipeline (placeholder query in `opp2Composer`)
+- Pipeline UI drag-to-reorder (▲▼ works; drag is future)
+- Resilience: discuss network loss / crash recovery across the ecosystem
+- Minor: `CyranoServer.js` missing `'use strict'`
+
+### 4. Security
+- Authentication: `express-session` + `bcryptjs` installed, not wired
+
+### 5. CSS centralisation
+- ~1 600 lines of inline `<style>` spread across 20 pages; extract to `css/style.css`
+- Do this when the UI component vocabulary is stable (after DE redesign)
+
+### 6. OPP2 cloud bridge
+- Mosquitto bridge config to remote broker
+- `tournament_id` / `competition_id` from Atlas in payloads
+- Lower priority: local operation is fully functional without it
+
+### Out of scope for MVP
+| Feature | Notes |
+|---|---|
+| Cyrano scoring machine | Lower priority than cloud bridge |
+| Team competitions | Out of scope |
+| FIE Engarde import/export | Out of scope |
 
 ---
 
