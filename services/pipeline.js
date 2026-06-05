@@ -488,6 +488,9 @@ const Pipeline = {
 
   // ── Internal helpers ─────────────────────────────────────────────────────
 
+  // Public alias used by opp2Composer to build bout queries from a DE slot.
+  resolveDeSlot(slot) { return this._deSlotParams(slot); },
+
   // Resolve a DE slot's bracket parameters into the values the SQL queries need.
   _deSlotParams(slot) {
     const deRound = tableauToDeRound(slot.phase_id, slot.tableau);

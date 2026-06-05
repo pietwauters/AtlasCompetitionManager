@@ -145,13 +145,9 @@ const Phase = {
     const phase = this.findById(phaseId);
     if (!phase) return [];
 
-    let criteria = DEFAULT_CRITERIA;
-    let levelPools = false;
-    try {
-      const rule = loadRule(phase.rule_doc);
-      criteria   = rule.seeding?.criteria || DEFAULT_CRITERIA;
-      levelPools = rule.levelPools === true;
-    } catch {}
+    const rule       = loadRule(phase.rule_doc);
+    const criteria   = rule.seeding?.criteria || DEFAULT_CRITERIA;
+    const levelPools = rule.levelPools === true;
 
     // All competitors in this phase, including their pool_number for level-pool ranking
     const competitorRows = db.prepare(`
@@ -280,8 +276,7 @@ const Phase = {
     const N        = rankings.length;
 
     // Determine advancement rule
-    let rule;
-    try { rule = loadRule(phase.rule_doc); } catch { rule = {}; }
+    const rule = loadRule(phase.rule_doc);
     const adv = advancementOverride || rule.advancement || { method: 'percentage', value: 70 };
 
     let advanceN;
@@ -484,8 +479,7 @@ const Phase = {
 
     const { tableauSize, totalRounds, r1Bouts } = buildDE(competitors);
 
-    let rule = {};
-    try { rule = loadRule(ruleDoc); } catch {}
+    const rule = loadRule(ruleDoc);
     const wantBronze = rule.placement?.thirdPlaceBout === true;
 
     const phaseId = db.transaction(() => {
@@ -584,11 +578,8 @@ const Phase = {
     if (!phase) throw Object.assign(new Error('Phase not found'), { status: 404 });
     if (phase.status !== 'active') throw Object.assign(new Error('Phase must be active to simulate'), { status: 400 });
 
-    let touchTarget = phase.type === 'de' ? 15 : 5;
-    try {
-      const rule = loadRule(phase.rule_doc);
-      touchTarget = rule.bout?.touchTarget ?? touchTarget;
-    } catch {}
+    const rule        = loadRule(phase.rule_doc);
+    const touchTarget = rule.bout?.touchTarget ?? (phase.type === 'de' ? 15 : 5);
 
     function randomScores(target) {
       const winnerLeft = Math.random() < 0.5;
