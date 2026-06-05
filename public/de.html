@@ -138,6 +138,38 @@
       </div>
     </div>
 
+    <!-- Bronze bout (3rd place fence-off) -->
+    <div x-show="bronzeBout" style="margin-top:1.5rem">
+      <h3 style="font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 .5rem;padding:.5rem 0;border-bottom:1px solid #e5e5e5">
+        Bronze bout — 3rd place
+      </h3>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:.5rem 0">
+        <div class="bout-card" style="width:220px" :class="boutCardClass(bronzeBout)" @click="selectBout(bronzeBout)">
+          <template x-if="isEmpty(bronzeBout)">
+            <div>
+              <div class="bout-row"><span class="bout-name" style="color:#bbb">Awaiting SF result</span></div>
+              <div class="bout-row"><span class="bout-name" style="color:#bbb">Awaiting SF result</span></div>
+            </div>
+          </template>
+          <template x-if="!isEmpty(bronzeBout)">
+            <div>
+              <div class="bout-row" :class="bronzeBout.winner_id===bronzeBout.left_id&&bronzeBout.winner_id?'winner':''">
+                <span class="bout-name" x-text="boutName(bronzeBout,'left')||'?'"></span>
+                <span class="bout-score" x-show="bronzeBout.left_score!==null" x-text="bronzeBout.left_score"></span>
+              </div>
+              <div class="bout-row" :class="bronzeBout.winner_id===bronzeBout.right_id&&bronzeBout.winner_id?'winner':''">
+                <span class="bout-name" x-text="boutName(bronzeBout,'right')||'?'"></span>
+                <span class="bout-score" x-show="bronzeBout.right_score!==null" x-text="bronzeBout.right_score"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <span x-show="bronzeBout?.status==='finished' && bronzeBout?.winner_id" style="font-size:.85rem;color:#666">
+          🥉 <span x-text="nameMap[bronzeBout?.winner_id]"></span> takes bronze
+        </span>
+      </div>
+    </div>
+
     <!-- Score panel -->
     <div class="score-panel" x-show="selected && !isBye(selected) && !isEmpty(selected) && phase?.status==='active'">
       <h3 x-show="selected" x-text="scorePanelTitle()"></h3>
@@ -216,7 +248,8 @@ function app() {
   const phaseId = new URLSearchParams(window.location.search).get('id');
   return {
     phaseId, phase: null, comp: null,
-    rounds: [],        // [[bout,...], [bout,...], ...]
+    rounds: [],        // [[bout,...], [bout,...], ...] — main bracket only
+    bronzeBout: null,  // placement bout for 3rd/4th, or null
     tableauSize: 0,
     nameMap: {},       // competitor_id → display name
     seedMap: {},       // competitor_id → seed number (1 = top rank)
@@ -235,7 +268,9 @@ function app() {
         this.rounds = this.rounds.map(round =>
           round.map(b => b.id === updated.id ? { ...b, ...updated } : b)
         );
+        if (this.bronzeBout?.id === updated.id) this.bronzeBout = { ...this.bronzeBout, ...updated };
         if (this.selected?.id === updated.id) this.selected = { ...this.selected, ...updated };
+        this.computeFinalResults();
       });
     },
 
@@ -250,22 +285,27 @@ function app() {
 
     async loadBouts() {
       const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json());
-      // Build name map
+      // Build name map (all bouts, so bronze fencers are resolved too)
       this.nameMap = {};
       for (const b of bouts) {
         if (b.left_id)  this.nameMap[b.left_id]  = b.left_last  + ', ' + b.left_first;
         if (b.right_id) this.nameMap[b.right_id] = b.right_last + ', ' + b.right_first;
       }
-      // Group by round
+
+      // Separate main-bracket bouts from placement bouts.
+      const mainBouts = bouts.filter(b => b.bracket === 'main' || !b.bracket);
+      this.bronzeBout = bouts.find(b => b.bracket === 'placement' && b.tableau_position === 2) || null;
+
+      // Group main bouts by round
       const byRound = {};
       let maxRound = 0;
-      for (const b of bouts) {
+      for (const b of mainBouts) {
         if (!b.de_round) continue;
         if (!byRound[b.de_round]) byRound[b.de_round] = [];
         byRound[b.de_round].push(b);
         if (b.de_round > maxRound) maxRound = b.de_round;
       }
-      this.tableauSize = bouts.length ? 2 ** maxRound : 0;
+      this.tableauSize = mainBouts.length ? 2 ** maxRound : 0;
 
       // Build seed map from R1 bout positions.
       const r1 = byRound[1] || [];
@@ -287,14 +327,16 @@ function app() {
       }
       // Update selected bout if open
       if (this.selected) {
-        this.selected = bouts.find(b => b.id === this.selected.id) || null;
+        const allBouts = [...bouts];
+        this.selected = allBouts.find(b => b.id === this.selected.id) || null;
       }
-      this.computeFinalResults(bouts, maxRound);
+      this.computeFinalResults();
     },
 
-    computeFinalResults(bouts, totalRounds) {
+    computeFinalResults() {
+      const totalRounds = this.rounds.length;
       if (!totalRounds) { this.finalResults = null; return; }
-      const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
+      const finalBout = this.rounds[totalRounds - 1]?.find(b => b.tableau_position === 1);
       if (!finalBout || finalBout.status !== 'finished') { this.finalResults = null; return; }
 
       const results = [];
@@ -306,19 +348,26 @@ function app() {
       const silver = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
       add(2, '🥈 2', silver, 'medal-silver');
 
-      // SF losers share 3rd (no bronze bout)
-      const sfLosers = bouts.filter(b =>
-        b.de_round === totalRounds - 1 && b.status === 'finished' &&
-        b.winner_id && b.left_id && b.right_id
-      ).map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
-      sfLosers.forEach(id => add(3, '🥉 3', id, 'medal-bronze'));
+      // 3rd/4th: use bronze bout result if available, otherwise share 3rd.
+      const bronze = this.bronzeBout;
+      if (bronze?.status === 'finished' && bronze.winner_id) {
+        add(3, '🥉 3', bronze.winner_id, 'medal-bronze');
+        const fourth = bronze.winner_id === bronze.left_id ? bronze.right_id : bronze.left_id;
+        add(4, '4th', fourth, '');
+      } else {
+        const sfBouts = this.rounds[totalRounds - 2] || [];
+        const sfLosers = sfBouts
+          .filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
+          .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
+        sfLosers.forEach(id => add(3, '🥉 3', id, 'medal-bronze'));
+      }
 
-      // All earlier rounds: sort losers by seed, assign unique sequential ranks
-      let nextPlace = 3 + sfLosers.length; // = 5 when there are 2 SF losers
+      // All earlier rounds: sort losers by seed, assign unique sequential ranks.
+      let nextPlace = 5;
       for (let r = totalRounds - 2; r >= 1; r--) {
-        const losers = bouts
-          .filter(b => b.de_round === r && b.status === 'finished' &&
-                       b.winner_id && b.left_id && b.right_id)
+        const roundBouts = this.rounds[r - 1] || [];
+        const losers = roundBouts
+          .filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
           .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
           .map(l => ({ ...l, seed: this.seedMap[l.id] || 999 }))
           .sort((a, b) => a.seed - b.seed);
@@ -369,6 +418,10 @@ function app() {
 
     scorePanelTitle() {
       if (!this.selected) return '';
+      if (this.selected.bracket === 'placement') {
+        return 'Bronze bout — ' + (this.boutName(this.selected, 'left') || '?') +
+          ' vs ' + (this.boutName(this.selected, 'right') || '?');
+      }
       const roundIdx = this.rounds.findIndex(r => r.some(b => b.id === this.selected.id));
       return this.roundLabel(roundIdx, this.rounds.length) +
         ' — ' + (this.boutName(this.selected, 'left') || '?') +
@@ -377,12 +430,11 @@ function app() {
 
     progressLabel() {
       let total = 0, done = 0;
-      for (const round of this.rounds) {
-        for (const b of round) {
-          if (this.isBye(b) || this.isEmpty(b)) continue;
-          total++;
-          if (b.status === 'finished') done++;
-        }
+      const allBouts = [...this.rounds.flat(), ...(this.bronzeBout ? [this.bronzeBout] : [])];
+      for (const b of allBouts) {
+        if (this.isBye(b) || this.isEmpty(b)) continue;
+        total++;
+        if (b.status === 'finished') done++;
       }
       return done + ' / ' + total + ' bouts complete';
     },
@@ -427,13 +479,15 @@ function app() {
     },
 
     async undoScore() {
-      const r = await fetch('/api/bouts/' + this.selected.id + '/undo', { method: 'POST' });
+      const prevId = this.selected?.id;
+      const r = await fetch('/api/bouts/' + prevId + '/undo', { method: 'POST' });
       if (!r.ok) { this.showNotice((await r.json()).error || 'Undo failed', true); return; }
       this.showNotice('Score undone');
       await this.loadBouts();
       // Re-select the bout
+      if (this.bronzeBout?.id === prevId) { this.selected = this.bronzeBout; return; }
       for (const round of this.rounds) {
-        const b = round.find(x => x.id === this.selected?.id);
+        const b = round.find(x => x.id === prevId);
         if (b) { this.selected = b; break; }
       }
     },

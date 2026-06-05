@@ -64,12 +64,12 @@ const Bout = {
     `).run({ id, ls, rs, winner, status });
 
     const bout = this.findById(id);
-    let next = null;
+    let next = null, placement = null;
     if (status === 'finished') {
       next = this.advanceDEWinner(id);
-      this.routeDeLoser(id);
+      placement = this.routeDeLoser(id);
     }
-    return { bout, next };
+    return { bout, next, placement };
   },
 
   // After a main-bracket DE bout is finished, fill the winner into the correct
