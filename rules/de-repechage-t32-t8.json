@@ -1,6 +1,6 @@
 {
-  "id": "de-standard",
-  "description": "Standard Individual DE (15 touches, bronze bout)",
+  "id": "de-repechage-t32-t8",
+  "description": "Individual DE — repechage T32→T8, bronze bout",
   "type": "de",
   "bout": {
     "touchTarget": 15,
@@ -8,6 +8,10 @@
     "overtime": { "enabled": true, "durationSeconds": 60 }
   },
   "tableau": { "size": null, "seeding": "fie-serpentine" },
-  "repechage": { "enabled": false },
+  "repechage": {
+    "enabled": true,
+    "fromTableau": 32,
+    "reentryAt": 8
+  },
   "placement": { "thirdPlaceBout": true, "allPlacesFenced": null }
 }

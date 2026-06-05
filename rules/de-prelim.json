@@ -1,6 +1,6 @@
 {
-  "id": "de-standard",
-  "description": "Standard Individual DE (15 touches, bronze bout)",
+  "id": "de-prelim",
+  "description": "Preliminary DE (15 touches, no bronze — for use inside multi-phase formulas)",
   "type": "de",
   "bout": {
     "touchTarget": 15,
@@ -9,5 +9,5 @@
   },
   "tableau": { "size": null, "seeding": "fie-serpentine" },
   "repechage": { "enabled": false },
-  "placement": { "thirdPlaceBout": true, "allPlacesFenced": null }
+  "placement": { "thirdPlaceBout": false, "allPlacesFenced": null }
 }

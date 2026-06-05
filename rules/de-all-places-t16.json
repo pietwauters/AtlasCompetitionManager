@@ -1,6 +1,6 @@
 {
-  "id": "de-standard",
-  "description": "Standard Individual DE (15 touches, bronze bout)",
+  "id": "de-all-places-t16",
+  "description": "Individual DE — all-places-fenced from T16 (unique places 9th and below)",
   "type": "de",
   "bout": {
     "touchTarget": 15,
@@ -9,5 +9,5 @@
   },
   "tableau": { "size": null, "seeding": "fie-serpentine" },
   "repechage": { "enabled": false },
-  "placement": { "thirdPlaceBout": true, "allPlacesFenced": null }
+  "placement": { "thirdPlaceBout": true, "allPlacesFenced": 16 }
 }
