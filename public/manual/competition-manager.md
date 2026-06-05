@@ -205,6 +205,41 @@ The seed numbers in the competitors list are editable. Click on a seed number, t
 
 ---
 
+### 3.6 Check-in on competition day
+
+Before drawing pools, use the **Check-in** page to record which registered fencers have actually arrived and to mark any withdrawals. This ensures the pool draw reflects the real start list.
+
+**How to get there:** on the competition detail page, click the **Check-in** button near the top. The URL is `/checkin.html?id=<competition-id>`.
+
+The page shows every competitor grouped by club, with a summary bar at the top:
+
+| Indicator | Meaning |
+|---|---|
+| **Total** | All competitors added to this competition |
+| **Present** | Confirmed arrived (green) |
+| **Not yet** | No status recorded yet (grey) |
+| **Withdrawn** | Marked absent / withdrawn (red, faded) |
+
+**Marking fencers:**
+
+- **Present** — click the green button next to the fencer's name. Click again to revert to "not yet".
+- **Absent / Withdrawn** — click the red button. The fencer is flagged as withdrawn and will appear faded. Click again to revert.
+- **✓ All present** — marks every non-withdrawn fencer as present in one step. Useful at small events where the whole list arrives.
+- **Clear all** — resets all statuses back to "not yet".
+
+Use the search box to find a fencer quickly by name or club. The filter tabs (**All / Not yet / Present / Withdrawn**) let you focus on one group at a time — for example, show only "Not yet" to work through the remaining arrivals.
+
+**What check-in does and does not do:**
+
+- Marking a fencer **withdrawn** sets their status so that Atlas will **exclude them from the pool draw**. Do this before creating the first pool round.
+- Marking a fencer **present** is informational only — it does not affect seeding or pool formation.
+- Check-in does **not** remove a fencer from the competition. A withdrawn fencer stays visible in the list and can be reinstated if they arrive late. To permanently remove a fencer, use the **Remove** action on the competition detail page instead.
+- Late arrivals after pools are drawn cannot be added to an existing round. The pool draw is final once created.
+
+> **Tip:** use the **Not yet** filter as your working view during check-in. As fencers arrive and you mark them present, the list shortens until only withdrawals and no-shows remain.
+
+---
+
 ## 4. Running a Pool Round
 
 ### 4.1 Creating a pool round
