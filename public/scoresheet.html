@@ -300,11 +300,11 @@
              :class="{ 'bout-active': bout.id === activeBoutId && !bout.result, 'bout-finished': !!bout.result }"
              @click="toggleBout(bout.id)">
           <span class="bout-order" x-text="bout.order || ''"></span>
-          <span class="bout-fname" x-text="fencerDisplayName(bout.left)"></span>
+          <span class="bout-fname" x-show="!(bout.expanded && bout.id === activeBoutId && !bout.result)" x-text="fencerDisplayName(bout.left)"></span>
           <span class="bout-inline-score"
                 :class="{ live: bout.id === activeBoutId && !bout.result, finished: !!bout.result }"
                 x-text="boutHeaderScore(bout)"></span>
-          <span class="bout-fname right" x-text="fencerDisplayName(bout.right)"></span>
+          <span class="bout-fname right" x-show="!(bout.expanded && bout.id === activeBoutId && !bout.result)" x-text="fencerDisplayName(bout.right)"></span>
           <span x-show="bout.id === activeBoutId && !bout.result" class="live-badge">LIVE</span>
           <span class="toggle-arrow" :class="{ open: bout.expanded }">▶</span>
         </div>
