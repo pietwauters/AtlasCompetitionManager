@@ -14,7 +14,7 @@ function getCompetitionResults(compId) {
   // ── DE results ────────────────────────────────────────────────────────────
   if (dePhase) {
     const bouts = db.prepare(`
-      SELECT b.de_round, b.tableau_position, b.status,
+      SELECT b.de_round, b.tableau_position, b.status, b.bracket,
              b.left_id, b.right_id, b.winner_id,
              lp.first_name AS lf, lp.last_name AS ll, lcl.name AS lclub,
              rp.first_name AS rf, rp.last_name AS rl, rcl.name AS rclub
@@ -31,17 +31,19 @@ function getCompetitionResults(compId) {
       ORDER BY b.de_round, b.tableau_position
     `).all(dePhase.id);
 
-    const totalRounds = bouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
+    // Only main-bracket bouts drive totalRounds; placement bouts are handled separately.
+    const mainBouts = bouts.filter(b => b.bracket === 'main' || !b.bracket);
+    const totalRounds = mainBouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
     if (totalRounds > 0) {
-      // Name/club lookup
+      // Name/club lookup (include placement bouts so bronze fencers are resolved)
       const info = {};
       for (const b of bouts) {
         if (b.left_id)  info[b.left_id]  = { first_name: b.lf, last_name: b.ll, club: b.lclub };
         if (b.right_id) info[b.right_id] = { first_name: b.rf, last_name: b.rl, club: b.rclub };
       }
 
-      // DE seed lookup from R1 positions
-      const r1 = bouts.filter(b => b.de_round === 1);
+      // DE seed lookup from R1 positions (main bracket only)
+      const r1 = mainBouts.filter(b => b.de_round === 1);
       const T  = r1.length * 2;
       const seedSlots = buildSeedPositions(T);
       const deSeed = {};
@@ -59,7 +61,7 @@ function getCompetitionResults(compId) {
       };
 
       // 1st and 2nd — only when final is decided
-      const finalBout = bouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
+      const finalBout = mainBouts.find(b => b.de_round === totalRounds && b.tableau_position === 1);
       if (finalBout?.winner_id) {
         push(1, '1', finalBout.winner_id, 'DE winner');
         const silver = finalBout.winner_id === finalBout.left_id
@@ -67,20 +69,30 @@ function getCompetitionResults(compId) {
         push(2, '2', silver, 'DE final');
       }
 
-      // SF losers share 3rd (no bronze bout)
-      const sfLosers = bouts
-        .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
-                  && b.winner_id && b.left_id && b.right_id)
-        .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
-      sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+      // 3rd / 4th: use bronze bout result if available, otherwise share 3rd.
+      const bronzeBout = bouts.find(
+        b => b.bracket === 'placement' && b.de_round === totalRounds && b.tableau_position === 2
+      );
+      if (bronzeBout?.status === 'finished' && bronzeBout.winner_id) {
+        push(3, '3', bronzeBout.winner_id, 'Bronze bout');
+        const fourth = bronzeBout.winner_id === bronzeBout.left_id
+          ? bronzeBout.right_id : bronzeBout.left_id;
+        push(4, '4', fourth, 'Bronze bout');
+      } else {
+        const sfLosers = mainBouts
+          .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
+                    && b.winner_id && b.left_id && b.right_id)
+          .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
+        sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+      }
 
-      // All earlier rounds: place derived from bracket depth, not entry count.
+      // All earlier main-bracket rounds: place derived from bracket depth.
       // Round r losers start at 2^(totalRounds-r)+1 (e.g. QF→5, R16→9, R32→17).
       for (let r = totalRounds - 2; r >= 1; r--) {
         const roundNote = r === totalRounds - 2 ? 'DE quarter-final'
                         : 'DE round of ' + (2 ** (totalRounds - r + 1));
         const roundStartPlace = 2 ** (totalRounds - r) + 1;
-        const losers = bouts
+        const losers = mainBouts
           .filter(b => b.de_round === r && b.status === 'finished'
                     && b.winner_id && b.left_id && b.right_id)
           .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))

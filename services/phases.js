@@ -484,6 +484,10 @@ const Phase = {
 
     const { tableauSize, totalRounds, r1Bouts } = buildDE(competitors);
 
+    let rule = {};
+    try { rule = loadRule(ruleDoc); } catch {}
+    const wantBronze = rule.placement?.thirdPlaceBout === true;
+
     const phaseId = db.transaction(() => {
       const maxOrder = db.prepare(
         'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
@@ -553,6 +557,15 @@ const Phase = {
         db.prepare(`UPDATE bouts SET ${side} = ? WHERE id = ?`).run(winner.competitor_id, r2Id);
       }
 
+      // Bronze bout: bracket='placement', de_round=totalRounds, tableau_position=2.
+      // SF losers are routed here by advanceDEWinner in bouts.js when bouts finish.
+      if (wantBronze) {
+        db.prepare(`
+          INSERT INTO bouts (phase_id, de_round, tableau_position, bracket, status, bout_order)
+          VALUES (?, ?, 2, 'placement', 'pending', 99999)
+        `).run(phaseId, totalRounds);
+      }
+
       return phaseId;
     })();
 
@@ -598,14 +611,16 @@ const Phase = {
         count++;
       }
     } else if (phase.type === 'de') {
+      // Process main bracket round by round so winners/losers are placed before
+      // the next round (including the bronze bout) is simulated.
       const maxRound = db.prepare(
-        'SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=?'
+        "SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=? AND bracket='main'"
       ).get(phaseId).m || 1;
 
       for (let r = 1; r <= maxRound; r++) {
         const pending = db.prepare(`
           SELECT id FROM bouts
-          WHERE phase_id=? AND de_round=? AND status='pending'
+          WHERE phase_id=? AND de_round=? AND bracket='main' AND status='pending'
             AND left_id IS NOT NULL AND right_id IS NOT NULL
         `).all(phaseId, r);
         for (const b of pending) {
@@ -613,6 +628,18 @@ const Phase = {
           Bout.updateScore(b.id, ls, rs);
           count++;
         }
+      }
+
+      // Simulate placement bouts (e.g. bronze) after main bracket is done.
+      const placementPending = db.prepare(`
+        SELECT id FROM bouts
+        WHERE phase_id=? AND bracket='placement' AND status='pending'
+          AND left_id IS NOT NULL AND right_id IS NOT NULL
+      `).all(phaseId);
+      for (const b of placementPending) {
+        const [ls, rs] = randomScores(touchTarget);
+        Bout.updateScore(b.id, ls, rs);
+        count++;
       }
     }
 
