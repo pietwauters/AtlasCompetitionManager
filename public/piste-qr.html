@@ -23,7 +23,7 @@
       .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;
               padding: 1.5cm; box-sizing: border-box; }
       .qr-card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
-      .qr-card img { width: 200px; height: 200px; }
+      .qr-card img { width: 200px !important; height: 200px !important; }
       .piste-label { font-size: 1.8rem; }
     }
   </style>
@@ -51,7 +51,7 @@
     <a href="/strips.html" style="font-size:.85rem;color:#888">← Back to strips</a>
   </div>
 
-  <template x-if="strips.length === 0">
+  <template x-if="loaded && strips.length === 0">
     <div style="color:#aaa;font-size:.9rem;padding:.5rem 0">
       No pistes configured. <a href="/strips.html">Add pistes first →</a>
     </div>
@@ -60,32 +60,32 @@
   <div class="grid">
     <template x-for="s in strips" :key="s.id">
       <div class="qr-card">
-        <img :src="s.qr" :alt="'QR code for piste '+s.strip_number">
+        <img :src="'/api/strips/qr?piste=' + encodeURIComponent(s.name)" width="200" height="200" :alt="'QR '+s.name">
         <div class="piste-label" x-text="'Piste ' + s.strip_number"></div>
         <div class="piste-name" x-show="s.name" x-text="s.name"></div>
-        <div class="piste-url" x-text="s.url"></div>
+        <div class="piste-url" x-text="baseUrl + '/scoresheet.html?piste=' + encodeURIComponent(s.name)"></div>
       </div>
     </template>
   </div>
 
 </main>
 <script src="/js/nav.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
   return {
     strips: [],
+    loaded: false,
+    baseUrl: '',
 
     async init() {
-      const raw = await fetch('/api/strips').then(r => r.json()).catch(() => []);
-      this.strips = await Promise.all(raw.map(s => this.buildCard(s)));
-    },
-
-    async buildCard(s) {
-      const url = window.location.origin + '/scoresheet.html?piste=' + s.strip_number;
-      const qr  = await QRCode.toDataURL(url, { width: 200, margin: 1, color: { dark: '#1a1a2e' } });
-      return { ...s, url, qr };
+      const [raw, info] = await Promise.all([
+        fetch('/api/strips').then(r => r.json()).catch(() => []),
+        fetch('/api/strips/qr-base').then(r => r.json()).catch(() => ({})),
+      ]);
+      this.baseUrl = info.baseUrl || window.location.origin;
+      this.strips = raw.map(s => ({ ...s }));
+      this.loaded = true;
     },
   };
 }
