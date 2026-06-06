@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Piste QR Codes</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .toolbar{display:flex;gap:.75rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.25rem}
+    .qr-card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);
+             padding:1.25rem;display:flex;flex-direction:column;align-items:center;gap:.6rem;
+             text-align:center}
+    .qr-card img{display:block;width:180px;height:180px}
+    .piste-label{font-size:1.4rem;font-weight:700;color:#1a1a2e}
+    .piste-name{font-size:.88rem;color:#555}
+    .piste-url{font-size:.68rem;color:#aaa;word-break:break-all;margin-top:.25rem}
+
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: white; margin: 0; padding: 0; }
+      main { padding: 0 !important; }
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;
+              padding: 1.5cm; box-sizing: border-box; }
+      .qr-card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+      .qr-card img { width: 200px; height: 200px; }
+      .piste-label { font-size: 1.8rem; }
+    }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+  </template>
+  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main>
+
+  <div class="toolbar no-print">
+    <h2 style="margin:0;flex:1">Piste QR Codes</h2>
+    <button class="primary" onclick="window.print()">🖨 Print</button>
+    <a href="/strips.html" style="font-size:.85rem;color:#888">← Back to strips</a>
+  </div>
+
+  <template x-if="strips.length === 0">
+    <div style="color:#aaa;font-size:.9rem;padding:.5rem 0">
+      No pistes configured. <a href="/strips.html">Add pistes first →</a>
+    </div>
+  </template>
+
+  <div class="grid">
+    <template x-for="s in strips" :key="s.id">
+      <div class="qr-card">
+        <img :src="s.qr" :alt="'QR code for piste '+s.strip_number">
+        <div class="piste-label" x-text="'Piste ' + s.strip_number"></div>
+        <div class="piste-name" x-show="s.name" x-text="s.name"></div>
+        <div class="piste-url" x-text="s.url"></div>
+      </div>
+    </template>
+  </div>
+
+</main>
+<script src="/js/nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    strips: [],
+
+    async init() {
+      const raw = await fetch('/api/strips').then(r => r.json()).catch(() => []);
+      this.strips = await Promise.all(raw.map(s => this.buildCard(s)));
+    },
+
+    async buildCard(s) {
+      const url = window.location.origin + '/scoresheet.html?piste=' + s.strip_number;
+      const qr  = await QRCode.toDataURL(url, { width: 200, margin: 1, color: { dark: '#1a1a2e' } });
+      return { ...s, url, qr };
+    },
+  };
+}
+</script>
+</body>
+</html>
