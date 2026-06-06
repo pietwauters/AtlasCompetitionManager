@@ -86,9 +86,9 @@ Rule files in `rules/` with `"type": "de"` appear in the
 
 ### `repechage`
 
-Fencers who lose in the main bracket re-enter a parallel repechage bracket.
-Winners of the final repechage round rejoin the main bracket at `reentryAt`,
-forming the finals together with the main-bracket survivors.
+Fencers who lose in the main tableau re-enter a parallel repechage tableau.
+Winners of the final repechage round rejoin the main tableau at `reentryAt`,
+forming the finals together with the main-tableau survivors.
 
 **Tableau size and repechage rounds**
 
@@ -103,18 +103,18 @@ Minimum fencers required: `reentryAt × 2`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `enabled` | boolean | yes | `false` disables repechage entirely (default). |
-| `fromTableau` | number | if enabled | Informational — maximum N this rule is designed for. Not used in bracket computation. |
-| `reentryAt` | number | if enabled | Finals bracket size: repechage winners rejoin the main bracket here. Must be a power of 2. Minimum fencers = `reentryAt × 2`. |
+| `fromTableau` | number | if enabled | Informational — maximum N this rule is designed for. Not used in tableau computation. |
+| `reentryAt` | number | if enabled | Finals tableau size: repechage winners rejoin the main tableau here. Must be a power of 2. Minimum fencers = `reentryAt × 2`. |
 
-**How the repechage bracket is built**
+**How the repechage tableau is built**
 
 For each repechage cycle:
 
 1. **Intra round** — R1-losers (or previous injection winners) fence each other.
-2. **Injection round** — intra-winners are seeded below the new group of main-bracket losers and all fence together.
+2. **Injection round** — intra-winners are seeded below the new group of main-tableau losers and all fence together.
 
 This repeats `log₂(T / reentryAt)` times. The last injection winners and the
-last main-bracket survivors then fence the finals bracket together.
+last main-tableau survivors then fence the finals tableau together.
 
 **Example — USA Fencing DE16 with repechage (T16→T8, 1 repechage cycle):**
 
@@ -135,13 +135,13 @@ Table E/F/G (Finals T8)
 "repechage": { "enabled": true, "fromTableau": 64, "reentryAt": 4 }
 ```
 Losers from T64, T32, T16, T8 all feed repechage.
-2 repechage winners join the 2 main-bracket finalists at T4.
+2 repechage winners join the 2 main-tableau finalists at T4.
 
 ---
 
 ### `placement`
 
-Controls what happens to fencers who lose in the main bracket (and repechage,
+Controls what happens to fencers who lose in the main tableau (and repechage,
 if enabled) after the phase is complete.
 
 | Field | Type | Required | Description |
@@ -159,8 +159,8 @@ if enabled) after the phase is complete.
 | `16` | T16 losers fence for 9th–16th · T8 for 5th–8th · T4 for 3rd–4th. | 7 + 3 + 1 = 11 |
 | `32` | T32 losers for 17th–32nd · T16 for 9th–16th · … | 15 + 7 + 3 + 1 = 26 |
 
-A group of N losers at a given round produces a mini-bracket of N−1 bouts
-(same as any elimination bracket) and yields N unique places.
+A group of N losers at a given round produces a mini-tableau of N−1 bouts
+(same as any elimination tableau) and yields N unique places.
 
 ---
 

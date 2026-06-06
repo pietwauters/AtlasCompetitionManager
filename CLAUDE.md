@@ -10,7 +10,7 @@ Read it before touching any code. It overrides default behaviors.
 **Atlas** is a fencing competition management system built for the
 [OpenPiste](https://openpiste.org) ecosystem. Target hardware: Raspberry Pi on
 competition day. A competition manager uses it to run pool rounds, direct elimination
-brackets, and publish results.
+tableaux, and publish results.
 
 Part of the broader OpenPiste ecosystem: strip scoreboards and club software communicate
 via **OPP2** (OpenPiste Protocol 2, MQTT + JSON). Atlas must eventually speak OPP2.
@@ -93,7 +93,7 @@ Person          — master record (anyone: fencer, referee, coach)
 Tournament      — named series of competitions
   └─ Competition — one event (weapon + gender + age category)
        └─ Competitor — a Fencer entered in this Competition
-            └─ Phase  — Pool round or DE bracket within this Competition
+            └─ Phase  — Pool round or DE tableau within this Competition
                  └─ Pool / Bout
 ```
 
@@ -118,7 +118,7 @@ Tournament      — named series of competitions
 - All valid uniform options shown (e.g. 42 fencers → both 6×7 and 7×6)
 - Mixed options (different pool sizes) also shown when they exist
 
-### DE bracket (FIE seeding)
+### DE tableau (FIE seeding)
 - Tableau size = smallest power of 2 ≥ N competitors
 - `buildSeedPositions(T)`: seed 1 at position 1, seed 2 at position T
   Seeds 2 & 3 meet only in the semi-final; 1 & 2 only in the final
@@ -147,7 +147,7 @@ function buildSeedPositions(T) {
 ```
 
 **WARNING — bye distribution.**
-Byes go to the **top seeds**, not random positions. In a T=64 bracket with 45
+Byes go to the **top seeds**, not random positions. In a T=64 tableau with 45
 fencers, seeds 46–64 are byes. A bye at position P means the real seed at that
 position gets a free pass; there is never a bout between two real competitors
 where one of them has a seed number higher than N. The bye slots fall out
@@ -194,7 +194,7 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - UI: `public/phase.html`, `public/pool.html`
 
 ### DE phase (complete)
-- FIE serpentine bracket seeding
+- FIE serpentine tableau seeding
 - All rounds pre-built on phase creation; byes auto-finished and wired
 - Score entry, undo, winner auto-advancement
 - Simulate function
@@ -285,7 +285,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ### 1. Full functional DE tableau
 - `allPlacesFenced`: all places fenced off from 1st to last (T8+, common in youth events)
-- Repechage: losers re-enter the bracket from a defined round
+- Repechage: losers re-enter the tableau from a defined round
 - `de.html` full redesign to accommodate both of the above
 - Bronze bout for placement bouts in pipeline (strip picker doesn't yet cover placement/repechage)
 
@@ -303,7 +303,11 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Minor: `CyranoServer.js` missing `'use strict'`
 
 ### 4. Security
-- Authentication: `express-session` + `bcryptjs` installed, not wired
+- Authentication: fully wired — session-based PIN login, roles: `admin` / `director` / `assistant` / `referee`
+- GET requests are public; mutations are gated per route (`writeOnly(role)` in `server.js`)
+- OPP2/MQTT config and user management require `admin`; phase/bout scoring requires `director`
+- Install creates an `admin` account with a one-time PIN (forced change on first login)
+- `scripts/reset_admin_pin.js` resets a lost admin PIN
 
 ### 5. CSS centralisation
 - ~1 600 lines of inline `<style>` spread across 20 pages; extract to `css/style.css`
@@ -333,7 +337,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) |
 | `lib/poolFormation.js` | FIE pool seeding + calcPoolOptions |
 | `lib/boutOrder.js` | FIE official bout order tables |
-| `lib/deFormation.js` | FIE DE bracket seeding (buildSeedPositions, buildDE) |
+| `lib/deFormation.js` | FIE DE tableau seeding (buildSeedPositions, buildDE) |
 | `lib/opp2Client.js` | OPP2 MQTT client singleton |
 | `services/phases.js` | Phase create/activate/close + DE creation + simulate |
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |

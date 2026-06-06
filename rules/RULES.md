@@ -112,7 +112,7 @@ Controls how many fencers advance to the next phase.
 ### `seeding`
 
 Defines how fencers are ranked after pools. The ranking is used to seed the
-next phase (further pool rounds or the DE bracket).
+next phase (further pool rounds or the DE tableau).
 
 | Field | Type | Required | Description |
 |---|---|---|---|

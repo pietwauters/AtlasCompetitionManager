@@ -4,7 +4,7 @@ Fencing competition management system built for the
 [OpenPiste](https://openpiste.org) ecosystem.
 Runs on a Raspberry Pi on competition day.
 
-Manages pool rounds, direct elimination brackets, strip scheduling via OPP2/MQTT,
+Manages pool rounds, direct elimination tableaux, strip scheduling via OPP2/MQTT,
 and publishes results. Part of the broader OpenPiste hardware + software platform.
 
 ---
@@ -14,7 +14,7 @@ and publishes results. Part of the broader OpenPiste hardware + software platfor
 - **People** — fencers, referees, clubs; CSV import/export
 - **Competitions** — tournaments, age categories, eligibility filtering, auto-seeding
 - **Pool rounds** — FIE serpentine seeding, official bout order, live rankings, advancement
-- **Direct elimination** — FIE bracket seeding, byes, score entry, final results
+- **Direct elimination** — FIE tableau seeding, byes, score entry, final results
 - **Strips / OPP2** — piste pipeline scheduling, MQTT integration with scoring apparatus
 - **Dashboard** — live view of all active competitions
 
@@ -49,6 +49,18 @@ sudo bash install.sh
 - Install PM2 and configure auto-start at boot via systemd
 
 After install, Atlas is available at `http://<pi-ip>:3001`.
+
+During installation an **admin account** is created automatically.
+The one-time PIN is printed at the end of the install output — save it before
+the terminal closes. You will be forced to change it on first login.
+
+Login page: `http://<pi-ip>:3001/login.html`
+
+To reset a lost admin PIN:
+
+```bash
+node scripts/reset_admin_pin.js
+```
 
 > **Port note:** Atlas defaults to port `3001` to avoid conflicting with
 > `mqtt-web` and other OpenPiste services that typically run on port `3000`.
@@ -128,7 +140,7 @@ You will be asked to type a confirmation phrase. This cannot be undone.
 | `server.js` | Entry point, route mounting, migration runner |
 | `db/migrations/` | Numbered schema migrations (applied on every start) |
 | `rules/` | JSON rule documents (pool sizes, DE parameters) |
-| `lib/` | Pool formation, bout order, DE bracket, OPP2 client |
+| `lib/` | Pool formation, bout order, DE tableau, OPP2 client |
 | `services/` | All database access (raw SQL, no ORM) |
 | `routes/` | Express route handlers |
 | `public/` | HTML pages (HTMX + Alpine.js, no build step) |

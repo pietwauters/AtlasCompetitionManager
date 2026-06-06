@@ -154,14 +154,13 @@
       <div x-show="newPhaseType==='de'">
         <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
           <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Rule document
-            <select class="inline" x-model="newRuleDoc" @change="deOptions=null">
+            <select class="inline" x-model="newRuleDoc" @change="newRuleDoc ? fetchDeOptions() : deOptions=null">
               <option value="">— choose —</option>
               <template x-for="r in deRules" :key="r.filename">
                 <option :value="r.filename" x-text="r.description+' ('+r.filename+')'"></option>
               </template>
             </select>
           </label>
-          <button @click="fetchDeOptions()" :disabled="!newRuleDoc">Preview bracket</button>
         </div>
         <!-- Seeding method — only relevant when multiple pool phases exist -->
         <div x-show="deOptions && deOptions.finishedPoolPhases > 1"
@@ -182,7 +181,7 @@
                 x-text="'('+deOptions?.byeCount+' bye'+(deOptions?.byeCount>1?'s':'')+' for top seed'+(deOptions?.byeCount>1?'s':'')+')'" ></span>
         </div>
         <div x-show="deOptions" style="margin-top:.75rem">
-          <button class="success" :disabled="!newRuleDoc" @click="createDE()">Create DE bracket</button>
+          <button class="success" :disabled="!newRuleDoc" @click="createDE()">Create DE tableau</button>
         </div>
       </div>
     </div>
@@ -408,7 +407,7 @@ function app() {
       });
       const data = await r.json();
       if (!r.ok) { this.showNotice(data.error||'Create failed', true); return; }
-      this.showNotice('DE bracket created');
+      this.showNotice('DE tableau created');
       this.phaseFormOpen=false; this.deOptions=null; this.newRuleDoc='';
       await this.loadPhases();
     },

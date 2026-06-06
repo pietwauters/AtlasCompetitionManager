@@ -28,7 +28,7 @@ Two distinct concepts must be kept separate throughout the design:
 
 | Capability | Public | Assistant | Referee | Director | Admin |
 |---|:---:|:---:|:---:|:---:|:---:|
-| View pools, results, bracket, schedule | ✓ | ✓ | ✓ | ✓ | ✓ |
+| View pools, results, tableau, schedule | ✓ | ✓ | ✓ | ✓ | ✓ |
 | View own assignment / schedule | — | — | ✓ | ✓ | ✓ |
 | Check in / withdraw competitors | — | ✓ | — | ✓ | ✓ |
 | Correct people records (limited) | — | ✓ | — | ✓ | ✓ |
