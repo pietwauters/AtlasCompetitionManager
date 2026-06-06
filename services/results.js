@@ -103,9 +103,11 @@ function getCompetitionResults(compId) {
         // Repechage table losers get shared ranks based on their elimination round:
         //   G-losers (last rep injection losers): next band
         //   F-losers, E-losers, D-losers: further bands
-        const fromT = ruleDoc.repechage.fromTableau;
         const reT   = ruleDoc.repechage.reentryAt;
-        const n     = Math.round(Math.log2(fromT / reT));
+        const maxRepRound = db.prepare(
+          "SELECT COALESCE(MAX(de_round),0) AS m FROM bouts WHERE phase_id=? AND bracket='repechage'"
+        ).get(dePhase.id).m;
+        const n     = maxRepRound / 2;
         const lastMainRound = n + 1;
         const finalsRounds  = Math.log2(reT);
         const firstFinalsRound = lastMainRound + 1;
@@ -128,7 +130,6 @@ function getCompetitionResults(compId) {
 
         // Repechage losers by elimination round (highest de_round first = closest to finals)
         const repBouts = bouts.filter(b => b.bracket === 'repechage');
-        const maxRepRound = repBouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
         const placed = new Set(entries.map(e => e.competitor_id));
         let nextPlace = entries.length + 1;
 

@@ -642,9 +642,12 @@ const Phase = {
 
       if (isRepechage) {
         // Process rounds in dependency order: main Ri → rep D → main R(i+1) → rep E → rep F → ...
-        const fromT        = ruleDoc.repechage.fromTableau;
+        // Derive n from actual repechage bouts (robust against any T, not just fromTableau).
         const reT          = ruleDoc.repechage.reentryAt;
-        const n            = Math.round(Math.log2(fromT / reT));
+        const maxRepRound  = db.prepare(
+          "SELECT COALESCE(MAX(de_round),0) AS m FROM bouts WHERE phase_id=? AND bracket='repechage'"
+        ).get(phaseId).m;
+        const n            = maxRepRound / 2;
         const lastMainRound = n + 1;
         const finalsRounds  = Math.log2(reT);
 
