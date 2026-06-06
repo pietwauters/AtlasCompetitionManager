@@ -113,6 +113,11 @@ function getCompetitionResults(compId) {
         const firstFinalsRound = lastMainRound + 1;
 
         // Finals losers not yet placed (H-losers = 5th-8th for T32→T8)
+        // Exclude fencers still in a pending placement bout (e.g. SF losers awaiting bronze).
+        const pendingPlacementIds = new Set(
+          bouts.filter(b => b.bracket === 'placement' && b.status !== 'finished')
+               .flatMap(b => [b.left_id, b.right_id].filter(Boolean))
+        );
         for (let fr = finalsRounds - 1; fr >= 1; fr--) {
           const de_round = lastMainRound + fr;
           const bInRound = mainBouts.filter(b => b.de_round === de_round && b.status === 'finished'
@@ -122,16 +127,30 @@ function getCompetitionResults(compId) {
           const startPlace = Math.pow(2, finalsRounds - fr) + 1;
           const losers = bInRound
             .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
-            .filter(l => !placedByPlacement.has(l.id) && !entries.find(e => e.competitor_id === l.id))
+            .filter(l => !placedByPlacement.has(l.id) && !entries.find(e => e.competitor_id === l.id)
+                      && !pendingPlacementIds.has(l.id))
             .sort((a, b) => (deSeed[a.id] || 999) - (deSeed[b.id] || 999));
           const note = fr === finalsRounds - 1 ? 'Finals semi-final' : 'Finals quarter-final';
           losers.forEach((l, i) => push(startPlace + i, String(startPlace + i), l.id, note));
         }
 
         // Repechage losers by elimination round (highest de_round first = closest to finals)
+        // Pre-compute the correct starting place for each round so that unscored higher
+        // rounds still reserve their slots — e.g. Table C losers always rank below
+        // Table D losers even when Table D hasn't been scored yet.
         const repBouts = bouts.filter(b => b.bracket === 'repechage');
         const placed = new Set(entries.map(e => e.competitor_id));
-        let nextPlace = entries.length + 1;
+
+        const repRoundSize = {};
+        for (let r = 1; r <= maxRepRound; r++)
+          repRoundSize[r] = repBouts.filter(b => b.de_round === r).length;
+
+        let repOffset = 0;
+        const repRoundStart = {};
+        for (let r = maxRepRound; r >= 1; r--) {
+          repRoundStart[r] = reT + 1 + repOffset;
+          repOffset += repRoundSize[r];
+        }
 
         for (let r = maxRepRound; r >= 1; r--) {
           const eliminated = repBouts
@@ -140,12 +159,11 @@ function getCompetitionResults(compId) {
             .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
             .filter(l => !placed.has(l.id));
           if (!eliminated.length) continue;
-          const sp = nextPlace;
+          const sp = repRoundStart[r];
           eliminated.forEach((l, i) => {
             push(sp + i, String(sp + i), l.id, 'Repechage round ' + r);
             placed.add(l.id);
           });
-          nextPlace += eliminated.length;
         }
 
         // Main bracket losers who went to repechage but are not yet in entries
