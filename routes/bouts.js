@@ -32,7 +32,7 @@ router.patch('/:id', (req, res) => {
   try {
     const before = Bout.findById(req.params.id);
     if (!before) return res.status(404).json({ error: 'Bout not found' });
-    const { bout: b, next, placement } = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
+    const { bout: b, next, placement, cascaded } = Bout.updateScore(req.params.id, left_score, right_score, winner_id);
     Event.record({
       competition_id: b.competition_id,
       phase_id:       b.phase_id,
@@ -46,6 +46,7 @@ router.patch('/:id', (req, res) => {
     });
     emitBoutUpdated(b, next);
     if (placement) emitBoutUpdated(placement, null);
+    for (const cb of cascaded) emitBoutUpdated(cb, null);
     res.json(b);
   } catch (e) {
     res.status(400).json({ error: e.message });

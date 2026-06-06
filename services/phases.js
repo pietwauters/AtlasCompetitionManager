@@ -3,7 +3,7 @@
 const db             = require('../db');
 const { loadRule }   = require('../lib/rules');
 const { formPools, calcPoolOptions } = require('../lib/poolFormation');
-const { buildDE }    = require('../lib/deFormation');
+const { buildFullBracket } = require('../lib/deFormation');
 const Competitor     = require('./competitors');
 
 const DEFAULT_CRITERIA = [
@@ -476,11 +476,9 @@ const Phase = {
   createDE(compId, ruleDoc, seedingMethod = 'last') {
     const seeding     = this._getDeSeeding(compId, seedingMethod);
     const competitors = seeding.map(r => ({ competitor_id: r.competitor_id }));
+    const rule        = loadRule(ruleDoc);
 
-    const { tableauSize, totalRounds, r1Bouts } = buildDE(competitors);
-
-    const rule = loadRule(ruleDoc);
-    const wantBronze = rule.placement?.thirdPlaceBout === true;
+    const { nodes, tableauSize, totalRounds } = buildFullBracket(competitors, rule);
 
     const phaseId = db.transaction(() => {
       const maxOrder = db.prepare(
@@ -492,7 +490,10 @@ const Phase = {
           'SELECT status FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1'
         ).get(compId);
         if (prev && prev.status !== 'finished') {
-          throw Object.assign(new Error('Previous phase must be finished before creating a new one.'), { status: 400 });
+          throw Object.assign(
+            new Error('Previous phase must be finished before creating a new one.'),
+            { status: 400 }
+          );
         }
       }
 
@@ -501,63 +502,64 @@ const Phase = {
         VALUES (@comp_id, @order, 'de', @rule_doc, 'pending')
       `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
 
-      // Pre-create all bouts for every round.
-      // boutIds[round][position] lets us wire winners to next-round slots.
-      const boutIds = {};
-      for (let round = 1; round <= totalRounds; round++) {
-        boutIds[round] = {};
-        const boutsInRound = tableauSize / (2 ** round);
+      // Pass 1 — insert every bout; collect DB ids indexed by tempId.
+      const insertBout = db.prepare(`
+        INSERT INTO bouts
+          (phase_id, left_id, right_id, de_round, tableau_position,
+           bracket, status, winner_id, left_score, right_score,
+           bout_order, place_rank)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-        for (let pos = 1; pos <= boutsInRound; pos++) {
-          let leftId = null, rightId = null, status = 'pending', winnerId = null;
-          let leftScore = null, rightScore = null;
-
-          if (round === 1) {
-            const spec = r1Bouts[pos - 1];
-            leftId  = spec.left?.competitor_id  ?? null;
-            rightId = spec.right?.competitor_id ?? null;
-
-            // Auto-finish bye bouts (one side is null).
-            if (leftId === null || rightId === null) {
-              status    = 'finished';
-              winnerId  = leftId ?? rightId;
-              leftScore  = leftId  ? 1 : 0;
-              rightScore = rightId ? 1 : 0;
-            }
-          }
-
-          const { lastInsertRowid: boutId } = db.prepare(`
-            INSERT INTO bouts
-              (phase_id, left_id, right_id, de_round, tableau_position,
-               status, winner_id, left_score, right_score, bout_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(phaseId, leftId, rightId, round, pos, status, winnerId, leftScore, rightScore, pos);
-
-          boutIds[round][pos] = boutId;
-        }
+      const dbIds = new Array(nodes.length); // dbIds[tempId] = DB row id
+      for (const n of nodes) {
+        const { lastInsertRowid } = insertBout.run(
+          phaseId,
+          n.leftCompetitorId,
+          n.rightCompetitorId,
+          n.de_round,
+          n.tableau_position,
+          n.bracket,
+          n.status,
+          n.winner_id,
+          n.left_score,
+          n.right_score,
+          n.bout_order,
+          n.place_rank,
+        );
+        dbIds[n.tempId] = lastInsertRowid;
+        n.dbId = lastInsertRowid;
       }
 
-      // Wire bye winners into round-2 slots immediately.
-      for (const spec of r1Bouts) {
-        if (spec.left !== null && spec.right !== null) continue; // not a bye
-        const winner = spec.left ?? spec.right;
-        if (!winner) continue;
+      // Pass 2 — set routing pointers now that all DB ids are known.
+      const updateRouting = db.prepare(`
+        UPDATE bouts
+        SET winner_next_bout_id = @wnb, winner_next_side = @wns,
+            loser_next_bout_id  = @lnb, loser_next_side  = @lns
+        WHERE id = @id
+      `);
 
-        const r2Pos  = Math.ceil(spec.tableauPosition / 2);
-        const r2Id   = boutIds[2]?.[r2Pos];
-        if (!r2Id) continue;
-
-        const side = spec.tableauPosition % 2 === 1 ? 'left_id' : 'right_id';
-        db.prepare(`UPDATE bouts SET ${side} = ? WHERE id = ?`).run(winner.competitor_id, r2Id);
+      for (const n of nodes) {
+        const hasRouting = n.winnerNextTempId !== null || n.loserNextTempId !== null;
+        if (!hasRouting) continue;
+        updateRouting.run({
+          id:  n.dbId,
+          wnb: n.winnerNextTempId !== null ? dbIds[n.winnerNextTempId] : null,
+          wns: n.winnerNextSide   ?? null,
+          lnb: n.loserNextTempId  !== null ? dbIds[n.loserNextTempId]  : null,
+          lns: n.loserNextSide    ?? null,
+        });
       }
 
-      // Bronze bout: bracket='placement', de_round=totalRounds, tableau_position=2.
-      // SF losers are routed here by advanceDEWinner in bouts.js when bouts finish.
-      if (wantBronze) {
-        db.prepare(`
-          INSERT INTO bouts (phase_id, de_round, tableau_position, bracket, status, bout_order)
-          VALUES (?, ?, 2, 'placement', 'pending', 99999)
-        `).run(phaseId, totalRounds);
+      // Pass 3 — wire bye winners into their next-round slots immediately,
+      // mirroring what routeBoutResult would do when bouts finish at run time.
+      const updateSlot = db.prepare(`UPDATE bouts SET left_id = ? WHERE id = ?`);
+      const updateSlotR = db.prepare(`UPDATE bouts SET right_id = ? WHERE id = ?`);
+      for (const n of nodes) {
+        if (n.status !== 'finished' || !n.winner_id || !n.winnerNextTempId) continue;
+        const nextDbId = dbIds[n.winnerNextTempId];
+        if (n.winnerNextSide === 'left')  updateSlot.run(n.winner_id, nextDbId);
+        else                              updateSlotR.run(n.winner_id, nextDbId);
       }
 
       return phaseId;
@@ -602,8 +604,8 @@ const Phase = {
         count++;
       }
     } else if (phase.type === 'de') {
-      // Process main bracket round by round so winners/losers are placed before
-      // the next round (including the bronze bout) is simulated.
+      // Process main bracket round by round so routing fires before the next
+      // round is attempted.
       const maxRound = db.prepare(
         "SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=? AND bracket='main'"
       ).get(phaseId).m || 1;
@@ -621,16 +623,23 @@ const Phase = {
         }
       }
 
-      // Simulate placement bouts (e.g. bronze) after main bracket is done.
-      const placementPending = db.prepare(`
-        SELECT id FROM bouts
-        WHERE phase_id=? AND bracket='placement' AND status='pending'
-          AND left_id IS NOT NULL AND right_id IS NOT NULL
-      `).all(phaseId);
-      for (const b of placementPending) {
-        const [ls, rs] = randomScores(touchTarget);
-        Bout.updateScore(b.id, ls, rs);
-        count++;
+      // Placement bouts are a DAG: each level becomes ready after its sources
+      // are scored.  Repeat until no more bouts become scoreable.
+      let anyScored = true;
+      while (anyScored) {
+        anyScored = false;
+        const pending = db.prepare(`
+          SELECT id FROM bouts
+          WHERE phase_id=? AND bracket='placement' AND status='pending'
+            AND left_id IS NOT NULL AND right_id IS NOT NULL
+          ORDER BY bout_order
+        `).all(phaseId);
+        for (const b of pending) {
+          const [ls, rs] = randomScores(touchTarget);
+          Bout.updateScore(b.id, ls, rs);
+          count++;
+          anyScored = true;
+        }
       }
     }
 

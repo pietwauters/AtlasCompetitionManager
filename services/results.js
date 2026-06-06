@@ -69,33 +69,42 @@ function getCompetitionResults(compId) {
         push(2, '2', silver, 'DE final');
       }
 
-      // 3rd / 4th: use bronze bout result if available, otherwise share 3rd.
-      const bronzeBout = bouts.find(
-        b => b.bracket === 'placement' && b.de_round === totalRounds && b.tableau_position === 2
-      );
-      if (bronzeBout?.status === 'finished' && bronzeBout.winner_id) {
-        push(3, '3', bronzeBout.winner_id, 'Bronze bout');
-        const fourth = bronzeBout.winner_id === bronzeBout.left_id
-          ? bronzeBout.right_id : bronzeBout.left_id;
-        push(4, '4', fourth, 'Bronze bout');
-      } else {
-        const sfLosers = mainBouts
-          .filter(b => b.de_round === totalRounds - 1 && b.status === 'finished'
-                    && b.winner_id && b.left_id && b.right_id)
-          .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id);
-        sfLosers.forEach(id => push(3, '3', id, 'DE semi-final'));
+      // Placement bouts with place_rank give unique places (allPlacesFenced or bronze).
+      // Terminal placement bouts (place_rank IS NOT NULL): winner = place_rank, loser = place_rank+1.
+      // Fallback for older phases: placement bout at de_round=totalRounds, tableau_position=2 is bronze.
+      const terminalPlacements = bouts
+        .filter(b => b.bracket === 'placement' && b.place_rank != null)
+        .sort((a, b) => a.place_rank - b.place_rank);
+
+      // Pre-014 phases: detect bronze by position if no place_rank column is present
+      const legacyBronze = terminalPlacements.length === 0
+        ? bouts.find(b => b.bracket === 'placement' && b.de_round === totalRounds && b.tableau_position === 2)
+        : null;
+      if (legacyBronze) terminalPlacements.push({ ...legacyBronze, place_rank: 3 });
+
+      const placedByPlacement = new Set();
+      for (const pb of terminalPlacements) {
+        if (pb.status === 'finished' && pb.winner_id) {
+          push(pb.place_rank, String(pb.place_rank), pb.winner_id, 'Placement bout');
+          const loser = pb.winner_id === pb.left_id ? pb.right_id : pb.left_id;
+          push(pb.place_rank + 1, String(pb.place_rank + 1), loser, 'Placement bout');
+          placedByPlacement.add(pb.winner_id);
+          if (loser) placedByPlacement.add(loser);
+        }
       }
 
-      // All earlier main-bracket rounds: place derived from bracket depth.
-      // Round r losers start at 2^(totalRounds-r)+1 (e.g. QF→5, R16→9, R32→17).
-      for (let r = totalRounds - 2; r >= 1; r--) {
-        const roundNote = r === totalRounds - 2 ? 'DE quarter-final'
-                        : 'DE round of ' + (2 ** (totalRounds - r + 1));
+      // Main-bracket round losers not yet placed by a placement bout:
+      // share the start-place for that round.
+      for (let r = totalRounds - 1; r >= 1; r--) {
         const roundStartPlace = 2 ** (totalRounds - r) + 1;
+        const roundNote = r === totalRounds - 1 ? 'DE semi-final'
+                        : r === totalRounds - 2 ? 'DE quarter-final'
+                        : 'DE round of ' + (2 ** (totalRounds - r + 1));
         const losers = mainBouts
           .filter(b => b.de_round === r && b.status === 'finished'
                     && b.winner_id && b.left_id && b.right_id)
           .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+          .filter(l => !placedByPlacement.has(l.id))
           .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
           .sort((a, b) => a.seed - b.seed);
 
