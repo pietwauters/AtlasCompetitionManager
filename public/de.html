@@ -794,19 +794,20 @@ function app() {
       return 'Round of ' + (this.rounds[ri]?.length * 2);
     },
 
-    // repechageRoundLabel: de_round 1=D, 2=E, 3=F, 4=G (0-based index ri)
+    // repechageRoundLabel: letter offset from 'A' = lastMainRound
+    // T16 (lastMainRound=2): C, D   T32 (lastMainRound=3): D, E, F, G
     repechageRoundLabel(ri) {
-      const labels = ['Table D', 'Table E', 'Table F', 'Table G', 'Table H', 'Table I', 'Table J'];
-      return labels[ri] || ('Repechage round ' + (ri + 1));
+      return 'Table ' + String.fromCharCode('A'.charCodeAt(0) + this.lastMainRound + ri);
     },
 
-    // finalsRoundLabel: fr is 0-based index within finalsRounds
+    // finalsRoundLabel: letters continue after all repechage tables
     finalsRoundLabel(fi, total) {
+      const letter = String.fromCharCode('A'.charCodeAt(0) + this.lastMainRound + this.repechageRounds.length + fi);
       const n = total - fi;
-      if (n === 1) return 'Final';
-      if (n === 2) return 'Semi-final';
-      if (n === 3) return 'Quarter-final';
-      return 'Finals round of ' + (this.finalsRounds[fi]?.length * 2);
+      if (n === 1) return 'Table ' + letter + ' — Final';
+      if (n === 2) return 'Table ' + letter + ' — Semi-final';
+      if (n === 3) return 'Table ' + letter + ' — Quarter-final';
+      return 'Table ' + letter;
     },
 
     isBye(bout) {

@@ -86,37 +86,48 @@ Rule files in `rules/` with `"type": "de"` appear in the
 
 ### `repechage`
 
-Fencers who lose in the main bracket between `fromTableau` and
-`reentryAt × 2` (inclusive) are placed in a repechage bracket that runs
-in parallel with the main bracket. Winners of the final repechage round
-re-enter the main bracket at `reentryAt`.
+Fencers who lose in the main bracket re-enter a parallel repechage bracket.
+Winners of the final repechage round rejoin the main bracket at `reentryAt`,
+forming the finals together with the main-bracket survivors.
 
-The number of repechage rounds = log₂(fromTableau / reentryAt).
+**Tableau size and repechage rounds**
+
+The actual tableau size `T` is always `getTableauSize(N)` — the smallest
+power of 2 ≥ the number of active fencers. `fromTableau` is informational
+only (it documents the maximum N the rule was designed for) and is not used
+in any computation.
+
+Number of repechage rounds = `log₂(T / reentryAt)` where T = getTableauSize(N).
+Minimum fencers required: `reentryAt × 2`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `enabled` | boolean | yes | `false` disables repechage entirely (default). |
-| `fromTableau` | number | if enabled | Tableau size of the first main-bracket round whose losers enter repechage. Must be a power of 2. |
-| `reentryAt` | number | if enabled | Tableau size at which repechage winners rejoin the main bracket. Must be a power of 2 smaller than `fromTableau`. |
+| `fromTableau` | number | if enabled | Informational — maximum N this rule is designed for. Not used in bracket computation. |
+| `reentryAt` | number | if enabled | Finals bracket size: repechage winners rejoin the main bracket here. Must be a power of 2. Minimum fencers = `reentryAt × 2`. |
 
 **How the repechage bracket is built**
 
-Losers enter the repechage in the same round they were eliminated from the
-main bracket. Earlier losers (larger tableau) fence each other first; their
-winners wait for the next group of losers to arrive before fencing again.
-This mirrors the FIE historical structure where losers from each half of the
-draw form their own sub-bracket.
+For each repechage cycle:
 
-**Example — German regional T32→T8 (2 repechage rounds):**
+1. **Intra round** — R1-losers (or previous injection winners) fence each other.
+2. **Injection round** — intra-winners are seeded below the new group of main-bracket losers and all fence together.
+
+This repeats `log₂(T / reentryAt)` times. The last injection winners and the
+last main-bracket survivors then fence the finals bracket together.
+
+**Example — USA Fencing DE16 with repechage (T16→T8, 1 repechage cycle):**
 
 ```
-Main:         T32 → T16 → T8 (QF) → T4 (SF) → Final
-                ↓      ↓      ↑
-Repechage:   T32L → QR1 ← T16L
-             (16)    (8)   (8 join)
+Table A (T16 R1, 8 bouts)  →  Table B (QF, 4 bouts)
+         ↓ losers                      ↓ losers
+Table C (intra, 4 bouts)               |
+         ↓ winners                     |
+Table D (injection, 4 bouts) ──────────┘
+         ↓ winners + B-winners
+Table E/F/G (Finals T8)
 ```
-16 T32 losers fence → 8 survivors. 8 T16 losers join → 16 fence → 8 repechage
-winners enter T8 alongside 8 main-bracket survivors.
+8 R1-losers fence → 4 C-winners join 4 QF-losers in Table D → 4 D-winners enter Finals.
 
 **Example — classic FIE épée historical (T64→T4, 4 repechage rounds):**
 
@@ -124,7 +135,7 @@ winners enter T8 alongside 8 main-bracket survivors.
 "repechage": { "enabled": true, "fromTableau": 64, "reentryAt": 4 }
 ```
 Losers from T64, T32, T16, T8 all feed repechage.
-2 repechage winners (one per half) join the 2 main-bracket finalists at T4.
+2 repechage winners join the 2 main-bracket finalists at T4.
 
 ---
 
