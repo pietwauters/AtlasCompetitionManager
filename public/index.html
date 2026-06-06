@@ -100,6 +100,16 @@
         <a :href="'/competition-detail.html?id='+c.id" class="open-btn" style="background:#e67e22">→ Set up next phase</a>
       </div>
     </template>
+    <template x-if="active.length > 0 || upcoming.length > 0 || between.length > 0">
+      <div style="background:#f8f9fa;border-radius:8px;border:2px dashed #d0d0d0;
+                  padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.5rem;justify-content:center">
+        <div style="font-size:.9rem;color:#666">Start another competition?</div>
+        <a href="/tournaments.html" style="display:inline-block;padding:.35rem .9rem;background:#1a6bab;
+           color:#fff;border-radius:5px;text-decoration:none;font-size:.85rem;font-weight:600;align-self:flex-start">
+          → Events &amp; competitions
+        </a>
+      </div>
+    </template>
   </div>
 
   <!-- ── Live pistes ─────────────────────────────────────────────────────── -->
