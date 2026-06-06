@@ -138,7 +138,8 @@ const Bout = {
     // (meaning it was a bye that routed nothing there), auto-finish as a bye.
     for (const nextId of [bout.winner_next_bout_id, bout.loser_next_bout_id].filter(Boolean)) {
       const next = db.prepare('SELECT * FROM bouts WHERE id=?').get(nextId);
-      if (!next || next.status !== 'pending' || next.bracket !== 'placement') continue;
+      if (!next || next.status !== 'pending' ||
+          (next.bracket !== 'placement' && next.bracket !== 'repechage')) continue;
       const hasLeft  = next.left_id  != null;
       const hasRight = next.right_id != null;
       if (!hasLeft && !hasRight) continue; // both still empty — too early

@@ -604,18 +604,16 @@ const Phase = {
         count++;
       }
     } else if (phase.type === 'de') {
-      // Process main bracket round by round so routing fires before the next
-      // round is attempted.
-      const maxRound = db.prepare(
-        "SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=? AND bracket='main'"
-      ).get(phaseId).m || 1;
+      const ruleDoc       = loadRule(phase.rule_doc);
+      const isRepechage   = !!(ruleDoc.repechage?.enabled);
 
-      for (let r = 1; r <= maxRound; r++) {
+      function scoreRound(bracket, de_round) {
         const pending = db.prepare(`
           SELECT id FROM bouts
-          WHERE phase_id=? AND de_round=? AND bracket='main' AND status='pending'
+          WHERE phase_id=? AND de_round=? AND bracket=? AND status='pending'
             AND left_id IS NOT NULL AND right_id IS NOT NULL
-        `).all(phaseId, r);
+          ORDER BY bout_order
+        `).all(phaseId, de_round, bracket);
         for (const b of pending) {
           const [ls, rs] = randomScores(touchTarget);
           Bout.updateScore(b.id, ls, rs);
@@ -623,23 +621,60 @@ const Phase = {
         }
       }
 
-      // Placement bouts are a DAG: each level becomes ready after its sources
-      // are scored.  Repeat until no more bouts become scoreable.
-      let anyScored = true;
-      while (anyScored) {
-        anyScored = false;
-        const pending = db.prepare(`
-          SELECT id FROM bouts
-          WHERE phase_id=? AND bracket='placement' AND status='pending'
-            AND left_id IS NOT NULL AND right_id IS NOT NULL
-          ORDER BY bout_order
-        `).all(phaseId);
-        for (const b of pending) {
-          const [ls, rs] = randomScores(touchTarget);
-          Bout.updateScore(b.id, ls, rs);
-          count++;
-          anyScored = true;
+      function scorePlacement() {
+        let anyScored = true;
+        while (anyScored) {
+          anyScored = false;
+          const pending = db.prepare(`
+            SELECT id FROM bouts
+            WHERE phase_id=? AND bracket='placement' AND status='pending'
+              AND left_id IS NOT NULL AND right_id IS NOT NULL
+            ORDER BY bout_order
+          `).all(phaseId);
+          for (const b of pending) {
+            const [ls, rs] = randomScores(touchTarget);
+            Bout.updateScore(b.id, ls, rs);
+            count++;
+            anyScored = true;
+          }
         }
+      }
+
+      if (isRepechage) {
+        // Process rounds in dependency order: main Ri → rep D → main R(i+1) → rep E → rep F → ...
+        const fromT        = ruleDoc.repechage.fromTableau;
+        const reT          = ruleDoc.repechage.reentryAt;
+        const n            = Math.round(Math.log2(fromT / reT));
+        const lastMainRound = n + 1;
+        const finalsRounds  = Math.log2(reT);
+
+        scoreRound('main', 1);         // R1
+        scoreRound('repechage', 1);    // D
+
+        for (let inj = 0; inj < n; inj++) {
+          scoreRound('main', inj + 2);           // R2, R3
+          scoreRound('repechage', 2 * inj + 2);  // E, G
+          if (inj < n - 1) {
+            scoreRound('repechage', 2 * inj + 3); // F (between E and G)
+          }
+        }
+
+        for (let fr = 1; fr <= finalsRounds; fr++) {
+          scoreRound('main', lastMainRound + fr); // H, I, J
+        }
+
+        scorePlacement(); // bronze
+      } else {
+        // Standard DE: process main bracket round by round, then placement DAG.
+        const maxRound = db.prepare(
+          "SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=? AND bracket='main'"
+        ).get(phaseId).m || 1;
+
+        for (let r = 1; r <= maxRound; r++) {
+          scoreRound('main', r);
+        }
+
+        scorePlacement();
       }
     }
 

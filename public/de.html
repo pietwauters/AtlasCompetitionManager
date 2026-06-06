@@ -152,6 +152,102 @@
       </div>
     </div>
 
+    <!-- Repechage tables (D, E, F, G) — repechage phases only -->
+    <template x-if="isRepechage && repechageRounds.length">
+      <div>
+        <h3 class="group-header">Repechage</h3>
+        <div class="bracket-wrap">
+          <div class="bracket">
+            <template x-for="(round, ri) in repechageRounds" :key="ri">
+              <div class="round-col">
+                <h3 x-text="repechageRoundLabel(ri)"></h3>
+                <template x-for="bout in round" :key="bout.id">
+                  <div class="bout-slot">
+                    <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
+                      <template x-if="isBye(bout)">
+                        <div>
+                          <div class="bout-row">
+                            <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
+                          </div>
+                          <div class="bye-label">bye</div>
+                        </div>
+                      </template>
+                      <template x-if="isEmpty(bout)">
+                        <div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                        </div>
+                      </template>
+                      <template x-if="!isBye(bout) && !isEmpty(bout)">
+                        <div>
+                          <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
+                            <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
+                          </div>
+                          <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
+                            <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Finals bracket (H, I, J) — repechage phases only -->
+    <template x-if="isRepechage && finalsRounds.length">
+      <div>
+        <h3 class="group-header">Finals</h3>
+        <div class="bracket-wrap">
+          <div class="bracket">
+            <template x-for="(round, fi) in finalsRounds" :key="fi">
+              <div class="round-col">
+                <h3 x-text="finalsRoundLabel(fi, finalsRounds.length)"></h3>
+                <template x-for="bout in round" :key="bout.id">
+                  <div class="bout-slot">
+                    <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
+                      <template x-if="isBye(bout)">
+                        <div>
+                          <div class="bout-row">
+                            <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
+                          </div>
+                          <div class="bye-label">bye</div>
+                        </div>
+                      </template>
+                      <template x-if="isEmpty(bout)">
+                        <div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                        </div>
+                      </template>
+                      <template x-if="!isBye(bout) && !isEmpty(bout)">
+                        <div>
+                          <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
+                            <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
+                          </div>
+                          <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
+                            <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Placement groups (bronze, 5th-8th, 9th-16th, …) -->
     <template x-for="(group, gi) in placementGroups" :key="gi">
       <div>
@@ -289,7 +385,11 @@ function app() {
   const phaseId = new URLSearchParams(window.location.search).get('id');
   return {
     phaseId, phase: null, comp: null,
-    rounds: [],            // main bracket: [[bout,…], [bout,…], …]
+    rounds: [],            // main bracket rounds (R1..lastMainRound for repechage, or full bracket)
+    repechageRounds: [],   // repechage tables D/E/F/G: [[bout,…],…]
+    finalsRounds: [],      // finals H/I/J (repechage only): [[bout,…],…]
+    isRepechage: false,
+    lastMainRound: 0,
     placementGroups: [],   // [{ startPlace, endPlace, columns: [[bout,…],…] }]
     tableauSize: 0,
     nameMap: {},           // competitor_id → display name
@@ -310,10 +410,13 @@ function app() {
       window.addEventListener('beforeunload', () => es.close());
       es.addEventListener('bout-updated', e => {
         const updated = JSON.parse(e.data);
-        this.rounds = this.rounds.map(r => r.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+        const upd = r => r.map(b => b.id === updated.id ? { ...b, ...updated } : b);
+        this.rounds          = this.rounds.map(upd);
+        this.repechageRounds = this.repechageRounds.map(upd);
+        this.finalsRounds    = this.finalsRounds.map(upd);
         this.placementGroups = this.placementGroups.map(g => ({
           ...g,
-          columns: g.columns.map(col => col.map(b => b.id === updated.id ? { ...b, ...updated } : b)),
+          columns: g.columns.map(col => upd(col)),
         }));
         if (this.selected?.id === updated.id) this.selected = { ...this.selected, ...updated };
         this.computeFinalResults();
@@ -349,10 +452,10 @@ function app() {
         (byRound[b.de_round] = byRound[b.de_round] || []).push(b);
         if (b.de_round > maxRound) maxRound = b.de_round;
       }
-      this.tableauSize = maxRound ? 2 ** maxRound : 0;
 
       const r1 = byRound[1] || [];
       const T  = r1.length * 2;
+      this.tableauSize = T || 0;
       if (T >= 2) {
         const seedSlots = buildSeedPositions(T);
         this.seedMap = {};
@@ -363,9 +466,42 @@ function app() {
         }
       }
 
-      this.rounds = [];
-      for (let r = 1; r <= maxRound; r++) {
-        this.rounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
+      // ── Repechage split ──────────────────────────────────────────────────────
+      const repBoutsAll = bouts.filter(b => b.bracket === 'repechage');
+      this.isRepechage = repBoutsAll.length > 0;
+
+      if (this.isRepechage) {
+        const maxRepRound = repBoutsAll.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
+        // numRepRounds = maxRepRound / 2 (D=1 intra, E=2 inj, F=3 intra, G=4 inj → 4/2=2)
+        this.lastMainRound  = maxRepRound / 2 + 1;
+        const finalsStart   = this.lastMainRound + 1;
+
+        this.rounds = [];
+        for (let r = 1; r <= this.lastMainRound; r++) {
+          this.rounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
+        }
+
+        const repByRound = {};
+        for (const b of repBoutsAll) {
+          (repByRound[b.de_round] = repByRound[b.de_round] || []).push(b);
+        }
+        this.repechageRounds = [];
+        for (let r = 1; r <= maxRepRound; r++) {
+          this.repechageRounds.push((repByRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
+        }
+
+        this.finalsRounds = [];
+        for (let r = finalsStart; r <= maxRound; r++) {
+          this.finalsRounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
+        }
+      } else {
+        this.lastMainRound  = 0;
+        this.repechageRounds = [];
+        this.finalsRounds    = [];
+        this.rounds = [];
+        for (let r = 1; r <= maxRound; r++) {
+          this.rounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
+        }
       }
 
       if (this.selected) {
@@ -526,6 +662,49 @@ function app() {
     },
 
     computeFinalResults() {
+      if (this.isRepechage) {
+        // Repechage result summary: find the finals bracket final
+        const allFinals = this.finalsRounds;
+        if (!allFinals.length) { this.finalResults = null; return; }
+        const finalBout = allFinals[allFinals.length - 1]?.find(b => b.tableau_position === 1);
+        if (!finalBout?.winner_id) { this.finalResults = null; return; }
+
+        const results = [];
+        const placed  = new Set();
+        const add = (label, id, medalClass) => {
+          if (!id || placed.has(id)) return;
+          const name = this.nameMap[id] || ('Competitor #' + id);
+          results.push({ id, place: label, seed: this.seedMap[id] || '?', name, medalClass });
+          placed.add(id);
+        };
+
+        add('🥇 1', finalBout.winner_id, 'medal-gold');
+        const silver = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
+        add('🥈 2', silver, 'medal-silver');
+
+        // Bronze from placement
+        const bronze = this.placementGroups.flatMap(g => g.columns.flat())
+          .find(b => b.place_rank === 3 && b.status === 'finished' && b.winner_id);
+        if (bronze) {
+          add('🥉 3', bronze.winner_id, 'medal-bronze');
+          const bl = bronze.winner_id === bronze.left_id ? bronze.right_id : bronze.left_id;
+          add('4', bl, '');
+        }
+
+        // Finals QF losers (5th-8th if reT=8)
+        if (allFinals.length >= 2) {
+          const qf = allFinals[allFinals.length - 3]; // H round for T8 finals
+          if (qf) {
+            const losers = qf.filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
+              .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id).filter(id => !placed.has(id));
+            losers.forEach((id, i) => add(String(5 + i), id, ''));
+          }
+        }
+
+        this.finalResults = results.length > 2 ? results : null;
+        return;
+      }
+
       const totalRounds = this.rounds.length;
       if (!totalRounds) { this.finalResults = null; return; }
       const finalBout = this.rounds[totalRounds - 1]?.find(b => b.tableau_position === 1);
@@ -590,11 +769,27 @@ function app() {
     },
 
     roundLabel(ri, total) {
+      if (this.isRepechage) return 'Round of ' + (this.rounds[ri]?.length * 2);
       const n = total - ri;
       if (n === 1) return 'Final';
       if (n === 2) return 'Semi-final';
       if (n === 3) return 'Quarter-final';
       return 'Round of ' + (this.rounds[ri]?.length * 2);
+    },
+
+    // repechageRoundLabel: de_round 1=D, 2=E, 3=F, 4=G (0-based index ri)
+    repechageRoundLabel(ri) {
+      const labels = ['Table D', 'Table E', 'Table F', 'Table G', 'Table H', 'Table I', 'Table J'];
+      return labels[ri] || ('Repechage round ' + (ri + 1));
+    },
+
+    // finalsRoundLabel: fr is 0-based index within finalsRounds
+    finalsRoundLabel(fi, total) {
+      const n = total - fi;
+      if (n === 1) return 'Final';
+      if (n === 2) return 'Semi-final';
+      if (n === 3) return 'Quarter-final';
+      return 'Finals round of ' + (this.finalsRounds[fi]?.length * 2);
     },
 
     isBye(bout) {
@@ -626,23 +821,25 @@ function app() {
 
     scorePanelTitle() {
       if (!this.selected) return '';
-      const roundIdx = this.rounds.findIndex(r => r.some(b => b.id === this.selected.id));
-      if (roundIdx >= 0) {
-        return this.roundLabel(roundIdx, this.rounds.length) +
-          ' — ' + (this.boutName(this.selected, 'left') || '?') +
-          ' vs ' + (this.boutName(this.selected, 'right') || '?');
-      }
+      const names = (this.boutName(this.selected, 'left') || '?') + ' vs ' + (this.boutName(this.selected, 'right') || '?');
+      const mainIdx = this.rounds.findIndex(r => r.some(b => b.id === this.selected.id));
+      if (mainIdx >= 0) return this.roundLabel(mainIdx, this.rounds.length) + ' — ' + names;
+      const repIdx = this.repechageRounds.findIndex(r => r.some(b => b.id === this.selected.id));
+      if (repIdx >= 0) return this.repechageRoundLabel(repIdx) + ' — ' + names;
+      const finIdx = this.finalsRounds.findIndex(r => r.some(b => b.id === this.selected.id));
+      if (finIdx >= 0) return this.finalsRoundLabel(finIdx, this.finalsRounds.length) + ' — ' + names;
       const placeLabel = this.selected.place_rank
         ? this.ord(this.selected.place_rank) + '–' + this.ord(this.selected.place_rank + 1) + ' place'
         : 'Placement bout';
-      return placeLabel + ' — ' + (this.boutName(this.selected, 'left') || '?') +
-        ' vs ' + (this.boutName(this.selected, 'right') || '?');
+      return placeLabel + ' — ' + names;
     },
 
     progressLabel() {
       let total = 0, done = 0;
       const allBouts = [
         ...this.rounds.flat(),
+        ...this.repechageRounds.flat(),
+        ...this.finalsRounds.flat(),
         ...this.placementGroups.flatMap(g => g.columns.flat()),
       ];
       for (const b of allBouts) {
@@ -698,7 +895,7 @@ function app() {
       if (!r.ok) { this.showNotice((await r.json()).error || 'Undo failed', true); return; }
       this.showNotice('Score undone');
       await this.loadBouts();
-      for (const round of this.rounds) {
+      for (const round of [...this.rounds, ...this.repechageRounds, ...this.finalsRounds]) {
         const b = round.find(x => x.id === prevId);
         if (b) { this.selected = b; return; }
       }

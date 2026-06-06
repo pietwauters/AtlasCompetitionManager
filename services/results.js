@@ -13,9 +13,14 @@ function getCompetitionResults(compId) {
 
   // ── DE results ────────────────────────────────────────────────────────────
   if (dePhase) {
+    const phase = db.prepare('SELECT rule_doc FROM phases WHERE id=?').get(dePhase.id);
+    const { loadRule } = require('../lib/rules');
+    const ruleDoc     = loadRule(phase.rule_doc);
+    const isRepechage = !!(ruleDoc.repechage?.enabled);
+
     const bouts = db.prepare(`
       SELECT b.de_round, b.tableau_position, b.status, b.bracket,
-             b.left_id, b.right_id, b.winner_id,
+             b.left_id, b.right_id, b.winner_id, b.place_rank,
              lp.first_name AS lf, lp.last_name AS ll, lcl.name AS lclub,
              rp.first_name AS rf, rp.last_name AS rl, rcl.name AS rclub
       FROM bouts b
@@ -31,17 +36,18 @@ function getCompetitionResults(compId) {
       ORDER BY b.de_round, b.tableau_position
     `).all(dePhase.id);
 
-    // Only main-bracket bouts drive totalRounds; placement bouts are handled separately.
-    const mainBouts = bouts.filter(b => b.bracket === 'main' || !b.bracket);
-    const totalRounds = mainBouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
-    if (totalRounds > 0) {
-      // Name/club lookup (include placement bouts so bronze fencers are resolved)
-      const info = {};
-      for (const b of bouts) {
-        if (b.left_id)  info[b.left_id]  = { first_name: b.lf, last_name: b.ll, club: b.lclub };
-        if (b.right_id) info[b.right_id] = { first_name: b.rf, last_name: b.rl, club: b.rclub };
-      }
+    // Name/club lookup
+    const info = {};
+    for (const b of bouts) {
+      if (b.left_id)  info[b.left_id]  = { first_name: b.lf, last_name: b.ll, club: b.lclub };
+      if (b.right_id) info[b.right_id] = { first_name: b.rf, last_name: b.rl, club: b.rclub };
+    }
 
+    // Only main-bracket bouts drive totalRounds; placement bouts are handled separately.
+    const mainBouts   = bouts.filter(b => b.bracket === 'main' || !b.bracket);
+    const totalRounds = mainBouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
+
+    if (totalRounds > 0) {
       // DE seed lookup from R1 positions (main bracket only)
       const r1 = mainBouts.filter(b => b.de_round === 1);
       const T  = r1.length * 2;
@@ -70,8 +76,6 @@ function getCompetitionResults(compId) {
       }
 
       // Placement bouts with place_rank give unique places (allPlacesFenced or bronze).
-      // Terminal placement bouts (place_rank IS NOT NULL): winner = place_rank, loser = place_rank+1.
-      // Fallback for older phases: placement bout at de_round=totalRounds, tableau_position=2 is bronze.
       const terminalPlacements = bouts
         .filter(b => b.bracket === 'placement' && b.place_rank != null)
         .sort((a, b) => a.place_rank - b.place_rank);
@@ -93,23 +97,77 @@ function getCompetitionResults(compId) {
         }
       }
 
-      // Main-bracket round losers not yet placed by a placement bout:
-      // share the start-place for that round.
-      for (let r = totalRounds - 1; r >= 1; r--) {
-        const roundStartPlace = 2 ** (totalRounds - r) + 1;
-        const roundNote = r === totalRounds - 1 ? 'DE semi-final'
-                        : r === totalRounds - 2 ? 'DE quarter-final'
-                        : 'DE round of ' + (2 ** (totalRounds - r + 1));
-        const losers = mainBouts
-          .filter(b => b.de_round === r && b.status === 'finished'
-                    && b.winner_id && b.left_id && b.right_id)
-          .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
-          .filter(l => !placedByPlacement.has(l.id))
-          .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
-          .sort((a, b) => a.seed - b.seed);
+      if (isRepechage) {
+        // Repechage ranking: determined by which repechage round a fencer was eliminated.
+        // All fencers who finished in the finals (H/I/J) are handled by main-bracket logic above.
+        // Repechage table losers get shared ranks based on their elimination round:
+        //   G-losers (last rep injection losers): next band
+        //   F-losers, E-losers, D-losers: further bands
+        const fromT = ruleDoc.repechage.fromTableau;
+        const reT   = ruleDoc.repechage.reentryAt;
+        const n     = Math.round(Math.log2(fromT / reT));
+        const lastMainRound = n + 1;
+        const finalsRounds  = Math.log2(reT);
+        const firstFinalsRound = lastMainRound + 1;
 
-        for (let i = 0; i < losers.length; i++) {
-          push(roundStartPlace + i, String(roundStartPlace + i), losers[i].id, roundNote);
+        // Finals losers not yet placed (H-losers = 5th-8th for T32→T8)
+        for (let fr = finalsRounds - 1; fr >= 1; fr--) {
+          const de_round = lastMainRound + fr;
+          const bInRound = mainBouts.filter(b => b.de_round === de_round && b.status === 'finished'
+                              && b.winner_id && b.left_id && b.right_id);
+          if (!bInRound.length) continue;
+          // Place: 2^(finalsRounds - fr) + 1 within the finals bracket
+          const startPlace = Math.pow(2, finalsRounds - fr) + 1;
+          const losers = bInRound
+            .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+            .filter(l => !placedByPlacement.has(l.id) && !entries.find(e => e.competitor_id === l.id))
+            .sort((a, b) => (deSeed[a.id] || 999) - (deSeed[b.id] || 999));
+          const note = fr === finalsRounds - 1 ? 'Finals semi-final' : 'Finals quarter-final';
+          losers.forEach((l, i) => push(startPlace + i, String(startPlace + i), l.id, note));
+        }
+
+        // Repechage losers by elimination round (highest de_round first = closest to finals)
+        const repBouts = bouts.filter(b => b.bracket === 'repechage');
+        const maxRepRound = repBouts.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
+        const placed = new Set(entries.map(e => e.competitor_id));
+        let nextPlace = entries.length + 1;
+
+        for (let r = maxRepRound; r >= 1; r--) {
+          const eliminated = repBouts
+            .filter(b => b.de_round === r && b.status === 'finished'
+                      && b.winner_id && b.left_id && b.right_id)
+            .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+            .filter(l => !placed.has(l.id));
+          if (!eliminated.length) continue;
+          const sp = nextPlace;
+          eliminated.forEach((l, i) => {
+            push(sp + i, String(sp + i), l.id, 'Repechage round ' + r);
+            placed.add(l.id);
+          });
+          nextPlace += eliminated.length;
+        }
+
+        // Main bracket losers who went to repechage but are not yet in entries
+        // (they were eliminated by a repechage round, already handled above)
+
+      } else {
+        // Standard DE: main-bracket round losers not yet placed share a start-place.
+        for (let r = totalRounds - 1; r >= 1; r--) {
+          const roundStartPlace = 2 ** (totalRounds - r) + 1;
+          const roundNote = r === totalRounds - 1 ? 'DE semi-final'
+                          : r === totalRounds - 2 ? 'DE quarter-final'
+                          : 'DE round of ' + (2 ** (totalRounds - r + 1));
+          const losers = mainBouts
+            .filter(b => b.de_round === r && b.status === 'finished'
+                      && b.winner_id && b.left_id && b.right_id)
+            .map(b => ({ id: b.winner_id === b.left_id ? b.right_id : b.left_id }))
+            .filter(l => !placedByPlacement.has(l.id))
+            .map(l => ({ ...l, seed: deSeed[l.id] || 999 }))
+            .sort((a, b) => a.seed - b.seed);
+
+          for (let i = 0; i < losers.length; i++) {
+            push(roundStartPlace + i, String(roundStartPlace + i), losers[i].id, roundNote);
+          }
         }
       }
     }
