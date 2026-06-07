@@ -575,8 +575,13 @@ function app() {
       for (const section of this.sections) {
         for (let ri = 0; ri < section.rounds.length; ri++) {
           if (section.rounds[ri].bouts.some(b => b.id === this.selected.id)) {
-            const prefix = section.id.startsWith('placement-') ? '' : section.label + ' — ';
-            return prefix + section.rounds[ri].label + ' — ' + names;
+            if (section.id.startsWith('placement-')) {
+              const placeLabel = this.selected.place_rank
+                ? this.ord(this.selected.place_rank) + '–' + this.ord(this.selected.place_rank + 1) + ' place'
+                : section.label + ' — ' + section.rounds[ri].label;
+              return placeLabel + ' — ' + names;
+            }
+            return section.label + ' — ' + section.rounds[ri].label + ' — ' + names;
           }
         }
       }

@@ -43,7 +43,7 @@ function finalsRoundLabel(fi, total) {
 
 function placementSectionLabel(startPlace, endPlace) {
   if (startPlace === 3 && endPlace === 4) return 'Bronze bout — 3rd–4th place';
-  return ord(startPlace) + '–' + ord(endPlace - 1) + ' place';
+  return ord(startPlace) + '–' + ord(endPlace) + ' place';
 }
 
 function placementRoundLabel(lv, totalLevels) {
