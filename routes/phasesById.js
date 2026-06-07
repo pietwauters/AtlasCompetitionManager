@@ -1,10 +1,11 @@
 'use strict';
 // Shortcut routes that access phases directly by ID without needing :compId.
 // Used by phase.html and pool.html which only know the phase/pool ID.
-const express = require('express');
-const Phase   = require('../services/phases');
-const Pool    = require('../services/pools');
-const SSE     = require('../lib/sse');
+const express   = require('express');
+const Phase     = require('../services/phases');
+const Pool      = require('../services/pools');
+const SSE       = require('../lib/sse');
+const DeLayout  = require('../services/deLayout');
 
 const router = express.Router();
 
@@ -36,6 +37,12 @@ router.post('/:id/close', (req, res) => {
     const result = Phase.close(req.params.id, req.body?.method ? req.body : null);
     res.json(result);
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+router.get('/:id/sections', (req, res) => {
+  const result = DeLayout.buildSections(req.params.id);
+  if (!result) return res.status(404).json({ error: 'Phase not found' });
+  res.json(result);
 });
 
 router.post('/:id/simulate', (req, res) => {

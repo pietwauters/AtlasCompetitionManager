@@ -14,21 +14,32 @@
     .badge-active{background:#d4edda;color:#155724}
     .badge-finished{background:#d6d8db;color:#383d41}
 
-    /* ── Bracket ── */
+    /* ── Section layout ── */
+    .section-note{font-size:.82rem;color:#888;margin:.25rem 0 .75rem}
+
+    /* ── Bracket (column tree) ── */
     .bracket-wrap{overflow-x:auto;padding-bottom:.5rem}
     .bracket{display:flex;gap:0;align-items:stretch;min-width:max-content}
-
     .round-col{display:flex;flex-direction:column;justify-content:space-around;width:220px;flex-shrink:0}
-    .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 .5rem;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
-
+    .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 0;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
+    .round-col-note{font-size:.72rem;color:#aaa;text-align:center;padding:.15rem 0 .25rem}
     .bout-slot{flex:1;display:flex;align-items:center;padding:.25rem .5rem}
+
+    /* ── List (flat rounds) ── */
+    .list-section{}
+    .list-round{margin-bottom:1rem}
+    .list-round-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.4rem;flex-wrap:wrap}
+    .list-round-label{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555}
+    .list-round-note{font-size:.78rem;color:#aaa}
+    .list-bouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.4rem}
+
+    /* ── Bout card (shared) ── */
     .bout-card{width:100%;background:#fff;border:1px solid #ddd;border-radius:6px;overflow:hidden;font-size:.82rem;cursor:pointer;transition:box-shadow .15s;box-shadow:0 1px 3px rgba(0,0,0,.07)}
     .bout-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.15)}
     .bout-card.selected{border-color:#1a6bab;box-shadow:0 0 0 2px #1a6bab44}
     .bout-card.finished{border-left:3px solid #1a6bab}
     .bout-card.bye{border-left:3px solid #ccc;opacity:.7;cursor:default}
     .bout-card.empty{background:#f8f8f8;border-style:dashed;cursor:default}
-
     .bout-row{display:flex;align-items:center;padding:.3rem .5rem;gap:.3rem;min-height:28px}
     .bout-row+.bout-row{border-top:1px solid #f0f0f0}
     .bout-row.winner{background:#eaf6ee;font-weight:600}
@@ -36,6 +47,10 @@
     .bout-score{font-family:monospace;font-weight:700;font-size:.9rem;min-width:1.5rem;text-align:center;color:#1a6bab}
     .bye-label{color:#aaa;font-style:italic;font-size:.78rem;padding:.3rem .5rem}
     .place-label{font-size:.72rem;color:#999;padding:.2rem .5rem 0;text-align:right}
+
+    /* ── Strip picker (shared) ── */
+    .strip-picker{width:100%;font-size:.74rem;padding:.2rem .3rem;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;color:#555}
+    .strip-picker-wrap{padding:.15rem .5rem .4rem;text-align:center}
 
     /* ── Score modal ── */
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
@@ -51,9 +66,6 @@
     .medal-gold{color:#c9a000;font-weight:700}
     .medal-silver{color:#777;font-weight:700}
     .medal-bronze{color:#b87333;font-weight:700}
-
-    .group-header{font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:#666;
-                  margin:1.25rem 0 .5rem;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -95,181 +107,34 @@
     </div>
   </div>
 
-  <!-- Main bracket + placement groups -->
-  <div class="card" x-show="rounds.length">
-    <h2 style="margin-top:0">Tableau
-      <span style="font-weight:400;font-size:.82rem;color:#888" x-text="'('+tableauSize+'-person tableau)'"></span>
-    </h2>
+  <!-- Sections -->
+  <template x-for="section in sections" :key="section.id">
+    <div class="card">
+      <h2 style="margin-top:0" x-text="section.label + (tableauSize ? ' (' + tableauSize + '-person tableau)' : '')"
+          x-show="section.id === 'main'"></h2>
+      <h2 style="margin-top:0" x-text="section.label" x-show="section.id !== 'main'"></h2>
+      <p class="section-note" x-show="section.note" x-text="section.note"></p>
 
-    <!-- Main bracket -->
-    <div class="bracket-wrap">
-      <div class="bracket">
-        <template x-for="(round, ri) in rounds" :key="ri">
-          <div class="round-col">
-            <h3 x-text="roundLabel(ri, rounds.length)"></h3>
-            <div style="padding:.15rem .5rem .4rem;text-align:center">
-              <select x-model="roundStrip[ri]" @change="assignStrip(ri)"
-                      style="width:100%;font-size:.74rem;padding:.2rem .3rem;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;color:#555">
-                <option value="">— no piste —</option>
-                <template x-for="s in strips" :key="s.id">
-                  <option :value="String(s.id)" x-text="s.name || ('Piste ' + s.strip_number)"></option>
-                </template>
-              </select>
-            </div>
-            <template x-for="bout in round" :key="bout.id">
-              <div class="bout-slot">
-                <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
-                  <template x-if="isBye(bout)">
-                    <div>
-                      <div class="bout-row">
-                        <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
-                      </div>
-                      <div class="bye-label">bye</div>
-                    </div>
-                  </template>
-                  <template x-if="isEmpty(bout)">
-                    <div>
-                      <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                      <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                    </div>
-                  </template>
-                  <template x-if="!isBye(bout) && !isEmpty(bout)">
-                    <div>
-                      <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
-                        <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
-                        <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
-                      </div>
-                      <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
-                        <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
-                        <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </template>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <!-- Repechage tables (D, E, F, G) — repechage phases only -->
-    <template x-if="isRepechage && repechageRounds.length">
-      <div>
-        <h3 class="group-header">Repechage</h3>
+      <!-- ── Bracket layout ── -->
+      <template x-if="section.displayHint === 'bracket'">
         <div class="bracket-wrap">
           <div class="bracket">
-            <template x-for="(round, ri) in repechageRounds" :key="ri">
+            <template x-for="(round, ri) in section.rounds" :key="ri">
               <div class="round-col">
-                <h3 x-text="repechageRoundLabel(ri)"></h3>
-                <template x-for="bout in round" :key="bout.id">
-                  <div class="bout-slot">
-                    <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
-                      <template x-if="isBye(bout)">
-                        <div>
-                          <div class="bout-row">
-                            <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
-                          </div>
-                          <div class="bye-label">bye</div>
-                        </div>
-                      </template>
-                      <template x-if="isEmpty(bout)">
-                        <div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                        </div>
-                      </template>
-                      <template x-if="!isBye(bout) && !isEmpty(bout)">
-                        <div>
-                          <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
-                            <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
-                            <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
-                          </div>
-                          <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
-                            <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
-                            <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
-                          </div>
-                        </div>
-                      </template>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- Finals bracket (H, I, J) — repechage phases only -->
-    <template x-if="isRepechage && finalsRounds.length">
-      <div>
-        <h3 class="group-header">Finals</h3>
-        <div class="bracket-wrap">
-          <div class="bracket">
-            <template x-for="(round, fi) in finalsRounds" :key="fi">
-              <div class="round-col">
-                <h3 x-text="finalsRoundLabel(fi, finalsRounds.length)"></h3>
-                <template x-for="bout in round" :key="bout.id">
-                  <div class="bout-slot">
-                    <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
-                      <template x-if="isBye(bout)">
-                        <div>
-                          <div class="bout-row">
-                            <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
-                          </div>
-                          <div class="bye-label">bye</div>
-                        </div>
-                      </template>
-                      <template x-if="isEmpty(bout)">
-                        <div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                        </div>
-                      </template>
-                      <template x-if="!isBye(bout) && !isEmpty(bout)">
-                        <div>
-                          <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
-                            <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
-                            <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
-                          </div>
-                          <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
-                            <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
-                            <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
-                          </div>
-                        </div>
-                      </template>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- Placement groups (bronze, 5th-8th, 9th-16th, …) -->
-    <template x-for="(group, gi) in placementGroups" :key="gi">
-      <div>
-        <h3 class="group-header" x-text="placementGroupLabel(group)"></h3>
-        <div class="bracket-wrap">
-          <div class="bracket">
-            <template x-for="(col, ci) in group.columns" :key="ci">
-              <div class="round-col">
-                <h3 x-text="placementColLabel(group, ci)"></h3>
-                <div style="padding:.15rem .5rem .4rem;text-align:center">
-                  <select
-                    :value="placementStrip[gi] && placementStrip[gi][ci] || ''"
-                    @change="placementStrip[gi] = placementStrip[gi] || []; placementStrip[gi][ci] = $event.target.value; assignPlacementStrip(gi, ci)"
-                    style="width:100%;font-size:.74rem;padding:.2rem .3rem;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;color:#555">
+                <h3 x-text="round.label"></h3>
+                <div class="round-col-note" x-show="round.note" x-text="round.note"></div>
+                <div class="strip-picker-wrap" x-show="round.stripSlot">
+                  <select class="strip-picker"
+                          :value="sectionStrip[section.id + '-' + ri] || ''"
+                          @change="sectionStrip[section.id + '-' + ri] = $event.target.value; assignStrip(section.id, ri, round)">
                     <option value="">— no piste —</option>
                     <template x-for="s in strips" :key="s.id">
-                      <option :value="String(s.id)" x-text="s.name || ('Piste ' + s.strip_number)"></option>
+                      <option :value="String(s.id)" :selected="sectionStrip[section.id + '-' + ri] === String(s.id)"
+                              x-text="s.name || ('Piste ' + s.strip_number)"></option>
                     </template>
                   </select>
                 </div>
-                <template x-for="bout in col" :key="bout.id">
+                <template x-for="bout in round.bouts" :key="bout.id">
                   <div class="bout-slot">
                     <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
                       <template x-if="isBye(bout)">
@@ -288,7 +153,66 @@
                       </template>
                       <template x-if="!isBye(bout) && !isEmpty(bout)">
                         <div>
-                          <div x-show="bout.place_rank" class="place-label"
+                          <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
+                            <span class="bout-score" x-show="bout.left_score!==null" x-text="bout.left_score"></span>
+                          </div>
+                          <div class="bout-row" :class="bout.winner_id===bout.right_id&&bout.winner_id?'winner':''">
+                            <span class="bout-name" x-text="boutName(bout,'right')||'?'"></span>
+                            <span class="bout-score" x-show="bout.right_score!==null" x-text="bout.right_score"></span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── List layout ── -->
+      <template x-if="section.displayHint === 'list'">
+        <div class="list-section">
+          <template x-for="(round, ri) in section.rounds" :key="ri">
+            <div class="list-round">
+              <div class="list-round-header">
+                <span class="list-round-label" x-text="round.label"></span>
+                <span class="list-round-note" x-show="round.note" x-text="round.note"></span>
+                <div x-show="round.stripSlot" style="margin-left:auto">
+                  <select class="strip-picker" style="width:auto"
+                          :value="sectionStrip[section.id + '-' + ri] || ''"
+                          @change="sectionStrip[section.id + '-' + ri] = $event.target.value; assignStrip(section.id, ri, round)">
+                    <option value="">— no piste —</option>
+                    <template x-for="s in strips" :key="s.id">
+                      <option :value="String(s.id)" :selected="sectionStrip[section.id + '-' + ri] === String(s.id)"
+                              x-text="s.name || ('Piste ' + s.strip_number)"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+              <div class="list-bouts">
+                <template x-for="bout in round.bouts" :key="bout.id">
+                  <div>
+                    <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
+                      <template x-if="isBye(bout)">
+                        <div>
+                          <div class="bout-row">
+                            <span class="bout-name" x-text="boutName(bout,'left')||boutName(bout,'right')"></span>
+                          </div>
+                          <div class="bye-label">bye</div>
+                        </div>
+                      </template>
+                      <template x-if="isEmpty(bout)">
+                        <div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                        </div>
+                      </template>
+                      <template x-if="!isBye(bout) && !isEmpty(bout)">
+                        <div>
+                          <div class="place-label" x-show="bout.place_rank"
                                x-text="ord(bout.place_rank)+'–'+ord(bout.place_rank+1)+' place'"></div>
                           <div class="bout-row" :class="bout.winner_id===bout.left_id&&bout.winner_id?'winner':''">
                             <span class="bout-name" x-text="boutName(bout,'left')||'?'"></span>
@@ -304,13 +228,13 @@
                   </div>
                 </template>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
         </div>
-      </div>
-    </template>
+      </template>
 
-  </div>
+    </div>
+  </template>
 
   <!-- Score modal -->
   <div class="modal-backdrop" x-show="selected && !isBye(selected) && !isEmpty(selected)"
@@ -402,19 +326,13 @@ function app() {
   const phaseId = new URLSearchParams(window.location.search).get('id');
   return {
     phaseId, phase: null, comp: null,
-    rounds: [],            // main bracket rounds (R1..lastMainRound for repechage, or full bracket)
-    repechageRounds: [],   // repechage tables D/E/F/G: [[bout,…],…]
-    finalsRounds: [],      // finals H/I/J (repechage only): [[bout,…],…]
-    isRepechage: false,
-    lastMainRound: 0,
-    placementGroups: [],   // [{ startPlace, endPlace, columns: [[bout,…],…] }]
+    sections:    [],
     tableauSize: 0,
-    nameMap: {},           // competitor_id → display name
-    seedMap: {},           // competitor_id → seed number
-    strips: [],
-    deSlots: [],
-    roundStrip: [],
-    placementStrip: [],  // placementStrip[gi][ci] = strip_id string
+    nameMap:     {},   // competitor_id → display name
+    seedMap:     {},   // competitor_id → original seed number
+    strips:      [],
+    deSlots:     [],
+    sectionStrip: {},  // key: sectionId+'-'+roundIndex → strip_id string
     selected: null,
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
@@ -427,13 +345,12 @@ function app() {
       window.addEventListener('beforeunload', () => es.close());
       es.addEventListener('bout-updated', e => {
         const updated = JSON.parse(e.data);
-        const upd = r => r.map(b => b.id === updated.id ? { ...b, ...updated } : b);
-        this.rounds          = this.rounds.map(upd);
-        this.repechageRounds = this.repechageRounds.map(upd);
-        this.finalsRounds    = this.finalsRounds.map(upd);
-        this.placementGroups = this.placementGroups.map(g => ({
-          ...g,
-          columns: g.columns.map(col => upd(col)),
+        this.sections = this.sections.map(section => ({
+          ...section,
+          rounds: section.rounds.map(round => ({
+            ...round,
+            bouts: round.bouts.map(b => b.id === updated.id ? { ...b, ...updated } : b),
+          })),
         }));
         if (this.selected?.id === updated.id) this.selected = { ...this.selected, ...updated };
         this.computeFinalResults();
@@ -447,321 +364,172 @@ function app() {
       }
       this.strips = await fetch('/api/strips').then(r => r.json());
       document.title = 'Atlas — DE — ' + (this.comp?.name || '');
-      await this.loadBouts();
+      await this.loadSections();
     },
 
-    async loadBouts() {
-      const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json());
+    async loadSections() {
+      const data = await fetch('/api/phases/' + phaseId + '/sections').then(r => r.json());
+      this.sections    = data.sections || [];
+      this.tableauSize = data.tableauSize || 0;
 
-      // Build name map from all bouts
+      // Build nameMap and seedMap from all bouts
       this.nameMap = {};
-      for (const b of bouts) {
-        if (b.left_id)  this.nameMap[b.left_id]  = b.left_last  + ', ' + b.left_first;
-        if (b.right_id) this.nameMap[b.right_id] = b.right_last + ', ' + b.right_first;
+      const mainSection = this.sections.find(s => s.id === 'main');
+      const r1Bouts = mainSection?.rounds[0]?.bouts || [];
+      const T = this.tableauSize;
+
+      for (const section of this.sections) {
+        for (const round of section.rounds) {
+          for (const b of round.bouts) {
+            if (b.left_id)  this.nameMap[b.left_id]  = b.left_last  + ', ' + b.left_first;
+            if (b.right_id) this.nameMap[b.right_id] = b.right_last + ', ' + b.right_first;
+          }
+        }
       }
 
-      // ── Main bracket ────────────────────────────────────────────────────────
-      const mainBouts = bouts.filter(b => b.bracket === 'main' || !b.bracket);
-      const byRound = {};
-      let maxRound = 0;
-      for (const b of mainBouts) {
-        if (!b.de_round) continue;
-        (byRound[b.de_round] = byRound[b.de_round] || []).push(b);
-        if (b.de_round > maxRound) maxRound = b.de_round;
-      }
-
-      const r1 = byRound[1] || [];
-      const T  = r1.length * 2;
-      this.tableauSize = T || 0;
       if (T >= 2) {
         const seedSlots = buildSeedPositions(T);
         this.seedMap = {};
-        for (const b of r1) {
+        for (const b of r1Bouts) {
           const p = b.tableau_position;
           if (b.left_id)  this.seedMap[b.left_id]  = seedSlots[2 * (p - 1)];
           if (b.right_id) this.seedMap[b.right_id] = seedSlots[2 * (p - 1) + 1];
         }
       }
 
-      // ── Repechage split ──────────────────────────────────────────────────────
-      const repBoutsAll = bouts.filter(b => b.bracket === 'repechage');
-      this.isRepechage = repBoutsAll.length > 0;
-
-      if (this.isRepechage) {
-        const maxRepRound = repBoutsAll.reduce((m, b) => Math.max(m, b.de_round || 0), 0);
-        // numRepRounds = maxRepRound / 2 (D=1 intra, E=2 inj, F=3 intra, G=4 inj → 4/2=2)
-        this.lastMainRound  = maxRepRound / 2 + 1;
-        const finalsStart   = this.lastMainRound + 1;
-
-        this.rounds = [];
-        for (let r = 1; r <= this.lastMainRound; r++) {
-          this.rounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
-        }
-
-        const repByRound = {};
-        for (const b of repBoutsAll) {
-          (repByRound[b.de_round] = repByRound[b.de_round] || []).push(b);
-        }
-        this.repechageRounds = [];
-        for (let r = 1; r <= maxRepRound; r++) {
-          this.repechageRounds.push((repByRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
-        }
-
-        this.finalsRounds = [];
-        for (let r = finalsStart; r <= maxRound; r++) {
-          this.finalsRounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
-        }
-      } else {
-        this.lastMainRound  = 0;
-        this.repechageRounds = [];
-        this.finalsRounds    = [];
-        this.rounds = [];
-        for (let r = 1; r <= maxRound; r++) {
-          this.rounds.push((byRound[r] || []).sort((a, b) => a.tableau_position - b.tableau_position));
-        }
-      }
-
+      // Re-find selected bout after reload
       if (this.selected) {
-        this.selected = bouts.find(b => b.id === this.selected.id) || null;
+        const prevId = this.selected.id;
+        this.selected = null;
+        outer: for (const section of this.sections) {
+          for (const round of section.rounds) {
+            const b = round.bouts.find(x => x.id === prevId);
+            if (b) { this.selected = b; break outer; }
+          }
+        }
       }
-
-      // ── Placement groups ─────────────────────────────────────────────────────
-      this.placementGroups = this._buildPlacementGroups(bouts);
 
       this.computeFinalResults();
       await this.loadDeSlots();
     },
 
-    // Organise placement bouts into sorted groups, each with ordered columns.
-    // Uses routing pointers (migration 014+) for level assignment; falls back
-    // gracefully for pre-014 phases where pointers are null.
-    _buildPlacementGroups(bouts) {
-      const placementBouts = bouts.filter(b => b.bracket === 'placement');
-      if (!placementBouts.length) return [];
-
-      const pMap = new Map(placementBouts.map(b => [b.id, b]));
-
-      // Reverse adjacency: which placement bouts point into each bout?
-      const inbound = new Map();
-      for (const b of placementBouts) inbound.set(b.id, []);
-      for (const b of placementBouts) {
-        for (const nid of [b.winner_next_bout_id, b.loser_next_bout_id]) {
-          if (nid && inbound.has(nid)) inbound.get(nid).push(b.id);
-        }
-      }
-
-      // BFS from root bouts (no placement-bout parents) to assign levels
-      const levels = new Map();
-      const queue = [];
-      for (const b of placementBouts) {
-        if (inbound.get(b.id).length === 0) { levels.set(b.id, 0); queue.push(b.id); }
-      }
-      let qi = 0;
-      while (qi < queue.length) {
-        const id = queue[qi++];
-        const b  = pMap.get(id);
-        const lv = levels.get(id);
-        for (const nid of [b.winner_next_bout_id, b.loser_next_bout_id]) {
-          if (nid && pMap.has(nid) && !levels.has(nid)) {
-            levels.set(nid, lv + 1);
-            queue.push(nid);
-          }
-        }
-      }
-
-      // Connected components (DFS, both directions)
-      const visited = new Set();
-      const components = [];
-      for (const b of placementBouts) {
-        if (visited.has(b.id)) continue;
-        const comp = [];
-        const stack = [b.id];
-        while (stack.length) {
-          const id = stack.pop();
-          if (visited.has(id)) continue;
-          visited.add(id); comp.push(id);
-          const bout = pMap.get(id);
-          const neighbours = [
-            ...inbound.get(id),
-            ...[bout.winner_next_bout_id, bout.loser_next_bout_id].filter(n => n && pMap.has(n)),
-          ];
-          for (const nid of neighbours) if (!visited.has(nid)) stack.push(nid);
-        }
-        components.push(comp);
-      }
-
-      return components.map(comp => {
-        const maxLevel = Math.max(...comp.map(id => levels.get(id) ?? 0));
-        const columns = [];
-        for (let lv = 0; lv <= maxLevel; lv++) {
-          columns.push(
-            comp.filter(id => (levels.get(id) ?? 0) === lv)
-                .map(id => pMap.get(id))
-                .sort((a, b) => (a.bout_order || 0) - (b.bout_order || 0))
-          );
-        }
-
-        const terminals = comp.filter(id => pMap.get(id).place_rank != null);
-        let startPlace, endPlace;
-        if (terminals.length) {
-          startPlace = Math.min(...terminals.map(id => pMap.get(id).place_rank));
-          endPlace   = Math.max(...terminals.map(id => pMap.get(id).place_rank)) + 1;
-        } else {
-          // Pre-014 phase: detect bronze by tableau_position and patch a virtual
-          // place_rank so computeFinalResults can find this bout as a terminal.
-          const bronzeId = comp.find(id => pMap.get(id).tableau_position === 2);
-          if (bronzeId) {
-            pMap.get(bronzeId).place_rank = 3;
-            startPlace = 3; endPlace = 4;
-          } else {
-            startPlace = 1; endPlace = 2;
-          }
-        }
-        return { startPlace, endPlace, columns };
-      }).sort((a, b) => a.startPlace - b.startPlace);
-    },
-
     async loadDeSlots() {
       this.deSlots = await fetch('/api/opp2/pipeline/phase/' + phaseId).then(r => r.json());
-      this.roundStrip = this.rounds.map((_, ri) => {
-        const tableau = this.tableauSize >> ri;
-        const slot = this.deSlots.find(s => (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau);
-        return slot ? String(slot.strip_id) : '';
-      });
-      this.placementStrip = this.placementGroups.map((group, gi) =>
-        group.columns.map((_, ci) => {
-          const slot = this.deSlots.find(s =>
-            s.bracket === 'placement' &&
-            s.tableau === group.startPlace &&
-            s.partition === String(ci)
-          );
-          return slot ? String(slot.strip_id) : '';
-        })
-      );
-    },
-
-    async assignStrip(ri) {
-      const stripId = this.roundStrip[ri];
-      const tableau = this.tableauSize >> ri;
-      if (stripId) {
-        await fetch('/api/opp2/pipeline/strip/' + stripId, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'de', phase_id: Number(phaseId),
-                                 bracket: 'main', tableau, partition: 'full' }),
+      this.sectionStrip = {};
+      for (const section of this.sections) {
+        section.rounds.forEach((round, ri) => {
+          if (!round.stripSlot) return;
+          const key = section.id + '-' + ri;
+          const { bracket, tableau, partition } = round.stripSlot;
+          const existing = this.deSlots.find(s => {
+            if (bracket === 'main') return (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau;
+            return s.bracket === bracket && s.tableau === tableau && s.partition === partition;
+          });
+          this.sectionStrip[key] = existing ? String(existing.strip_id) : '';
         });
-      } else {
-        const existing = this.deSlots.find(s => (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau);
-        if (existing) await fetch('/api/opp2/pipeline/slots/' + existing.id, { method: 'DELETE' });
       }
-      await this.loadDeSlots();
     },
 
-    async assignPlacementStrip(gi, ci) {
-      const group   = this.placementGroups[gi];
-      const stripId = this.placementStrip[gi]?.[ci];
-      const tableau = group.startPlace;
-      const partition = String(ci);
+    async assignStrip(sectionId, ri, round) {
+      if (!round.stripSlot) return;
+      const key      = sectionId + '-' + ri;
+      const stripId  = this.sectionStrip[key];
+      const { bracket, tableau, partition } = round.stripSlot;
       if (stripId) {
         await fetch('/api/opp2/pipeline/strip/' + stripId, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'de', phase_id: Number(phaseId),
-                                 bracket: 'placement', tableau, partition }),
+          body: JSON.stringify({ type: 'de', phase_id: Number(phaseId), bracket, tableau, partition }),
         });
       } else {
-        const existing = this.deSlots.find(s =>
-          s.bracket === 'placement' && s.tableau === tableau && s.partition === partition
-        );
+        const existing = this.deSlots.find(s => {
+          if (bracket === 'main') return (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau;
+          return s.bracket === bracket && s.tableau === tableau && s.partition === partition;
+        });
         if (existing) await fetch('/api/opp2/pipeline/slots/' + existing.id, { method: 'DELETE' });
       }
       await this.loadDeSlots();
     },
 
     computeFinalResults() {
-      if (this.isRepechage) {
-        // Repechage result summary: find the finals bracket final
-        const allFinals = this.finalsRounds;
-        if (!allFinals.length) { this.finalResults = null; return; }
-        const finalBout = allFinals[allFinals.length - 1]?.find(b => b.tableau_position === 1);
-        if (!finalBout?.winner_id) { this.finalResults = null; return; }
+      const isRepechage = !!this.sections.find(s => s.id === 'repechage');
+      const allPlacementBouts = () => this.sections
+        .filter(s => s.id.startsWith('placement-'))
+        .flatMap(s => s.rounds.flatMap(r => r.bouts));
 
-        const results = [];
-        const placed  = new Set();
-        const add = (label, id, medalClass) => {
-          if (!id || placed.has(id)) return;
-          const name = this.nameMap[id] || ('Competitor #' + id);
-          results.push({ id, place: label, seed: this.seedMap[id] || '?', name, medalClass });
-          placed.add(id);
-        };
-
-        add('🥇 1', finalBout.winner_id, 'medal-gold');
-        const silver = finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id;
-        add('🥈 2', silver, 'medal-silver');
-
-        // Bronze from placement
-        const bronze = this.placementGroups.flatMap(g => g.columns.flat())
-          .find(b => b.place_rank === 3 && b.status === 'finished' && b.winner_id);
-        if (bronze) {
-          add('🥉 3', bronze.winner_id, 'medal-bronze');
-          const bl = bronze.winner_id === bronze.left_id ? bronze.right_id : bronze.left_id;
-          add('4', bl, '');
-        }
-
-        // Finals QF losers (5th-8th if reT=8)
-        if (allFinals.length >= 2) {
-          const qf = allFinals[allFinals.length - 3]; // H round for T8 finals
-          if (qf) {
-            const losers = qf.filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
-              .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id).filter(id => !placed.has(id));
-            losers.forEach((id, i) => add(String(5 + i), id, ''));
-          }
-        }
-
-        this.finalResults = results.length > 2 ? results : null;
-        return;
-      }
-
-      const totalRounds = this.rounds.length;
-      if (!totalRounds) { this.finalResults = null; return; }
-      const finalBout = this.rounds[totalRounds - 1]?.find(b => b.tableau_position === 1);
-      if (!finalBout?.winner_id) { this.finalResults = null; return; }
-
-      const results  = [];
-      const placed   = new Set();
-      const add = (place, label, id, medalClass) => {
+      const results = [];
+      const placed  = new Set();
+      const add = (label, id, medalClass) => {
         if (!id || placed.has(id)) return;
         const name = this.nameMap[id] || ('Competitor #' + id);
         results.push({ id, place: label, seed: this.seedMap[id] || '?', name, medalClass });
         placed.add(id);
       };
 
-      add(1, '🥇 1', finalBout.winner_id, 'medal-gold');
-      add(2, '🥈 2', finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id, 'medal-silver');
+      if (isRepechage) {
+        const finalsSection = this.sections.find(s => s.id === 'finals');
+        if (!finalsSection) { this.finalResults = null; return; }
+        const lastRound = finalsSection.rounds[finalsSection.rounds.length - 1];
+        const finalBout = lastRound?.bouts.find(b => b.tableau_position === 1);
+        if (!finalBout?.winner_id) { this.finalResults = null; return; }
 
-      // Terminal placement bouts in place order
-      const terminals = this.placementGroups
-        .flatMap(g => g.columns.flat())
+        add('🥇 1', finalBout.winner_id, 'medal-gold');
+        add('🥈 2', finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id, 'medal-silver');
+
+        const bronze = allPlacementBouts().find(b => b.place_rank === 3 && b.status === 'finished' && b.winner_id);
+        if (bronze) {
+          add('🥉 3', bronze.winner_id, 'medal-bronze');
+          add('4', bronze.winner_id === bronze.left_id ? bronze.right_id : bronze.left_id, '');
+        }
+
+        const numFR = finalsSection.rounds.length;
+        for (let fi = numFR - 2; fi >= 0; fi--) {
+          const startPlace = 2 ** (numFR - 1 - fi) + 1;
+          const round      = finalsSection.rounds[fi];
+          round.bouts
+            .filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
+            .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id)
+            .filter(id => !placed.has(id))
+            .map(id => ({ id, seed: this.seedMap[id] || 999 }))
+            .sort((a, b) => a.seed - b.seed)
+            .forEach((l, i) => add(String(startPlace + i), l.id, ''));
+        }
+
+        this.finalResults = results.length > 2 ? results : null;
+        return;
+      }
+
+      // Standard DE
+      const mainSection = this.sections.find(s => s.id === 'main');
+      if (!mainSection) { this.finalResults = null; return; }
+      const N         = mainSection.rounds.length;
+      const lastRound = mainSection.rounds[N - 1];
+      const finalBout = lastRound?.bouts.find(b => b.tableau_position === 1);
+      if (!finalBout?.winner_id) { this.finalResults = null; return; }
+
+      add('🥇 1', finalBout.winner_id, 'medal-gold');
+      add('🥈 2', finalBout.winner_id === finalBout.left_id ? finalBout.right_id : finalBout.left_id, 'medal-silver');
+
+      const terminals = allPlacementBouts()
         .filter(b => b.place_rank != null && b.status === 'finished' && b.winner_id)
         .sort((a, b) => a.place_rank - b.place_rank);
-
       for (const tb of terminals) {
         const loser = tb.winner_id === tb.left_id ? tb.right_id : tb.left_id;
         const mc    = tb.place_rank === 3 ? 'medal-bronze' : '';
-        add(tb.place_rank,     (tb.place_rank === 3 ? '🥉 ' : '') + tb.place_rank, tb.winner_id, mc);
-        add(tb.place_rank + 1, String(tb.place_rank + 1), loser, '');
+        add((tb.place_rank === 3 ? '🥉 ' : '') + tb.place_rank, tb.winner_id, mc);
+        add(String(tb.place_rank + 1), loser, '');
       }
 
-      // Remaining round losers not placed by a terminal bout
-      for (let r = totalRounds - 1; r >= 1; r--) {
-        const roundStartPlace = 2 ** (totalRounds - r) + 1;
-        const losers = (this.rounds[r - 1] || [])
+      for (let ri = N - 2; ri >= 0; ri--) {
+        const startPlace = 2 ** (N - 1 - ri) + 1;
+        const round      = mainSection.rounds[ri];
+        round.bouts
           .filter(b => b.status === 'finished' && b.winner_id && b.left_id && b.right_id)
           .map(b => b.winner_id === b.left_id ? b.right_id : b.left_id)
           .filter(id => !placed.has(id))
           .map(id => ({ id, seed: this.seedMap[id] || 999 }))
-          .sort((a, b) => a.seed - b.seed);
-        losers.forEach((l, i) => add(roundStartPlace + i, String(roundStartPlace + i), l.id, ''));
+          .sort((a, b) => a.seed - b.seed)
+          .forEach((l, i) => add(String(startPlace + i), l.id, ''));
       }
 
       this.finalResults = results.length > 2 ? results : null;
@@ -772,42 +540,6 @@ function app() {
       const s = ['th','st','nd','rd'];
       const v = n % 100;
       return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-
-    placementGroupLabel(g) {
-      if (g.startPlace === 3 && g.endPlace === 4) return 'Bronze bout — 3rd–4th place';
-      return this.ord(g.startPlace) + '–' + this.ord(g.endPlace) + ' place';
-    },
-
-    placementColLabel(g, ci) {
-      const total = g.columns.length;
-      if (ci === total - 1) return total === 1 ? 'Place bout' : 'Place bouts';
-      return 'Round ' + (ci + 1);
-    },
-
-    roundLabel(ri, total) {
-      if (this.isRepechage) return 'Round of ' + (this.rounds[ri]?.length * 2);
-      const n = total - ri;
-      if (n === 1) return 'Final';
-      if (n === 2) return 'Semi-final';
-      if (n === 3) return 'Quarter-final';
-      return 'Round of ' + (this.rounds[ri]?.length * 2);
-    },
-
-    // repechageRoundLabel: letter offset from 'A' = lastMainRound
-    // T16 (lastMainRound=2): C, D   T32 (lastMainRound=3): D, E, F, G
-    repechageRoundLabel(ri) {
-      return 'Table ' + String.fromCharCode('A'.charCodeAt(0) + this.lastMainRound + ri);
-    },
-
-    // finalsRoundLabel: letters continue after all repechage tables
-    finalsRoundLabel(fi, total) {
-      const letter = String.fromCharCode('A'.charCodeAt(0) + this.lastMainRound + this.repechageRounds.length + fi);
-      const n = total - fi;
-      if (n === 1) return 'Table ' + letter + ' — Final';
-      if (n === 2) return 'Table ' + letter + ' — Semi-final';
-      if (n === 3) return 'Table ' + letter + ' — Quarter-final';
-      return 'Table ' + letter;
     },
 
     isBye(bout) {
@@ -840,30 +572,27 @@ function app() {
     scorePanelTitle() {
       if (!this.selected) return '';
       const names = (this.boutName(this.selected, 'left') || '?') + ' vs ' + (this.boutName(this.selected, 'right') || '?');
-      const mainIdx = this.rounds.findIndex(r => r.some(b => b.id === this.selected.id));
-      if (mainIdx >= 0) return this.roundLabel(mainIdx, this.rounds.length) + ' — ' + names;
-      const repIdx = this.repechageRounds.findIndex(r => r.some(b => b.id === this.selected.id));
-      if (repIdx >= 0) return this.repechageRoundLabel(repIdx) + ' — ' + names;
-      const finIdx = this.finalsRounds.findIndex(r => r.some(b => b.id === this.selected.id));
-      if (finIdx >= 0) return this.finalsRoundLabel(finIdx, this.finalsRounds.length) + ' — ' + names;
-      const placeLabel = this.selected.place_rank
-        ? this.ord(this.selected.place_rank) + '–' + this.ord(this.selected.place_rank + 1) + ' place'
-        : 'Placement bout';
-      return placeLabel + ' — ' + names;
+      for (const section of this.sections) {
+        for (let ri = 0; ri < section.rounds.length; ri++) {
+          if (section.rounds[ri].bouts.some(b => b.id === this.selected.id)) {
+            const prefix = section.id.startsWith('placement-') ? '' : section.label + ' — ';
+            return prefix + section.rounds[ri].label + ' — ' + names;
+          }
+        }
+      }
+      return names;
     },
 
     progressLabel() {
       let total = 0, done = 0;
-      const allBouts = [
-        ...this.rounds.flat(),
-        ...this.repechageRounds.flat(),
-        ...this.finalsRounds.flat(),
-        ...this.placementGroups.flatMap(g => g.columns.flat()),
-      ];
-      for (const b of allBouts) {
-        if (this.isBye(b) || this.isEmpty(b)) continue;
-        total++;
-        if (b.status === 'finished') done++;
+      for (const section of this.sections) {
+        for (const round of section.rounds) {
+          for (const b of round.bouts) {
+            if (this.isBye(b) || this.isEmpty(b)) continue;
+            total++;
+            if (b.status === 'finished') done++;
+          }
+        }
       }
       return done + ' / ' + total + ' bouts complete';
     },
@@ -890,7 +619,7 @@ function app() {
       if (!r.ok) { this.showNotice(data.error || 'Simulate failed', true); return; }
       this.showNotice('Simulated ' + data.simulated + ' bout(s)');
       this.selected = null;
-      await this.loadBouts();
+      await this.loadSections();
     },
 
     async saveScore() {
@@ -905,7 +634,7 @@ function app() {
       if (!r.ok) { this.showNotice((await r.json()).error || 'Save failed', true); return; }
       this.showNotice('Score saved');
       this.selected = null;
-      await this.loadBouts();
+      await this.loadSections();
     },
 
     async undoScore() {
@@ -913,15 +642,11 @@ function app() {
       const r = await fetch('/api/bouts/' + prevId + '/undo', { method: 'POST' });
       if (!r.ok) { this.showNotice((await r.json()).error || 'Undo failed', true); return; }
       this.showNotice('Score undone');
-      await this.loadBouts();
-      for (const round of [...this.rounds, ...this.repechageRounds, ...this.finalsRounds]) {
-        const b = round.find(x => x.id === prevId);
-        if (b) { this.selected = b; return; }
-      }
-      for (const g of this.placementGroups) {
-        for (const col of g.columns) {
-          const b = col.find(x => x.id === prevId);
-          if (b) { this.selected = b; return; }
+      await this.loadSections();
+      outer: for (const section of this.sections) {
+        for (const round of section.rounds) {
+          const b = round.bouts.find(x => x.id === prevId);
+          if (b) { this.selected = b; break outer; }
         }
       }
     },

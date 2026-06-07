@@ -1,0 +1,17 @@
+{
+  "id": "de-repechage-t32-t8",
+  "description": "Individual DE — repechage T32→T8, no bronze bout",
+  "type": "de",
+  "bout": {
+    "touchTarget": 15,
+    "timeLimitMinutes": 9,
+    "overtime": { "enabled": true, "durationSeconds": 60 }
+  },
+  "tableau": { "size": null, "seeding": "fie-serpentine" },
+  "repechage": {
+    "enabled": true,
+    "fromTableau": 32,
+    "reentryAt": 8
+  },
+  "placement": { "thirdPlaceBout": false, "allPlacesFenced": null }
+}
