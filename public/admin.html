@@ -135,7 +135,8 @@
   <div x-show="qrModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
        display:flex;align-items:center;justify-content:center" @click.self="qrModal.open=false">
     <div style="background:#fff;border-radius:10px;padding:2rem;text-align:center;min-width:280px">
-      <canvas id="qr-canvas" style="display:block;margin:0 auto"></canvas>
+      <img :src="qrModal.user ? '/api/users/'+qrModal.user.id+'/qr' : ''"
+           width="200" height="200" style="display:block;margin:0 auto">
       <div style="font-size:1.15rem;font-weight:700;margin-top:.75rem" x-text="qrModal.user?.username"></div>
       <div style="font-size:.85rem;color:#555;margin-bottom:.25rem" x-text="roleLabel(qrModal.user?.role)"></div>
       <div style="font-size:.65rem;color:#bbb;word-break:break-all;margin-bottom:1.25rem;max-width:240px;margin-left:auto;margin-right:auto"
@@ -164,7 +165,6 @@
 
 </main>
 <script src="/js/nav.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
@@ -258,14 +258,6 @@ function app() {
 
     showQr(u) {
       this.qrModal = { open: true, user: u };
-      this.$nextTick(() => {
-        const url = `${location.origin}/login.html?u=${encodeURIComponent(u.user_token)}`;
-        QRCode.toCanvas(document.getElementById('qr-canvas'), url, { width: 240, margin: 2 });
-      });
-    },
-
-    loginUrl(u) {
-      return `${location.origin}/login.html?u=${encodeURIComponent(u.user_token)}`;
     },
 
     roleLabel(role) {
@@ -298,27 +290,16 @@ function app() {
 
     printBadge(u) {
       if (!u) return;
-      const url = this.loginUrl(u);
-      QRCode.toDataURL(url, { width: 300, margin: 2 }, (err, dataUrl) => {
-        if (err) return;
-        const w = window.open('', '_blank');
-        w.document.write(this.badgeHtml(u, dataUrl));
-        w.document.close();
-      });
+      const w = window.open('', '_blank');
+      w.document.write(this.badgeHtml(u, `${location.origin}/api/users/${u.id}/qr`));
+      w.document.close();
     },
 
     async printAllBadges() {
-      const pairs = await Promise.all(this.users.map(u =>
-        new Promise(resolve => {
-          QRCode.toDataURL(this.loginUrl(u), { width: 300, margin: 2 }, (err, dataUrl) => {
-            resolve(err ? null : { u, dataUrl });
-          });
-        })
-      ));
-      const badges = pairs.filter(Boolean).map(({ u, dataUrl }) => {
+      const badges = this.users.map(u => {
         const rl = this.roleLabel(u.role);
         return `<div class="badge">
-          <img src="${dataUrl}">
+          <img src="${location.origin}/api/users/${u.id}/qr">
           <div class="name">${u.username}</div>
           <div class="role">${rl}</div>
           <div class="token">${u.user_token}</div>
