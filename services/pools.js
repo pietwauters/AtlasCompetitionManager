@@ -1,6 +1,7 @@
 'use strict';
 const db   = require('../db');
 const Bout = require('./bouts');
+const { distributeBoutsToStrips } = require('../lib/multiStripPool');
 
 const Pool = {
   findById(poolId) {
@@ -57,6 +58,73 @@ const Pool = {
       ORDER BY p.pool_number
     `).all(phaseId);
     return pools;
+  },
+
+  // Distribute the pool's bouts across K strips and record the assignment.
+  // stripIds: array of strip DB ids (length K); first element = primary strip.
+  // dynamicReorder: boolean — enable in-flight reordering by OPP2 client.
+  // Returns { strips: [{stripId, boutIds: [...]}], flags: [...] }.
+  distributeToStrips(poolId, stripIds, dynamicReorder) {
+    const K = stripIds.length;
+    if (K < 1) throw new Error('At least one strip required');
+
+    const bouts = db.prepare(
+      'SELECT id, left_id, right_id, bout_order FROM bouts WHERE pool_id = ? ORDER BY bout_order'
+    ).all(poolId);
+    if (!bouts.length) throw new Error('Pool has no bouts');
+
+    const pairs = bouts.map(b => [b.left_id, b.right_id]);
+    const { strips: stripIdxArrays, flags } = distributeBoutsToStrips(pairs, K);
+
+    db.transaction(() => {
+      // Reset any previous distribution.
+      db.prepare('UPDATE bouts SET strip_id = NULL WHERE pool_id = ?').run(poolId);
+      db.prepare('DELETE FROM pool_rest_flags WHERE pool_id = ?').run(poolId);
+
+      // Set strip_id on each bout.
+      const setStrip = db.prepare('UPDATE bouts SET strip_id = ? WHERE id = ?');
+      for (let k = 0; k < K; k++) {
+        for (const idx of stripIdxArrays[k]) {
+          setStrip.run(stripIds[k], bouts[idx].id);
+        }
+      }
+
+      // Record flags.
+      const insertFlag = db.prepare(`
+        INSERT INTO pool_rest_flags (pool_id, fencer_pos, prev_bout_id, next_bout_id)
+        VALUES (?, ?, ?, ?)
+      `);
+      for (const f of flags) {
+        insertFlag.run(
+          poolId,
+          typeof f.token === 'number' ? f.token : 0,
+          bouts[f.prevBoutIdx]?.id ?? null,
+          bouts[f.nextBoutIdx]?.id ?? null
+        );
+      }
+
+      // Update pool metadata.
+      db.prepare('UPDATE pools SET strip_count = ?, dynamic_reorder = ? WHERE id = ?')
+        .run(K, dynamicReorder ? 1 : 0, poolId);
+    })();
+
+    return {
+      strips: stripIdxArrays.map((idxs, k) => ({
+        stripId: stripIds[k],
+        boutIds: idxs.map(i => bouts[i].id),
+      })),
+      flags,
+    };
+  },
+
+  restFlags(poolId) {
+    return db.prepare(`
+      SELECT f.*, pb.bout_order AS prev_order, nb.bout_order AS next_order
+      FROM pool_rest_flags f
+      LEFT JOIN bouts pb ON pb.id = f.prev_bout_id
+      LEFT JOIN bouts nb ON nb.id = f.next_bout_id
+      WHERE f.pool_id = ?
+    `).all(poolId);
   },
 
   // Only referee_id is a direct pool attribute. Strip assignment is owned

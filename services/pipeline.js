@@ -80,7 +80,7 @@ const Pipeline = {
         ph.phase_order,
         co.name       AS competition_name,
         co.weapon,
-        po.pool_number,
+        po.pool_number, po.strip_count, po.dynamic_reorder,
         rp.first_name AS ref_first, rp.last_name AS ref_last,
         CASE WHEN ps.type = 'pool'
           THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
@@ -166,21 +166,28 @@ const Pipeline = {
         }
       }
 
-      // A pool may only live in one pipeline slot.
+      // A pool may live in multiple pipeline slots (one per strip for multi-strip).
+      // data.secondary = true: adding an extra strip — don't remove existing slots.
       if (data.pool_id) {
-        const existing = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(data.pool_id);
-        if (existing) {
-          if (existing.strip_id !== Number(stripId)) {
-            db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
-            const oldHasMore = db.prepare(
+        const existingOnThisStrip = db.prepare(
+          'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
+        ).get(data.pool_id, Number(stripId));
+        if (existingOnThisStrip) {
+          db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existingOnThisStrip.id);
+          db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+          return this.findById(existingOnThisStrip.id);
+        }
+        if (!data.secondary) {
+          // Single-strip assignment: remove any existing slots for this pool on other strips.
+          const others = db.prepare(
+            'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id != ?'
+          ).all(data.pool_id, Number(stripId));
+          for (const s of others) {
+            db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(s.id);
+            const rem = db.prepare(
               'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
-            ).get(existing.strip_id).n;
-            if (oldHasMore === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(existing.strip_id);
-          } else {
-            db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existing.id);
-            db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
-            db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
-            return this.findById(existing.id);
+            ).get(s.strip_id).n;
+            if (rem === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(s.strip_id);
           }
         }
       }
@@ -365,8 +372,16 @@ const Pipeline = {
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
       `;
 
+      // For multi-strip pools, filter by strip_id so each strip sees only its bouts.
+      // strip_count > 1 means the pool was distributed; bouts.strip_id is set per bout.
+      const pool = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+      const stripFilter = (pool && pool.strip_count > 1)
+        ? `AND b.strip_id = ${Number(slot.strip_id)}`
+        : '';
+
       const forward = db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
+          ${stripFilter}
           AND b.status != 'finished'
           AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
         ORDER BY b.bout_order LIMIT 1
@@ -375,7 +390,7 @@ const Pipeline = {
 
       if (!afterBoutId) return null;
       return db.prepare(`${POOL_JOIN}
-        WHERE b.pool_id = ? AND b.status != 'finished' AND b.id != ?
+        WHERE b.pool_id = ? ${stripFilter} AND b.status != 'finished' AND b.id != ?
         ORDER BY b.bout_order LIMIT 1
       `).get(slot.pool_id, afterBoutId) || null;
     }
@@ -419,6 +434,26 @@ const Pipeline = {
     `).get(slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
   },
 
+  // Return the next `limit` pending bouts for a pool slot (for dynamic reorder lookahead).
+  nextBoutsAhead(slot, afterBoutId, limit = 4) {
+    if (slot.type !== 'pool') return [];
+    const pool = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+    const stripFilter = (pool && pool.strip_count > 1)
+      ? `AND b.strip_id = ${Number(slot.strip_id)}`
+      : '';
+    const POOL_JOIN = `
+      SELECT b.id, b.bout_order, b.left_id, b.right_id, b.pool_id, b.strip_id
+      FROM bouts b
+    `;
+    return db.prepare(`${POOL_JOIN}
+      WHERE b.pool_id = ?
+        ${stripFilter}
+        AND b.status != 'finished'
+        AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
+      ORDER BY b.bout_order LIMIT ?
+    `).all(slot.pool_id, afterBoutId, afterBoutId, limit);
+  },
+
   prevBout(slot, beforeBoutId) {
     if (!beforeBoutId) return null;
     if (slot.type === 'pool') {
@@ -448,8 +483,13 @@ const Pipeline = {
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
       `;
 
+      const pool2 = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+      const stripFilter2 = (pool2 && pool2.strip_count > 1)
+        ? `AND b.strip_id = ${Number(slot.strip_id)}`
+        : '';
       return db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
+          ${stripFilter2}
           AND b.bout_order < (SELECT bout_order FROM bouts WHERE id = ?)
         ORDER BY b.bout_order DESC LIMIT 1
       `).get(slot.pool_id, beforeBoutId) || null;

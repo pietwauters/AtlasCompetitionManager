@@ -143,6 +143,9 @@
                     <div class="slot-head" :style="slot.status==='done'?'opacity:.65':''">
                       <span class="badge" :class="'badge-'+slot.status" x-text="slot.status"></span>
                       <span class="slot-label" x-text="slotLabel(slot)"></span>
+                      <span x-show="slot.strip_count > 1" style="font-size:.75rem;color:#1a6bab;margin-left:.3rem"
+                        :title="slot.dynamic_reorder ? 'Dynamic reordering enabled' : 'Multi-strip distribution'"
+                        x-text="'×'+slot.strip_count+' pistes'"></span>
                       <span class="slot-time">
                         <span x-show="slot.scheduled_start" x-text="slot.scheduled_start+' →'"></span>
                         <span class="predicted" x-show="slot.predicted_end" x-text="slot.predicted_end"></span>
@@ -206,6 +209,32 @@
                         x-text="p.competition_name+' — Pool '+p.pool_number+' ('+p.phase_status+')'"></option>
                     </template>
                   </select>
+                  <!-- Multi-strip distribution: shown when pool has ≥ 8 bouts -->
+                  <div x-show="multiPool?.bouts_total >= 8" style="margin-top:.5rem;border-top:1px solid #ddd;padding-top:.5rem">
+                    <div style="font-size:.8rem;font-weight:600;margin-bottom:.25rem">Multi-strip distribution</div>
+                    <div style="font-size:.78rem;color:#555;margin-bottom:.35rem"
+                      x-text="(multiPool?.bouts_total||0)+' bouts — select additional strips to split across pistes:'"></div>
+                    <div style="margin-bottom:.3rem">
+                      <template x-for="s in otherStrips" :key="s.id">
+                        <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;margin-bottom:.2rem;cursor:pointer">
+                          <input type="checkbox" :checked="multiStrips.includes(s.id)" @change="toggleMultiStrip(s.id)">
+                          <span x-text="s.name||('Piste '+s.strip_number)"></span>
+                        </label>
+                      </template>
+                      <div x-show="otherStrips.length===0" style="font-size:.78rem;color:#888">No other strips available.</div>
+                    </div>
+                    <div x-show="multiStrips.length > 0">
+                      <div style="font-size:.78rem;background:#f0f4f8;border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem"
+                        x-text="'~'+Math.ceil((multiPool?.bouts_total||0)/(multiStrips.length+1))+' bouts/strip across '+(multiStrips.length+1)+' strips'"></div>
+                      <div x-show="!areStripsAdjacent" style="font-size:.78rem;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem">
+                        Warning: selected strips are not adjacent — prefer consecutive piste numbers for referee coordination.
+                      </div>
+                      <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;cursor:pointer;margin-top:.25rem">
+                        <input type="checkbox" x-model="multiDynamic">
+                        <span>Dynamic reordering — CMS adjusts bout order to respect rest time as the pool progresses</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </template>
 
@@ -369,6 +398,8 @@ function app() {
     deRounds: [],
     addOpen: null,
     addForm: {},
+    multiStrips: [],
+    multiDynamic: false,
     selectedReferee: '',
     refSchedule: [],
 
@@ -523,6 +554,8 @@ function app() {
       this.addForm  = { type: 'pool', pool_id: '', phase_id: '',
                         de_round: '', bout_start: '', bout_end: '',
                         scheduled_start: suggested, minutes_per_bout: '' };
+      this.multiStrips = [];
+      this.multiDynamic = false;
     },
 
     async loadDeRounds(phaseId) {
@@ -549,6 +582,35 @@ function app() {
       if (rd) { this.addForm.bout_start = 1; this.addForm.bout_end = rd.total_bouts; }
     },
 
+    get multiPool() {
+      if (!this.addForm.pool_id) return null;
+      return this.availablePools.find(p => p.id == this.addForm.pool_id) || null;
+    },
+
+    get otherStrips() {
+      return this.strips.filter(s => s.id !== this.addOpen);
+    },
+
+    get areStripsAdjacent() {
+      if (!this.multiStrips.length) return true;
+      const cur = this.strips.find(s => s.id === this.addOpen);
+      if (!cur) return true;
+      const nums = [cur.strip_number, ...this.multiStrips.map(sid => {
+        const s = this.strips.find(st => st.id === sid);
+        return s ? s.strip_number : null;
+      })].filter(n => n != null).sort((a, b) => a - b);
+      for (let i = 1; i < nums.length; i++) {
+        if (nums[i] - nums[i - 1] > 1) return false;
+      }
+      return true;
+    },
+
+    toggleMultiStrip(stripId) {
+      const idx = this.multiStrips.indexOf(stripId);
+      if (idx === -1) this.multiStrips.push(stripId);
+      else this.multiStrips.splice(idx, 1);
+    },
+
     async submitAddSlot(strip) {
       const body = {
         type:             this.addForm.type,
@@ -565,8 +627,26 @@ function app() {
         body: JSON.stringify(body),
       });
       if (!r.ok) { const d = await r.json(); this.showNotice(d.error||'Add failed',true); return; }
+
+      let extraNotice = null;
+      if (this.addForm.type === 'pool' && this.addForm.pool_id && this.multiStrips.length > 0) {
+        const dr = await fetch(`/api/pools/${this.addForm.pool_id}/distribute`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strip_ids: [strip.id, ...this.multiStrips], dynamic_reorder: this.multiDynamic }),
+        });
+        if (!dr.ok) {
+          const d = await dr.json().catch(() => ({}));
+          extraNotice = { text: d.error || 'Multi-strip distribution failed', error: true };
+        } else {
+          const result = await dr.json();
+          const n = result.flags ? result.flags.length : 0;
+          if (n > 0) extraNotice = { text: `Distributed across ${this.multiStrips.length + 1} strips — ${n} zero-rest case${n > 1 ? 's' : ''} flagged (referee may add brief pauses)`, error: false };
+        }
+      }
+
       this.addOpen = null;
       await this.loadStrips();
+      if (extraNotice) this.showNotice(extraNotice.text, extraNotice.error);
     },
 
     async updateSlot(id, fields, strip) {
