@@ -4,7 +4,10 @@ const OPP2        = require('../lib/opp2Client');
 const Settings    = require('../services/settings');
 const Pipeline    = require('../services/pipeline');
 const CardReason  = require('../services/cardReasons');
-const SSE      = require('../lib/sse');
+const SSE         = require('../lib/sse');
+const auth        = require('../middleware/auth');
+
+const adminOnly = auth.require('admin');
 
 const router = express.Router();
 
@@ -18,7 +21,7 @@ router.get('/settings', (req, res) => {
   });
 });
 
-router.put('/settings', (req, res) => {
+router.put('/settings', adminOnly, (req, res) => {
   const { broker_url, enabled, auto_next_on_end } = req.body;
   if (broker_url       !== undefined) Settings.set('opp2_broker_url', broker_url);
   if (enabled          !== undefined) Settings.set('opp2_enabled', enabled ? '1' : '0');
@@ -36,7 +39,7 @@ router.get('/piste-events', (req, res) => {
   SSE.subscribe('__strips__', res);
 });
 
-router.post('/connect', async (req, res) => {
+router.post('/connect', adminOnly, async (req, res) => {
   const url = req.body?.broker_url || Settings.get('opp2_broker_url');
   try {
     await OPP2.connect(url);
@@ -48,7 +51,7 @@ router.post('/connect', async (req, res) => {
   }
 });
 
-router.post('/disconnect', (req, res) => {
+router.post('/disconnect', adminOnly, (req, res) => {
   OPP2.disconnect();
   Settings.set('opp2_enabled', '0');
   res.json({ ok: true });

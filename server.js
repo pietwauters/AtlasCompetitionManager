@@ -71,7 +71,7 @@ app.use('/api/pools',  writeOnly('director'), require('./routes/pools'));
 app.use('/api/bouts',  writeOnly('director'), require('./routes/bouts'));
 app.use('/api/rules',  require('./routes/rules'));
 app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
-app.use('/api/opp2',   writeOnly('admin'),    require('./routes/opp2'));
+app.use('/api/opp2',   writeOnly('director'), require('./routes/opp2'));
 app.use('/api/users',  auth.require('admin'), require('./routes/users'));
 
 app.get('/health', (req, res) => {
