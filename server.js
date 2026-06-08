@@ -21,8 +21,9 @@ const Settings    = require('./services/settings');
 const SQLiteStore = require('./lib/sessionStore');
 const auth        = require('./middleware/auth');
 const OPP2        = require('./lib/opp2Client');
-if (Settings.get('opp2_enabled') === '1') {
-  OPP2.connect(Settings.get('opp2_broker_url'))
+const _brokerUrl = Settings.get('opp2_broker_url');
+if (_brokerUrl) {
+  OPP2.connect(_brokerUrl)
     .then(() => console.log('[OPP2] Auto-connected on startup'))
     .catch(e => console.error('[OPP2] Auto-connect failed:', e.message));
 }
