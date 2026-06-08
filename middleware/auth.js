@@ -14,7 +14,7 @@ function require(role) {
   return (req, res, next) => {
     if (level(req) >= needed) return next();
     const isApi = req.originalUrl.startsWith('/api/') || req.headers.accept?.includes('application/json');
-    if (isApi) return res.status(401).json({ error: 'Authentication required', role });
+    if (isApi) return res.status(401).json({ error: `Not authorised — ${role} role required`, role });
     res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
   };
 }
