@@ -556,7 +556,79 @@ This view is read-only; assignments are set per slot using the Referee dropdown 
 
 ---
 
-## Appendix A — CSV Import Format
+## 9. User Accounts and Access
+
+Atlas uses a role-based login system. Different roles are allowed to do different things. Everyone on the local network can read all public data without logging in — login is only required to make changes.
+
+---
+
+### 9.1 Roles and what they can do
+
+There are four roles, in ascending order of authority:
+
+| Role | Typical person | What they can do |
+|---|---|---|
+| **Referee** | Bout referee | Read all data. Enter and confirm bout scores. |
+| **Assistant** | Entrance desk staff | Everything a Referee can do, plus: check in competitors, correct people and club records. |
+| **Director** | Competition director | Everything an Assistant can do, plus: create and manage competitions, phases, pools, and bouts; manage strips; build strip pipelines. |
+| **Admin** | System administrator | Everything a Director can do, plus: configure and connect the MQTT broker; create, delete, and manage user accounts. |
+
+**Public (not logged in):** anyone on the local network can view all pools, results, tableaux, and schedules without a login. No login is required to follow the competition.
+
+The hierarchy is strict: a Director can do everything an Assistant and Referee can do; an Admin can do everything a Director can do. There is no way to grant a narrower set of permissions within a role.
+
+---
+
+### 9.2 Logging in
+
+All roles use **QR code + PIN** to log in:
+
+1. Open `/login.html` or scan your accreditation badge QR code.
+2. The QR code pre-fills your username in the login form — you only need to enter your PIN.
+3. Enter your 6-digit PIN and press **Login**.
+4. Your session lasts 12 hours. After that you will need to log in again.
+
+If you do not have a QR badge, type your username directly in the login field and enter your PIN.
+
+**Forgot your PIN?** Ask an Admin to reset it. The new PIN is shown once — write it down and change it when you next log in.
+
+---
+
+### 9.3 Managing user accounts (Admin only)
+
+Go to the **Admin** page to manage accounts. From here you can:
+
+- **Create a user** — choose a username and role. A 6-digit PIN is generated and shown once. The user must change it on first login.
+- **Reset a PIN** — generates a new PIN shown once. Use this when a user has forgotten their PIN.
+- **Delete a user** — permanently removes the account. The user is logged out immediately.
+
+Each user account has a **QR code** that encodes a login link. Click the **QR** button on any account row to display it. Use **Print badge** to open a print-ready badge page for that user, or **Print all badges** to print accreditation badges for everyone at once. Print these before competition day and attach them to accreditation lanyards.
+
+Scanning the badge QR with a phone or tablet opens `/login.html` with the username pre-filled — the user just enters their PIN.
+
+---
+
+### 9.4 QR codes: two types
+
+Atlas generates two distinct kinds of QR code, used for different purposes:
+
+**Accreditation QR codes (Admin page)**
+- One per user account.
+- Encodes a link to the login page pre-filled with that user's token.
+- Printed on accreditation badges and given to referees, directors, and assistants.
+- Scanning it lets the person log in quickly without typing their username.
+- Requires a PIN — scanning the QR alone does not grant access.
+
+**Piste scoresheet QR codes (Strips page → QR codes)**
+- One per fencing strip.
+- Encodes a link to the live scoresheet for that strip.
+- Intended to be printed and posted at the entrance to each piste.
+- Anyone can scan it — no login required. It opens a read-only view showing the current bout, scores, and pool record for that strip.
+- Generate and print these before the session starts so referees and spectators can follow along on their phones.
+
+---
+
+
 
 ### A.1 Column reference
 
@@ -612,10 +684,24 @@ The CSV parser follows RFC-4180. Fields containing commas or line breaks must be
 
 ## Appendix C — Strips and OPP2
 
+For full coverage of strip pipelines and OPP2 see Section 8.
+
 ### C.1 Defining strips
+
+Strips are defined on the **Strips** page. Each strip has a name (e.g. *Green*) and a strip number. The strip number is the identifier used in OPP2 MQTT topics — it must match what the scoring apparatus is configured with.
+
+From the Strips page, click **QR codes →** to open the piste QR code page. This page shows a printable QR code for each strip that links directly to the live scoresheet for that piste (see §9.4).
 
 ### C.2 Connecting to the MQTT broker
 
+Open the **Admin** page and scroll to the OPP2 section. Enter the broker URL (default: `mqtt://openpiste.local:1883`) and click **Connect**. Atlas will attempt to reconnect to this broker automatically on every restart.
+
+Only Admin users can connect, disconnect, or change the broker address.
+
 ### C.3 Building a strip pipeline
 
+See Section 8 for the full pipeline workflow.
+
 ### C.4 Assigning referees to strips
+
+Referees are assigned per pipeline slot on the Schedule page. The referee schedule view (bottom of the Schedule page) shows the full day's assignments for any selected referee across all strips.
