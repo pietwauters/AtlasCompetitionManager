@@ -284,6 +284,10 @@ Click **Assign strip/ref** on a pool card to open the assignment panel. Choose a
 
 Strip assignment is optional for score entry — you can enter scores manually on any device without a strip assignment. Assignments become important when using OPP2: the scoring apparatus on that strip will receive the correct bout list automatically (see Appendix C).
 
+> **Large pools (8+ fencers):** if you are using OPP2, consider distributing the pool across two strips to reduce the total time. This is done through the pipeline builder on the Schedule page, not here — see §8.4.
+
+---
+
 ---
 
 ### 4.4 Entering scores
@@ -553,6 +557,44 @@ Completed slots collapse automatically into a compact *✓ done* row. Click the 
 The bottom of the Schedule page shows a **referee schedule** — all slots across all strips filtered by referee. Use the dropdown to select a referee and see their full assignment for the day: which pools and DE rounds they are assigned to, on which strips, and at what times.
 
 This view is read-only; assignments are set per slot using the Referee dropdown in the slot detail (see §8.2).
+
+---
+
+### 8.4 Multi-strip pool distribution
+
+For pools of 8 or more fencers it is possible to run the pool simultaneously across two or more pistes. Atlas divides the bouts between the strips so that fencers rotate between pistes and no fencer is asked to fence consecutive bouts without rest.
+
+**When to use this:** large pools (8–12 fencers) take a long time on a single strip. Splitting across two strips roughly halves the duration without changing the pool result in any way — every bout is still fenced; the final V/M and ranking are the same.
+
+**Setting it up:**
+
+1. Click **+ Add slot** on the primary strip's card.
+2. Select **Pool** and choose the pool from the dropdown.
+3. When the pool has 8 or more bouts, a **Multi-strip distribution** section appears below the pool picker.
+4. Tick one or more additional strips. A preview line shows the approximate bout count per strip, for example *~18 bouts/strip across 2 strips*.
+5. If the selected strips are not consecutive piste numbers, a yellow warning is shown — adjacent pistes are strongly recommended so the referee can easily coordinate between them.
+6. Optionally enable **Dynamic reordering** (see below).
+7. Set the start time and minutes per bout as usual, then click **Add**.
+
+Atlas creates a pipeline slot on the primary strip and a matching slot on each additional strip. The pool card on the phase page shows a **×2 pistes** badge (or ×3 etc.) to confirm the distribution is active.
+
+**How bouts are distributed:**
+
+Atlas groups the bouts into *waves* — each wave is a maximal set of bouts that can be fenced simultaneously because no fencer appears more than once. Within each wave the bouts are distributed across the strips in round-robin order, with a slight bias toward the strip with fewer bouts so far, producing a balanced split.
+
+Where mathematically unavoidable, a fencer may have zero rest between two consecutive bouts on different strips. These cases are flagged in a notice after adding the slot; the number of flags is shown. In practice the referee can always add a brief pause between those bouts.
+
+> **Adjacent pistes:** always use strips with consecutive numbers (e.g. pistes 3 and 4, not 3 and 6) when distributing a pool. The referee on one strip needs to be able to see and communicate with the referee on the other.
+
+**Pools of 11 or 12 fencers:**
+
+The standard FIE bout order for pools of 11 and 12 has a very uneven rest distribution — some fencers fence back to back many times. For these large pools Atlas automatically uses a circle round-robin order instead, which gives every fencer an equal rest pattern and distributes much more cleanly across two strips. This applies both to single-strip and multi-strip use.
+
+**Dynamic reordering:**
+
+When this checkbox is ticked, Atlas monitors actual progress during the pool and may swap an upcoming bout to a different position if a fencer would otherwise have insufficient rest. The minimum rest is set globally in the OPP2 settings (default: 3 minutes). Dynamic reordering acts within a small look-ahead window of 4 bouts, so swaps are minor — the overall structure of the pool is preserved.
+
+This option is most useful when bouts take significantly different amounts of time (e.g. one strip consistently finishes faster than the other). Disable it if you prefer a fixed, predictable bout sequence.
 
 ---
 
