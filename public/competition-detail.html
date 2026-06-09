@@ -588,7 +588,7 @@ function app() {
     async createTeamDE() {
       const r = await fetch('/api/team-phases', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ competition_id: Number(compId), rule_doc: 'team-fie-standard' })
+        body: JSON.stringify({ competition_id: Number(compId), rule_doc: 'team-fie-standard.json' })
       });
       const data = await r.json();
       if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}
