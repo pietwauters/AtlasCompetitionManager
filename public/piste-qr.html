@@ -63,7 +63,8 @@
         <img :src="'/api/strips/qr?piste=' + encodeURIComponent(s.name)" width="200" height="200" :alt="'QR '+s.name">
         <div class="piste-label" x-text="'Piste ' + s.strip_number"></div>
         <div class="piste-name" x-show="s.name" x-text="s.name"></div>
-        <div class="piste-url" x-text="baseUrl + '/scoresheet.html?piste=' + encodeURIComponent(s.name)"></div>
+        <a class="piste-url" :href="baseUrl + '/scoresheet.html?piste=' + encodeURIComponent(s.name)"
+           x-text="baseUrl + '/scoresheet.html?piste=' + encodeURIComponent(s.name)" target="_blank"></a>
       </div>
     </template>
   </div>
