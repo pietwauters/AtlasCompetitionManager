@@ -277,19 +277,25 @@
 
   <!-- ── Individual competitors (non-team competitions only) ── -->
 
-  <div class="panel-grid" x-show="!comp?.is_team">
+  <div class="panel-grid">
     <!-- Registered competitors -->
     <div class="card">
       <h2 style="margin-top:0">
-        Competitors
+        <span x-text="comp?.is_team ? 'Registered fencers' : 'Competitors'"></span>
         <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+competitors.length+')'"></span>
       </h2>
+      <div x-show="comp?.is_team" style="font-size:.83rem;color:#856404;margin-bottom:.6rem">
+        Add fencers here first, then assign them to teams below.
+      </div>
       <table>
-        <thead><tr><th>Seed</th><th>Name</th><th>Club</th><th>Age</th><th></th></tr></thead>
+        <thead><tr>
+          <th x-show="!comp?.is_team">Seed</th>
+          <th>Name</th><th>Club</th><th>Age</th><th></th>
+        </tr></thead>
         <tbody>
           <template x-for="c in competitors" :key="c.competitor_id">
             <tr>
-              <td><input class="seed-input" type="number" min="1" :value="c.initial_seed||''" @change="updateSeed(c,$event.target.value)"></td>
+              <td x-show="!comp?.is_team"><input class="seed-input" type="number" min="1" :value="c.initial_seed||''" @change="updateSeed(c,$event.target.value)"></td>
               <td x-text="c.last_name+', '+c.first_name"></td>
               <td x-text="c.club_name||'—'"></td>
               <td x-text="calcAge(c.date_of_birth)"></td>
@@ -297,7 +303,7 @@
             </tr>
           </template>
           <tr x-show="competitors.length===0">
-            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No competitors yet. Add fencers from the right panel.</td>
+            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No fencers yet. Add from the right panel.</td>
           </tr>
         </tbody>
       </table>
