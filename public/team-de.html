@@ -68,10 +68,10 @@
       <h1 x-text="'Team DE — '+(phase?.competition_name||'')"></h1>
       <span class="chip" :class="'chip-'+(phase?.status||'pending')" x-text="phase?.status||''"></span>
       <div class="spacer"></div>
-      <button x-show="phase?.status==='pending'" class="primary" @click="activatePhase()">Activate</button>
-      <button x-show="phase?.status==='active'" class="success" @click="closePhase()"
-              :disabled="phase?.matches_complete < phase?.matches_total">Close phase</button>
-      <button x-show="phase?.status==='active'" @click="simulatePhase()">Simulate all</button>
+      <button x-show="phase?.status==='pending'&&phase?.matches_complete<phase?.matches_total" class="primary" @click="activatePhase()">Activate</button>
+      <button x-show="phase?.status!=='finished'&&phase?.matches_total>0&&phase?.matches_complete>=phase?.matches_total"
+              class="success" @click="closePhase()">Close phase</button>
+      <button x-show="phase?.status!=='finished'" @click="simulatePhase()">Simulate all</button>
     </div>
     <div style="font-size:.85rem;color:#666" x-show="phase?.status==='active'"
          x-text="(phase?.matches_complete||0)+' / '+(phase?.matches_total||0)+' matches complete'"></div>
