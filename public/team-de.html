@@ -56,7 +56,10 @@
   </nav>
 </header>
 <main>
-  <a class="back" :href="'/competition-detail.html?id='+compId">← Back to competition</a>
+  <div style="display:flex;gap:1rem;align-items:center;margin-bottom:.75rem">
+    <a class="back" style="margin-bottom:0" :href="'/competition-detail.html?id='+compId">← Back to competition</a>
+    <a :href="'/team-results.html?id='+compId" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
+  </div>
 
   <div x-show="notice.text" :class="'notice '+(notice.error?'err':'ok')" x-text="notice.text"></div>
 

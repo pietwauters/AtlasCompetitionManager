@@ -22,6 +22,13 @@ router.post('/', (req, res) => {
   }
 });
 
+router.get('/results', (req, res) => {
+  const teams = Team.findAll(req.params.compId)
+    .filter(t => t.final_rank != null)
+    .sort((a, b) => a.final_rank - b.final_rank);
+  res.json(teams);
+});
+
 router.post('/auto-seed', (req, res) => {
   try {
     Team.autoSeed(req.params.compId);
