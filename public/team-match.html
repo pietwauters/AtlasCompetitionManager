@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atlas — Team Match</title>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  body{font-family:sans-serif;margin:0;background:#f0f2f5;color:#222}
+  main{max-width:900px;margin:0 auto;padding:1rem}
+  .card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);padding:1.25rem;margin-bottom:1rem}
+  h2{font-size:1.05rem;margin:0 0 .75rem;color:#333}
+  .back{font-size:.85rem;color:#555;text-decoration:none;display:inline-block;margin-bottom:.75rem}
+  .back:hover{color:#333}
+  button{padding:.4rem .9rem;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:.9rem}
+  button.primary{background:#0d6efd;color:#fff;border-color:#0d6efd}
+  button.success{background:#198754;color:#fff;border-color:#198754}
+  button.danger{background:#dc3545;color:#fff;border-color:#dc3545}
+  button.warning{background:#ffc107;color:#000;border-color:#ffc107}
+  button:disabled{opacity:.45;cursor:default}
+  .chip{display:inline-block;padding:.15rem .5rem;border-radius:10px;font-size:.78rem;font-weight:600}
+  .chip-pending{background:#e9ecef;color:#495057}
+  .chip-active{background:#cfe2ff;color:#084298}
+  .chip-tiebreak{background:#fff3cd;color:#856404}
+  .chip-finished{background:#d1e7dd;color:#0f5132}
+  .notice{padding:.6rem 1rem;border-radius:5px;margin-bottom:.75rem;font-size:.9rem}
+  .notice.ok{background:#d1e7dd;color:#0f5132}
+  .notice.err{background:#f8d7da;color:#842029}
+  input[type=number]{width:4rem;padding:.3rem .4rem;border:1px solid #ccc;border-radius:4px;text-align:center;font-size:.9rem}
+  select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+
+  /* Score header */
+  .score-header{display:flex;align-items:center;justify-content:space-between;text-align:center;gap:1rem;margin-bottom:.25rem}
+  .score-header .team-name{flex:1;font-size:1.1rem;font-weight:700}
+  .score-header .score-val{font-size:2.4rem;font-weight:900;min-width:3rem}
+  .score-header .vs{font-size:1rem;color:#888;font-weight:400}
+
+  /* Draw panel */
+  .draw-panel{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end}
+
+  /* Order panel */
+  .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  .order-col h3{font-size:.9rem;font-weight:700;margin:0 0 .5rem;color:#444}
+  .position-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;font-size:.88rem}
+  .position-label{font-weight:700;min-width:2rem;color:#666}
+
+  /* Relay table */
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  thead th{padding:.35rem .5rem;border-bottom:2px solid #eee;text-align:left;white-space:nowrap;color:#555}
+  tbody td{padding:.35rem .5rem;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+  .relay-active td{background:#fffde7}
+  .relay-done td{color:#555}
+  .relay-pending td{color:#aaa}
+  .relay-inputs{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+  .cumul{font-weight:600;white-space:nowrap}
+  .cumul.leading{color:#198754}
+
+  /* Substitution */
+  .sub-form{display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end}
+  .sub-form label{font-size:.85rem;display:flex;flex-direction:column;gap:.25rem}
+</style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <nav class="nav-bar">
+    <a class="nav-brand" href="/">Atlas</a>
+    <span class="nav-sep">|</span>
+    <span class="nav-item" x-text="match?match.left_team_name+' vs '+match.right_team_name:'Team Match'"></span>
+    <div class="nav-right">
+      <span class="nav-user" x-text="user?.username||''"></span>
+      <a class="nav-item" href="#" @click.prevent="logout()">Logout</a>
+    </div>
+  </nav>
+</header>
+<main>
+  <a class="back" :href="phaseId?'/team-de.html?phase='+phaseId+'&comp='+compId:'/competition-detail.html?id='+compId">← Back</a>
+
+  <div x-show="notice.text" :class="'notice '+(notice.error?'err':'ok')" x-text="notice.text"></div>
+
+  <!-- Score header -->
+  <div class="card" x-show="match">
+    <div class="score-header">
+      <div class="team-name" x-text="match?.left_team_name||'Team A'"></div>
+      <div class="score-val" x-text="match?.left_score??'—'"></div>
+      <div class="vs">vs</div>
+      <div class="score-val" x-text="match?.right_score??'—'"></div>
+      <div class="team-name" x-text="match?.right_team_name||'Team B'"></div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:.75rem;margin-top:.4rem;align-items:center">
+      <span class="chip" :class="'chip-'+(match?.status||'pending')" x-text="match?.status||''"></span>
+      <span x-show="match?.draw_winner_team_id" style="font-size:.82rem;color:#555"
+            x-text="'Draw: '+(match?.draw_winner_team_id===match?.left_team_id?match?.left_team_name:match?.right_team_name)+' is Team A (1-3)'"></span>
+    </div>
+  </div>
+
+  <!-- Draw panel -->
+  <div class="card" x-show="match?.status==='pending'&&!match?.draw_winner_team_id">
+    <h2>Initial Draw</h2>
+    <p style="font-size:.9rem;color:#555;margin:.0 0 .75rem">
+      Draw determines which team is Team A (fencer positions 1, 2, 3) and Team B (positions 4, 5, 6).
+    </p>
+    <div class="draw-panel">
+      <button class="primary" @click="autoDraw()">Auto draw (random)</button>
+      <div style="display:flex;gap:.5rem;align-items:flex-end">
+        <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.25rem">
+          Manual draw winner
+          <select x-model="manualDrawWinner">
+            <option value="">— select team —</option>
+            <option :value="match?.left_team_id" x-text="match?.left_team_name"></option>
+            <option :value="match?.right_team_id" x-text="match?.right_team_name"></option>
+          </select>
+        </label>
+        <button class="success" :disabled="!manualDrawWinner" @click="manualDraw()">Confirm draw</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order submission panel (after draw, before active) -->
+  <div class="card" x-show="match?.draw_winner_team_id&&match?.status==='pending'">
+    <h2>Submit Fencer Order</h2>
+    <p style="font-size:.9rem;color:#555;margin:0 0 .75rem">
+      Each captain submits the order of their fencers (which fencer is in position 1/2/3 or 4/5/6).
+    </p>
+    <div class="order-grid">
+      <!-- Team A (draw winner, positions 1-3) -->
+      <div class="order-col">
+        <h3 x-text="teamAName()+' — Team A (positions 1-3)'"></h3>
+        <div style="font-size:.8rem;color:#888;margin-bottom:.5rem"
+             x-show="ordersSubmitted(match?.draw_winner_team_id)">✓ Submitted</div>
+        <template x-for="pos in [1,2,3]" :key="pos">
+          <div class="position-row">
+            <span class="position-label" x-text="pos"></span>
+            <select :x-model="'orderA['+pos+']'" @change="setOrderA(pos,$event.target.value)"
+                    :disabled="ordersSubmitted(match?.draw_winner_team_id)"
+                    style="flex:1">
+              <option value="">— fencer —</option>
+              <template x-for="m in teamAMembers()" :key="m.competitor_id">
+                <option :value="m.competitor_id" x-text="m.last_name+', '+m.first_name"></option>
+              </template>
+            </select>
+          </div>
+        </template>
+        <button class="primary" style="margin-top:.5rem"
+                :disabled="!canSubmitA()||ordersSubmitted(match?.draw_winner_team_id)"
+                @click="submitOrder('A')">Submit Team A order</button>
+      </div>
+
+      <!-- Team B (draw loser, positions 4-6) -->
+      <div class="order-col">
+        <h3 x-text="teamBName()+' — Team B (positions 4-6)'"></h3>
+        <div style="font-size:.8rem;color:#888;margin-bottom:.5rem"
+             x-show="ordersSubmitted(teamBId())">✓ Submitted</div>
+        <template x-for="pos in [4,5,6]" :key="pos">
+          <div class="position-row">
+            <span class="position-label" x-text="pos"></span>
+            <select @change="setOrderB(pos,$event.target.value)"
+                    :disabled="ordersSubmitted(teamBId())"
+                    style="flex:1">
+              <option value="">— fencer —</option>
+              <template x-for="m in teamBMembers()" :key="m.competitor_id">
+                <option :value="m.competitor_id" x-text="m.last_name+', '+m.first_name"></option>
+              </template>
+            </select>
+          </div>
+        </template>
+        <button class="primary" style="margin-top:.5rem"
+                :disabled="!canSubmitB()||ordersSubmitted(teamBId())"
+                @click="submitOrder('B')">Submit Team B order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relay table -->
+  <div class="card" x-show="match?.status==='active'||match?.status==='finished'||match?.status==='tiebreak'">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+      <h2 style="margin:0">Relays</h2>
+      <button @click="simulateMatch()" x-show="match?.status==='active'"
+              style="margin-left:auto;font-size:.82rem">Simulate match</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Left fencer</th>
+          <th style="text-align:center">Score</th>
+          <th>Right fencer</th>
+          <th style="text-align:center">Cumul.</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="relay in relays" :key="relay.id">
+          <tr :class="relayRowClass(relay)">
+            <td x-text="relay.relay_number"></td>
+            <td x-text="relay.left_fencer_name||'—'"></td>
+            <td style="text-align:center">
+              <!-- Result display -->
+              <span x-show="relay.status==='finished'"
+                    x-text="relay.left_touches+' – '+relay.right_touches"></span>
+              <!-- Score entry form for the next pending relay -->
+              <div class="relay-inputs" x-show="relay.status==='pending'&&relay.relay_number===nextPendingRelay()&&match?.status==='active'">
+                <input type="number" min="0" max="45" x-model.number="scoreEntry.left"
+                       placeholder="L" style="width:3.5rem">
+                <span>–</span>
+                <input type="number" min="0" max="45" x-model.number="scoreEntry.right"
+                       placeholder="R" style="width:3.5rem">
+                <label style="font-size:.8rem;display:flex;align-items:center;gap:.25rem">
+                  <input type="checkbox" x-model="scoreEntry.timeExpired">⏱️ time
+                </label>
+                <button class="success" style="padding:.25rem .6rem"
+                        :disabled="scoreEntry.left==null||scoreEntry.right==null"
+                        @click="saveRelay(relay.id)">Save</button>
+              </div>
+            </td>
+            <td x-text="relay.right_fencer_name||'—'"></td>
+            <td style="text-align:center">
+              <span class="cumul" x-show="relay.status==='finished'"
+                    x-text="relay.cumul_left+' – '+relay.cumul_right"></span>
+            </td>
+            <td>
+              <button style="font-size:.75rem;padding:.1rem .35rem"
+                      x-show="relay.status==='finished'&&relay.relay_number===lastFinishedRelay()&&match?.status==='active'"
+                      @click="undoRelay(relay.id)">Undo</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+
+    <!-- Tiebreak -->
+    <div x-show="match?.status==='tiebreak'" style="margin-top:1rem;padding:.75rem;background:#fff3cd;border-radius:6px">
+      <strong>Tiebreak!</strong> Equal scores after relay 9. Conduct a 1-minute sudden death bout.
+      <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.9rem">Winner:</span>
+        <button class="success" @click="recordTiebreak(match.left_team_id)" x-text="match?.left_team_name"></button>
+        <button class="success" @click="recordTiebreak(match.right_team_id)" x-text="match?.right_team_name"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Substitution panel -->
+  <div class="card" x-show="match?.status==='active'&&canSubstitute()">
+    <h2>Declare Substitution</h2>
+    <p style="font-size:.88rem;color:#555;margin:0 0 .75rem">
+      Reserve replaces a regular fencer from a given relay onward. Max 1 per team per match.
+    </p>
+    <div class="sub-form">
+      <label>
+        Team
+        <select x-model="sub.teamId">
+          <option value="">— team —</option>
+          <option x-show="!subUsed(match?.left_team_id)" :value="match?.left_team_id" x-text="match?.left_team_name"></option>
+          <option x-show="!subUsed(match?.right_team_id)" :value="match?.right_team_id" x-text="match?.right_team_name"></option>
+        </select>
+      </label>
+      <label>
+        Position replaced
+        <select x-model.number="sub.positionReplaced">
+          <option value="">— pos —</option>
+          <template x-for="p in subPositions()" :key="p"><option :value="p" x-text="p"></option></template>
+        </select>
+      </label>
+      <label>
+        Effective from relay
+        <select x-model.number="sub.effectiveFrom">
+          <option value="">— relay —</option>
+          <template x-for="rn in subRelayOptions()" :key="rn"><option :value="rn" x-text="rn"></option></template>
+        </select>
+      </label>
+      <button class="warning"
+              :disabled="!sub.teamId||!sub.positionReplaced||!sub.effectiveFrom"
+              @click="declareSubstitution()">Declare substitution</button>
+    </div>
+  </div>
+</main>
+
+<script>
+function app() {
+  const params  = new URLSearchParams(window.location.search);
+  const matchId = params.get('match');
+  const phaseId = params.get('phase');
+  const compId  = params.get('comp');
+  return {
+    matchId, phaseId, compId,
+    match: null, relays: [],
+    teams: [],         // full team objects with members
+    orderA: {},        // pos -> competitor_id for Team A
+    orderB: {},        // pos -> competitor_id for Team B
+    manualDrawWinner: '',
+    scoreEntry: { left: null, right: null, timeExpired: false },
+    sub: { teamId: '', positionReplaced: '', effectiveFrom: '' },
+    submittedOrders: {},  // teamId -> true once submitted
+    notice: { text:'', error:false },
+
+    async init() {
+      if (!matchId) { this.showNotice('No match ID in URL', true); return; }
+      await this.load();
+    },
+
+    async load() {
+      const [mr, rr] = await Promise.all([
+        fetch('/api/team-matches/'+matchId),
+        fetch('/api/team-matches/'+matchId+'/relays'),
+      ]);
+      if (!mr.ok) { this.showNotice('Match not found', true); return; }
+      this.match  = await mr.json();
+      this.relays = rr.ok ? await rr.json() : [];
+
+      // Load team members for order submission
+      if (compId) {
+        const tr = await fetch('/api/competitions/'+compId+'/teams');
+        this.teams = tr.ok ? await tr.json() : [];
+      } else if (this.match.phase_id) {
+        const pr = await fetch('/api/team-phases/'+this.match.phase_id);
+        if (pr.ok) {
+          const ph = await pr.json();
+          const tr = await fetch('/api/competitions/'+ph.competition_id+'/teams');
+          this.teams = tr.ok ? await tr.json() : [];
+        }
+      }
+
+      this.scoreEntry = { left: null, right: null, timeExpired: false };
+    },
+
+    // ── Draw ─────────────────────────────────────────────────────────────────
+    async autoDraw() {
+      const r = await fetch('/api/team-matches/'+matchId+'/draw', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ method: 'auto' })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Draw failed', true); return; }
+      this.showNotice('Draw complete');
+      await this.load();
+    },
+    async manualDraw() {
+      if (!this.manualDrawWinner) return;
+      const r = await fetch('/api/team-matches/'+matchId+'/draw', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ method: 'manual', winner_team_id: Number(this.manualDrawWinner) })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Draw failed', true); return; }
+      this.manualDrawWinner = '';
+      this.showNotice('Draw recorded');
+      await this.load();
+    },
+
+    // ── Order helpers ─────────────────────────────────────────────────────────
+    teamAId()   { return this.match?.draw_winner_team_id; },
+    teamBId()   { return this.match?.draw_winner_team_id === this.match?.left_team_id ? this.match?.right_team_id : this.match?.left_team_id; },
+    teamAName() { return this.teamAId()===this.match?.left_team_id ? this.match?.left_team_name : this.match?.right_team_name; },
+    teamBName() { return this.teamBId()===this.match?.left_team_id ? this.match?.left_team_name : this.match?.right_team_name; },
+    teamAMembers() { return this.teams.find(t=>t.id===this.teamAId())?.members.filter(m=>m.role==='regular')||[]; },
+    teamBMembers() { return this.teams.find(t=>t.id===this.teamBId())?.members.filter(m=>m.role==='regular')||[]; },
+    setOrderA(pos, val) { this.orderA[pos] = val ? Number(val) : null; },
+    setOrderB(pos, val) { this.orderB[pos] = val ? Number(val) : null; },
+    canSubmitA() { return [1,2,3].every(p=>this.orderA[p]); },
+    canSubmitB() { return [4,5,6].every(p=>this.orderB[p]); },
+    ordersSubmitted(teamId) { return !!this.submittedOrders[teamId]; },
+
+    async submitOrder(side) {
+      const teamId   = side === 'A' ? this.teamAId() : this.teamBId();
+      const positions = side === 'A'
+        ? { 1: this.orderA[1], 2: this.orderA[2], 3: this.orderA[3] }
+        : { 4: this.orderB[4], 5: this.orderB[5], 6: this.orderB[6] };
+      const r = await fetch('/api/team-matches/'+matchId+'/orders', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ team_id: teamId, positions })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Submit failed', true); return; }
+      this.submittedOrders[teamId] = true;
+      this.showNotice('Order submitted'+(d.status==='active'?' — match is now active':''));
+      await this.load();
+    },
+
+    // ── Relay helpers ─────────────────────────────────────────────────────────
+    nextPendingRelay() {
+      const p = this.relays.find(r=>r.status==='pending');
+      return p?.relay_number ?? null;
+    },
+    lastFinishedRelay() {
+      const done = this.relays.filter(r=>r.status==='finished');
+      return done.length ? done[done.length-1].relay_number : null;
+    },
+    relayRowClass(relay) {
+      if (relay.status==='finished')                                               return 'relay-done';
+      if (relay.status==='pending'&&relay.relay_number===this.nextPendingRelay())  return 'relay-active';
+      return 'relay-pending';
+    },
+
+    async saveRelay(relayId) {
+      const r = await fetch('/api/relays/'+relayId, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          left_touches:  this.scoreEntry.left,
+          right_touches: this.scoreEntry.right,
+          time_expired:  this.scoreEntry.timeExpired ? 1 : 0,
+        })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Save failed', true); return; }
+      this.scoreEntry = { left: null, right: null, timeExpired: false };
+      await this.load();
+    },
+
+    async undoRelay(relayId) {
+      const r = await fetch('/api/relays/'+relayId+'/undo', {method:'POST'});
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Undo failed', true); return; }
+      this.showNotice('Relay undone');
+      await this.load();
+    },
+
+    async recordTiebreak(winnerTeamId) {
+      const r = await fetch('/api/team-matches/'+matchId+'/tiebreak', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ winner_team_id: winnerTeamId })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Failed', true); return; }
+      this.showNotice('Tiebreak recorded');
+      await this.load();
+    },
+
+    async simulateMatch() {
+      const r = await fetch('/api/team-matches/'+matchId+'/simulate', {method:'POST'});
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Simulate failed', true); return; }
+      this.showNotice('Match simulated');
+      await this.load();
+    },
+
+    // ── Substitution ──────────────────────────────────────────────────────────
+    canSubstitute() {
+      return !this.subUsed(this.match?.left_team_id) || !this.subUsed(this.match?.right_team_id);
+    },
+    subUsed(teamId) {
+      // Check if a sub has already been applied for this team in this match
+      // We infer from the relays data (relay.sub_active would need server support)
+      // For now, track it on a flag set after declareSubstitution succeeds
+      return !!(this._subApplied && this._subApplied[teamId]);
+    },
+    subPositions() {
+      if (!this.sub.teamId) return [];
+      const isA = Number(this.sub.teamId) === this.teamAId();
+      return isA ? [1,2,3] : [4,5,6];
+    },
+    subRelayOptions() {
+      const next = this.nextPendingRelay();
+      if (!next) return [];
+      const max = this.relays.length;
+      const opts = [];
+      for (let i = next; i <= max; i++) opts.push(i);
+      return opts;
+    },
+    async declareSubstitution() {
+      const r = await fetch('/api/team-matches/'+matchId+'/substitute', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          team_id:             Number(this.sub.teamId),
+          position_replaced:   Number(this.sub.positionReplaced),
+          effective_from_relay: Number(this.sub.effectiveFrom),
+        })
+      });
+      const d = await r.json();
+      if (!r.ok) { this.showNotice(d.error||'Substitution failed', true); return; }
+      if (!this._subApplied) this._subApplied = {};
+      this._subApplied[this.sub.teamId] = true;
+      this.sub = { teamId:'', positionReplaced:'', effectiveFrom:'' };
+      this.showNotice('Substitution declared');
+      await this.load();
+    },
+
+    showNotice(text, error=false) {
+      this.notice = { text, error };
+      setTimeout(()=>{ this.notice = {text:'',error:false}; }, 4000);
+    },
+  };
+}
+</script>
+<script src="/js/nav.js"></script>
+</body>
+</html>

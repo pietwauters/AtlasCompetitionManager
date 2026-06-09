@@ -1,0 +1,21 @@
+{
+  "id": "team-fie-standard",
+  "description": "FIE Standard Team Event (9 relays, 3+1 reserve)",
+  "type": "team_de",
+  "team": { "size": 3, "reserveCount": 1, "substitutionsPerMatch": 1 },
+  "relays": [
+    { "relay": 1, "left": 3, "right": 6, "target": 5,  "timeLimitSeconds": 180 },
+    { "relay": 2, "left": 1, "right": 5, "target": 10, "timeLimitSeconds": 180 },
+    { "relay": 3, "left": 2, "right": 4, "target": 15, "timeLimitSeconds": 180 },
+    { "relay": 4, "left": 1, "right": 6, "target": 20, "timeLimitSeconds": 180 },
+    { "relay": 5, "left": 3, "right": 4, "target": 25, "timeLimitSeconds": 180 },
+    { "relay": 6, "left": 2, "right": 5, "target": 30, "timeLimitSeconds": 180 },
+    { "relay": 7, "left": 1, "right": 4, "target": 35, "timeLimitSeconds": 180 },
+    { "relay": 8, "left": 2, "right": 6, "target": 40, "timeLimitSeconds": 180 },
+    { "relay": 9, "left": 3, "right": 5, "target": 45, "timeLimitSeconds": 180 }
+  ],
+  "matchTarget": 45,
+  "tiebreak": { "type": "priority_sudden_death", "durationSeconds": 60 },
+  "tableau": { "seeding": "fie-serpentine" },
+  "placement": { "thirdPlaceBout": true }
+}

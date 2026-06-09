@@ -65,7 +65,8 @@ app.use('/api/age-categories', writeOnly('director'), require('./routes/ageCateg
 app.use('/api/tournaments',  writeOnly('director'),  require('./routes/tournaments'));
 app.use('/api/competitions', writeOnly('director'),  require('./routes/competitions'));
 app.use('/api/competitions/:compId/competitors', writeOnly('director'), require('./routes/competitors'));
-app.use('/api/competitions/:compId/phases',    writeOnly('director'), require('./routes/phases'));
+app.use('/api/competitions/:compId/phases',      writeOnly('director'), require('./routes/phases'));
+app.use('/api/competitions/:compId/teams',       writeOnly('director'), require('./routes/teams'));
 app.use('/api/phases', writeOnly('director'), require('./routes/phasesById'));
 app.use('/api/pools',  writeOnly('director'), require('./routes/pools'));
 app.use('/api/bouts',  writeOnly('director'), require('./routes/bouts'));
@@ -73,6 +74,7 @@ app.use('/api/rules',  require('./routes/rules'));
 app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
 app.use('/api/opp2',   writeOnly('director'), require('./routes/opp2'));
 app.use('/api/users',  auth.require('admin'), require('./routes/users'));
+app.use('/api',        writeOnly('director'), require('./routes/teamMatches'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

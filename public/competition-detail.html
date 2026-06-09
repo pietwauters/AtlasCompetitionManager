@@ -33,6 +33,12 @@
     .badge-pending{background:#fef3cd;color:#856404}
     .badge-finished{background:#d6d8db;color:#383d41}
     select.inline{padding:.35rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
+    .team-card{border:1px solid #dde;border-radius:6px;padding:.75rem;margin-bottom:.6rem;background:#fafbff}
+    .team-card .team-header{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+    .member-row{display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee;font-size:.88rem}
+    .member-row:last-child{border-bottom:none}
+    .badge-regular{background:#d4edda;color:#155724}
+    .badge-reserve{background:#fef3cd;color:#856404}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -70,7 +76,8 @@
       <span x-show="comp?.tournament_name">Tournament: <strong x-text="comp?.tournament_name"></strong></span>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
-      <button @click="autoSeed()">⚡ Auto-seed by ranking</button>
+      <button x-show="!comp?.is_team" @click="autoSeed()">⚡ Auto-seed by ranking</button>
+      <button x-show="comp?.is_team"  @click="autoSeedTeams()">⚡ Auto-seed teams by ranking</button>
       <button class="success" x-show="comp?.status==='draft'" @click="setStatus('active')">▶ Start competition</button>
       <button x-show="comp?.status==='active'" @click="setStatus('draft')">⏸ Back to draft</button>
       <button x-show="comp?.status==='active'"
@@ -94,10 +101,11 @@
     <template x-for="ph in phases" :key="ph.id">
       <div class="phase-row">
         <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
-        <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:10px;font-weight:600;background:#e8eaf6;color:#3949ab" x-text="ph.type==='de'?'DE':'Pool'"></span>
+        <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:10px;font-weight:600;background:#e8eaf6;color:#3949ab" x-text="ph.type==='de'?'DE':ph.type==='team_de'?'Team DE':'Pool'"></span>
         <span style="font-weight:600;font-size:.9rem" x-text="ph.rule_doc.replace('.json','')"></span>
-        <span x-show="ph.type!=='de'" style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
-        <a :href="(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
+        <span x-show="ph.type==='pool'" style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
+        <span x-show="ph.type==='team_de'" style="font-size:.82rem;color:#666" x-text="'Matches: '+(ph.matches_complete||0)+'/'+(ph.matches_total||0)"></span>
+        <a :href="ph.type==='team_de'?'/team-de.html?phase='+ph.id+'&comp='+compId:(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
         <button class="danger" style="font-size:.8rem" @click="deletePhase(ph)">Delete</button>
       </div>
     </template>
@@ -106,8 +114,9 @@
     <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
       <!-- Phase type selector -->
       <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
-        <button :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool round</button>
-        <button :class="newPhaseType==='de'?'primary':''" @click="newPhaseType='de';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">DE round</button>
+        <button x-show="!comp?.is_team" :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool round</button>
+        <button x-show="!comp?.is_team" :class="newPhaseType==='de'?'primary':''" @click="newPhaseType='de';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">DE round</button>
+        <button x-show="comp?.is_team"  :class="newPhaseType==='team_de'?'primary':''" @click="newPhaseType='team_de'">Team DE</button>
       </div>
 
       <!-- Pool phase form -->
@@ -184,10 +193,91 @@
           <button class="success" :disabled="!newRuleDoc" @click="createDE()">Create DE tableau</button>
         </div>
       </div>
+
+      <!-- Team DE phase form -->
+      <div x-show="newPhaseType==='team_de'">
+        <div style="font-size:.85rem;color:#555;margin-bottom:.6rem"
+             x-text="teams.filter(t=>t.status==='active'&&t.seed).length + ' seeded teams → ' + teamTableauInfo()"></div>
+        <div style="font-size:.83rem;color:#856404;margin-bottom:.6rem"
+             x-show="teams.filter(t=>t.status==='active'&&t.seed).length < 2">
+          At least 2 seeded teams required. Auto-seed teams first.
+        </div>
+        <button class="success"
+                :disabled="teams.filter(t=>t.status==='active'&&t.seed).length < 2"
+                @click="createTeamDE()">Create Team DE tableau</button>
+      </div>
     </div>
   </div>
 
-  <div class="panel-grid">
+  <!-- ── Teams (team competitions only) ─────────── -->
+  <div class="card" x-show="comp?.is_team">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+      <h2 style="margin:0;flex:1">
+        Teams
+        <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+teams.length+')'"></span>
+      </h2>
+      <button class="primary" @click="addingTeam=!addingTeam">+ Add team</button>
+    </div>
+
+    <!-- Add team inline form -->
+    <div x-show="addingTeam" style="display:flex;gap:.5rem;align-items:flex-end;margin-bottom:.75rem;padding:.75rem;background:#f8f9ff;border-radius:6px">
+      <label style="flex:1;font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">
+        Team name
+        <input x-model="newTeamName" type="text" placeholder="e.g. Leonidas A" style="padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px">
+      </label>
+      <button class="success" :disabled="!newTeamName.trim()" @click="createTeam()">Create</button>
+      <button @click="addingTeam=false;newTeamName=''">Cancel</button>
+    </div>
+
+    <div x-show="teams.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No teams yet.</div>
+
+    <template x-for="team in teams" :key="team.id">
+      <div class="team-card">
+        <div class="team-header">
+          <span class="badge" :class="'badge-'+(team.seed?'registered':'pending')" x-text="team.seed ? '#'+team.seed : 'unseeded'"></span>
+          <strong x-text="team.name"></strong>
+          <span style="font-size:.82rem;color:#666" x-text="team.club_name||''"></span>
+          <span style="font-size:.82rem;color:#888" x-text="team.members.filter(m=>m.role==='regular').length+'/3 fencers'+(team.members.find(m=>m.role==='reserve')?' + R':'')"></span>
+          <button style="margin-left:auto;font-size:.8rem" @click="expandedTeam=expandedTeam===team.id?null:team.id">
+            <span x-text="expandedTeam===team.id ? '▲ Hide members' : '▼ Members'"></span>
+          </button>
+          <button class="danger" style="font-size:.8rem" @click="deleteTeam(team)">Delete</button>
+        </div>
+
+        <!-- Member list -->
+        <div x-show="expandedTeam===team.id" style="margin-top:.6rem">
+          <template x-for="m in team.members" :key="m.competitor_id">
+            <div class="member-row">
+              <span class="badge" :class="m.role==='reserve'?'badge-reserve':'badge-regular'" x-text="m.role==='reserve'?'R':'●'"></span>
+              <span x-text="m.last_name+', '+m.first_name"></span>
+              <span style="color:#888;margin-left:.25rem" x-text="m.ranking?'rank '+m.ranking:''"></span>
+              <button class="danger" style="font-size:.75rem;padding:.1rem .4rem;margin-left:auto" @click="removeMember(team.id, m.competitor_id)">✕</button>
+            </div>
+          </template>
+          <div x-show="team.members.length===0" style="color:#aaa;font-size:.85rem;padding:.25rem 0">No members yet.</div>
+
+          <!-- Add member -->
+          <div style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+            <select x-model="addMemberSel[team.id]" style="flex:1;min-width:160px;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem">
+              <option value="">— add competitor —</option>
+              <template x-for="c in availableCompetitors(team)" :key="c.competitor_id">
+                <option :value="c.competitor_id" x-text="c.last_name+', '+c.first_name+(c.ranking?' (rank '+c.ranking+')':'')"></option>
+              </template>
+            </select>
+            <select x-model="addMemberRole[team.id]" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem">
+              <option value="regular">Regular</option>
+              <option value="reserve">Reserve</option>
+            </select>
+            <button :disabled="!addMemberSel[team.id]" @click="addMember(team.id)">Add</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Individual competitors (non-team competitions only) ── -->
+
+  <div class="panel-grid" x-show="!comp?.is_team">
     <!-- Registered competitors -->
     <div class="card">
       <h2 style="margin-top:0">
@@ -281,6 +371,8 @@ function app() {
     newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club',
     poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
     notice:{text:'',error:false},
+    teams:[], newTeamName:'', addingTeam:false, expandedTeam:null,
+    addMemberSel:{}, addMemberRole:{},
 
     get eligClubs() {
       return [...new Set(this.eligible.map(f=>f.club_name).filter(Boolean))].sort();
@@ -315,6 +407,7 @@ function app() {
     async init() {
       if(!compId){this.showNotice('No competition ID in URL',true);return;}
       await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules()]);
+      if(this.comp?.is_team) await this.loadTeams();
     },
 
     async loadComp() {
@@ -433,6 +526,80 @@ function app() {
       const counts={};
       for(const s of opt) counts[s]=(counts[s]||0)+1;
       return Object.entries(counts).map(([s,n])=>n+'×'+s).join(' + ');
+    },
+
+    // ── Teams ─────────────────────────────────────────────────────────────────
+    async loadTeams() {
+      const r = await fetch('/api/competitions/'+compId+'/teams');
+      this.teams = r.ok ? await r.json() : [];
+    },
+    async createTeam() {
+      if(!this.newTeamName.trim())return;
+      const r = await fetch('/api/competitions/'+compId+'/teams', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name: this.newTeamName.trim() })
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}
+      this.newTeamName=''; this.addingTeam=false;
+      this.showNotice('Team created');
+      await this.loadTeams();
+    },
+    async deleteTeam(team) {
+      if(!confirm('Delete team '+team.name+'? This cannot be undone.'))return;
+      const r = await fetch('/api/competitions/'+compId+'/teams/'+team.id, {method:'DELETE'});
+      if(!r.ok){this.showNotice('Delete failed',true);return;}
+      this.showNotice('Team deleted');
+      await this.loadTeams();
+    },
+    async addMember(teamId) {
+      const competitorId = this.addMemberSel[teamId];
+      const role = this.addMemberRole[teamId] || 'regular';
+      if(!competitorId)return;
+      const r = await fetch('/api/competitions/'+compId+'/teams/'+teamId+'/members', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ competitor_id: Number(competitorId), role })
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Add failed',true);return;}
+      this.addMemberSel[teamId]='';
+      this.showNotice('Member added');
+      await this.loadTeams();
+    },
+    async removeMember(teamId, competitorId) {
+      const r = await fetch('/api/competitions/'+compId+'/teams/'+teamId+'/members/'+competitorId, {method:'DELETE'});
+      if(!r.ok){this.showNotice('Remove failed',true);return;}
+      this.showNotice('Member removed');
+      await this.loadTeams();
+    },
+    async autoSeedTeams() {
+      const r = await fetch('/api/competitions/'+compId+'/teams/auto-seed', {method:'POST'});
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Auto-seed failed',true);return;}
+      this.showNotice('Teams seeded');
+      await this.loadTeams();
+    },
+    async createTeamDE() {
+      const r = await fetch('/api/team-phases', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ competition_id: Number(compId), rule_doc: 'team-fie-standard' })
+      });
+      const data = await r.json();
+      if(!r.ok){this.showNotice(data.error||'Create failed',true);return;}
+      this.showNotice('Team DE tableau created');
+      this.phaseFormOpen=false;
+      await this.loadPhases();
+    },
+    availableCompetitors(team) {
+      const taken = new Set(team.members.map(m=>m.competitor_id));
+      const allTaken = new Set(this.teams.flatMap(t=>t.members.map(m=>m.competitor_id)));
+      return this.competitors.filter(c=>!allTaken.has(c.competitor_id)||taken.has(c.competitor_id));
+    },
+    teamTableauInfo() {
+      const n = this.teams.filter(t=>t.status==='active'&&t.seed).length;
+      if(n<2)return'—';
+      let t=1; while(t<n)t*=2;
+      return t+'-team tableau'+(t>n?' ('+(t-n)+' bye'+(t-n>1?'s':'')+')':'');
     },
 
     showNotice(text,error=false){ this.notice={text,error}; setTimeout(()=>{this.notice={text:'',error:false};},4000); },
