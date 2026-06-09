@@ -261,10 +261,9 @@ const Pipeline = {
     if (!sibling) return false;
 
     db.transaction(() => {
-      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?')
-        .run(sibling.slot_order, slot.id);
-      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?')
-        .run(slot.slot_order, sibling.id);
+      db.prepare('UPDATE pipeline_slots SET slot_order = -1 WHERE id = ?').run(slot.id);
+      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?').run(slot.slot_order, sibling.id);
+      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?').run(sibling.slot_order, slot.id);
     })();
     return true;
   },
