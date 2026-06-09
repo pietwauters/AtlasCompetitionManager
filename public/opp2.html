@@ -197,6 +197,7 @@
               <select x-model="addForm.type" style="margin-bottom:.4rem">
                 <option value="pool">Pool</option>
                 <option value="de_range">DE range</option>
+                <option value="team_match">Team match</option>
               </select>
 
               <!-- Pool picker -->
@@ -279,6 +280,20 @@
                       </div>
                     </div>
                   </template>
+                </div>
+              </template>
+
+              <!-- Team match picker -->
+              <template x-if="addForm.type==='team_match'">
+                <div>
+                  <select x-model="addForm.team_match_id" style="margin-bottom:.3rem">
+                    <option value="">— Select team match —</option>
+                    <template x-for="m in availableTeamMatches" :key="m.id">
+                      <option :value="m.id"
+                        x-text="m.competition_name+' — '+m.left_team_name+' vs '+m.right_team_name"></option>
+                    </template>
+                  </select>
+                  <div x-show="!availableTeamMatches.length" style="font-size:.78rem;color:#888">No active team matches available.</div>
                 </div>
               </template>
 
@@ -400,6 +415,7 @@ function app() {
     referees: [],
     availablePools: [],
     availableDePhases: [],
+    availableTeamMatches: [],
     deRounds: [],
     addOpen: null,
     addForm: {},
@@ -436,9 +452,11 @@ function app() {
     },
 
     async loadAvailablePhases() {
-      // Load all pools and DE phases for the add-slot pickers.
-      // We use the competitions API to enumerate all active phases.
-      const comps = await fetch('/api/competitions').then(r => r.json()).catch(() => []);
+      // Load all pools, DE phases, and team matches for the add-slot pickers.
+      const [comps, teamMatches] = await Promise.all([
+        fetch('/api/competitions').then(r => r.json()).catch(() => []),
+        fetch('/api/team-matches/available').then(r => r.json()).catch(() => []),
+      ]);
       const pools = [], dePhases = [];
       for (const c of comps) {
         const phases = await fetch(`/api/competitions/${c.id}/phases`).then(r => r.json()).catch(() => []);
@@ -457,8 +475,9 @@ function app() {
       const plannedPoolIds = new Set(
         this.strips.flatMap(s => s.slots).filter(s => s.pool_id).map(s => s.pool_id)
       );
-      this.availablePools    = pools.filter(p => !plannedPoolIds.has(p.id));
-      this.availableDePhases = dePhases;
+      this.availablePools       = pools.filter(p => !plannedPoolIds.has(p.id));
+      this.availableDePhases    = dePhases;
+      this.availableTeamMatches = teamMatches;
     },
 
     liveState(stripName) {
@@ -535,9 +554,11 @@ function app() {
     slotLabel(slot) {
       if (slot.type === 'pool')
         return `${slot.competition_name || '?'} — Pool ${slot.pool_number || '?'}`;
-      if (slot.type === 'de_range')
-        return `${slot.competition_name || '?'} — DE R${slot.de_round} #${slot.bout_start||1}–${slot.bout_end||'end'}`;
-      return slot.type;
+      if (slot.type === 'de')
+        return `${slot.competition_name || '?'} — DE T${slot.tableau || '?'}${slot.partition && slot.partition !== 'full' ? ' ' + slot.partition : ''}`;
+      if (slot.type === 'team_match')
+        return `${slot.competition_name || '?'} — ${slot.left_team_name || '?'} vs ${slot.right_team_name || '?'}`;
+      return slot.type || '—';
     },
 
     hasOverlap(prev, curr) {
@@ -557,7 +578,7 @@ function app() {
         const t = h * 60 + m + 5;
         suggested = this.round5(`${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
       }
-      this.addForm  = { type: 'pool', pool_id: '', phase_id: '',
+      this.addForm  = { type: 'pool', pool_id: '', phase_id: '', team_match_id: '',
                         de_round: '', bout_start: '', bout_end: '',
                         scheduled_start: suggested, minutes_per_bout: '' };
       this.multiStrips = [];
@@ -621,11 +642,12 @@ function app() {
     async submitAddSlot(strip) {
       const body = {
         type:             this.addForm.type,
-        pool_id:          this.addForm.type === 'pool'     ? (this.addForm.pool_id  || null) : null,
-        phase_id:         this.addForm.type === 'de_range' ? (this.addForm.phase_id || null) : null,
-        de_round:         this.addForm.type === 'de_range' ? (this.addForm.de_round || null) : null,
-        bout_start:       this.addForm.type === 'de_range' ? (this.addForm.bout_start || null) : null,
-        bout_end:         this.addForm.type === 'de_range' ? (this.addForm.bout_end   || null) : null,
+        pool_id:          this.addForm.type === 'pool'       ? (this.addForm.pool_id       || null) : null,
+        phase_id:         this.addForm.type === 'de_range'   ? (this.addForm.phase_id      || null) : null,
+        de_round:         this.addForm.type === 'de_range'   ? (this.addForm.de_round      || null) : null,
+        bout_start:       this.addForm.type === 'de_range'   ? (this.addForm.bout_start    || null) : null,
+        bout_end:         this.addForm.type === 'de_range'   ? (this.addForm.bout_end      || null) : null,
+        team_match_id:    this.addForm.type === 'team_match' ? (this.addForm.team_match_id || null) : null,
         scheduled_start:  this.addForm.scheduled_start  || null,
         minutes_per_bout: this.addForm.minutes_per_bout || null,
       };

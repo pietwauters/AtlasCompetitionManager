@@ -254,6 +254,20 @@
     <button class="theme-btn" @click="toggleTheme()" x-text="darkTheme ? '☀ Light' : '🌙 Dark'"></button>
   </div>
 
+  <!-- Team relay info banner -->
+  <div x-show="matchInfo?.type === 'T'"
+       style="background:#0d2040;border-bottom:1px solid #1e3a5a;padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#4aa3df">
+      Team relay <span x-text="(matchInfo?.relay||'') + ' / ' + (matchInfo?.relay_total||9)"></span>
+    </span>
+    <span style="font-size:.85rem;color:#aad4f5" x-text="matchInfo?.left_team||''"></span>
+    <span style="font-weight:700;color:#eee;font-size:1.05rem;font-variant-numeric:tabular-nums"
+          x-text="(matchInfo?.left_cumul??'—') + ' – ' + (matchInfo?.right_cumul??'—')"></span>
+    <span style="font-size:.85rem;color:#aad4f5" x-text="matchInfo?.right_team||''"></span>
+    <span style="font-size:.78rem;color:#667;margin-left:auto"
+          x-text="'target ' + (matchInfo?.target||'')"></span>
+  </div>
+
   <!-- Pool matrix -->
   <div x-show="phaseType === 'pool' && matrix">
     <button class="section-toggle" @click="matrixOpen = !matrixOpen">
@@ -436,7 +450,7 @@ function app() {
     participants: [], bouts: [], matrixOpen: true,
 
     weapon: 'F', score: null, lastScore: null, baselineSeq: null,
-    currentBout: null,
+    matchInfo: null, currentBout: null,
     dialog: { open: false, side: '', card: '', fencerName: '', custom: '', step: 1 },
     reasonDefs: null,
 
@@ -497,7 +511,7 @@ function app() {
       if (pub === 'software'   && type === 'fencers') {
         this.currentBout = { leftName: payload.left?.fencer?.name || '?', rightName: payload.right?.fencer?.name || '?' };
       }
-      if (pub === 'software'   && type === 'match') { this.weapon = payload.weapon || 'F'; }
+      if (pub === 'software'   && type === 'match') { this.weapon = payload.weapon || 'F'; this.matchInfo = payload; }
       if (pub === 'apparatus'  && type === 'score') {
         if (this.baselineSeq === null) {
           this.baselineSeq = payload.seq ?? null; this.lastScore = payload; this.score = payload; return;

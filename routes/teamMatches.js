@@ -8,6 +8,10 @@ const router = express.Router();
 
 // ── Team matches ──────────────────────────────────────────────────────────────
 
+router.get('/team-matches/available', (req, res) => {
+  res.json(TeamMatch.findAvailable());
+});
+
 router.get('/team-matches/:id', (req, res) => {
   const m = TeamMatch.findById(req.params.id);
   if (!m) return res.status(404).json({ error: 'Match not found' });

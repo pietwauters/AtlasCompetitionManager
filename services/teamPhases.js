@@ -103,14 +103,14 @@ const TeamPhase = {
 
       // Insert relay rows for each non-bye match
       const insertRelay = db.prepare(`
-        INSERT INTO relays (team_match_id, relay_number, target, status)
-        VALUES (?, ?, ?, 'pending')
+        INSERT INTO relays (team_match_id, relay_number, target, left_position, right_position, status)
+        VALUES (?, ?, ?, ?, ?, 'pending')
       `);
       for (const n of nodes) {
         if (n.status === 'finished') continue; // bye match — no relays needed
         if (!n.de_round && !n.place_rank) continue; // safety check
         for (const relayDef of rule.relays) {
-          insertRelay.run(n.dbId, relayDef.relay, relayDef.target);
+          insertRelay.run(n.dbId, relayDef.relay, relayDef.target, relayDef.left, relayDef.right);
         }
       }
 

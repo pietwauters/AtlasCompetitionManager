@@ -387,6 +387,26 @@ const TeamMatch = {
     return this.findById(matchId);
   },
 
+  // All non-finished team matches with both teams set — used by pipeline builder.
+  findAvailable() {
+    return db.prepare(`
+      SELECT tm.id, tm.status, tm.left_team_id, tm.right_team_id,
+             tm.left_score, tm.right_score, tm.phase_id, tm.de_round, tm.place_rank,
+             tl.name AS left_team_name, tr.name AS right_team_name,
+             co.name AS competition_name, co.weapon,
+             ph.phase_order
+      FROM team_matches tm
+      LEFT JOIN teams tl ON tl.id = tm.left_team_id
+      LEFT JOIN teams tr ON tr.id = tm.right_team_id
+      JOIN phases ph       ON ph.id = tm.phase_id
+      JOIN competitions co ON co.id = ph.competition_id
+      WHERE tm.status != 'finished'
+        AND tm.left_team_id IS NOT NULL
+        AND tm.right_team_id IS NOT NULL
+      ORDER BY co.name, tm.match_order
+    `).all();
+  },
+
   // Simulate a single match: randomly score all relays.
   simulate(matchId) {
     const match = db.prepare('SELECT * FROM team_matches WHERE id = ?').get(matchId);

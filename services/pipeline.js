@@ -81,9 +81,13 @@ const Pipeline = {
         co.name       AS competition_name,
         co.weapon,
         po.pool_number, po.strip_count, po.dynamic_reorder,
+        tm_slot.left_team_id, tm_left.name AS left_team_name,
+        tm_slot.right_team_id, tm_right.name AS right_team_name,
         rp.first_name AS ref_first, rp.last_name AS ref_last,
         CASE WHEN ps.type = 'pool'
           THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          WHEN ps.type = 'team_match'
+          THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
           ELSE NULL  -- computed in JS for DE slots (depends on partition)
         END AS bout_count,
         COALESCE(ps.minutes_per_bout,
@@ -92,8 +96,11 @@ const Pipeline = {
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps
-      LEFT JOIN pools        po ON po.id  = ps.pool_id
-      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id)
+      LEFT JOIN pools        po       ON po.id       = ps.pool_id
+      LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
+      LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
+      LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
+      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
       LEFT JOIN competitions co ON co.id  = ph.competition_id
       LEFT JOIN referees     r  ON r.id   = ps.referee_id
       LEFT JOIN people       rp ON rp.id  = r.person_id
@@ -110,8 +117,12 @@ const Pipeline = {
         po.pool_number,
         ph.type AS phase_type, ph.phase_order,
         co.name AS competition_name, co.weapon,
+        tm_slot.left_team_id, tm_left.name AS left_team_name,
+        tm_slot.right_team_id, tm_right.name AS right_team_name,
         CASE WHEN ps.type = 'pool'
           THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          WHEN ps.type = 'team_match'
+          THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
           ELSE NULL
         END AS bout_count,
         COALESCE(ps.minutes_per_bout,
@@ -120,10 +131,13 @@ const Pipeline = {
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps
-      JOIN strips        st ON st.id = ps.strip_id
-      LEFT JOIN pools    po ON po.id = ps.pool_id
-      LEFT JOIN phases   ph ON ph.id = COALESCE(ps.phase_id, po.phase_id)
-      LEFT JOIN competitions co ON co.id = ph.competition_id
+      JOIN strips          st       ON st.id       = ps.strip_id
+      LEFT JOIN pools      po       ON po.id       = ps.pool_id
+      LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
+      LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
+      LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
+      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
+      LEFT JOIN competitions co ON co.id  = ph.competition_id
       WHERE ps.referee_id = ?
       ORDER BY ps.strip_id, ps.slot_order
     `).all(refereeId);
@@ -198,11 +212,11 @@ const Pipeline = {
 
       const { lastInsertRowid } = db.prepare(`
         INSERT INTO pipeline_slots
-          (strip_id, slot_order, type, pool_id, phase_id,
+          (strip_id, slot_order, type, pool_id, phase_id, team_match_id,
            bracket, tableau, partition,
            scheduled_start, minutes_per_bout, referee_id)
         VALUES
-          (@strip_id, @slot_order, @type, @pool_id, @phase_id,
+          (@strip_id, @slot_order, @type, @pool_id, @phase_id, @team_match_id,
            @bracket, @tableau, @partition,
            @scheduled_start, @minutes_per_bout, @referee_id)
       `).run({
@@ -211,6 +225,7 @@ const Pipeline = {
         type:             data.type,
         pool_id:          data.pool_id          ?? null,
         phase_id:         data.phase_id         ?? null,
+        team_match_id:    data.team_match_id    ?? null,
         bracket:          data.bracket          ?? null,
         tableau:          data.tableau          ?? null,
         partition:        data.partition        ?? 'full',
@@ -330,6 +345,12 @@ const Pipeline = {
         "SELECT COUNT(*) AS n FROM bouts WHERE pool_id=? AND status!='finished'"
       ).get(slot.pool_id).n;
     }
+    if (slot.type === 'team_match') {
+      if (!slot.team_match_id) return 0;
+      return db.prepare(
+        "SELECT COUNT(*) AS n FROM relays WHERE team_match_id=? AND status!='finished'"
+      ).get(slot.team_match_id).n;
+    }
     const { deRound, lo, hi } = this._deSlotParams(slot);
     if (!deRound) return 0;
     return db.prepare(`
@@ -343,6 +364,30 @@ const Pipeline = {
   },
 
   nextBout(slot, afterBoutId = null) {
+    if (slot.type === 'team_match') {
+      const relay = db.prepare(`
+        SELECT id, relay_number, target, status, left_touches, right_touches,
+               left_position, right_position
+        FROM relays
+        WHERE team_match_id = ?
+          AND status != 'finished'
+          AND (? IS NULL OR relay_number > (SELECT relay_number FROM relays WHERE id = ?))
+        ORDER BY relay_number LIMIT 1
+      `).get(slot.team_match_id, afterBoutId, afterBoutId);
+
+      const effective = relay || (afterBoutId
+        ? db.prepare(`
+            SELECT id, relay_number, target, status, left_touches, right_touches,
+                   left_position, right_position
+            FROM relays
+            WHERE team_match_id = ? AND status != 'finished' AND id != ?
+            ORDER BY relay_number LIMIT 1
+          `).get(slot.team_match_id, afterBoutId)
+        : null);
+
+      return effective ? this._buildRelayBout(slot.team_match_id, effective) : null;
+    }
+
     if (slot.type === 'pool') {
       const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
@@ -455,6 +500,19 @@ const Pipeline = {
 
   prevBout(slot, beforeBoutId) {
     if (!beforeBoutId) return null;
+
+    if (slot.type === 'team_match') {
+      const relay = db.prepare(`
+        SELECT id, relay_number, target, status, left_touches, right_touches,
+               left_position, right_position
+        FROM relays
+        WHERE team_match_id = ?
+          AND relay_number < (SELECT relay_number FROM relays WHERE id = ?)
+        ORDER BY relay_number DESC LIMIT 1
+      `).get(slot.team_match_id, beforeBoutId);
+      return relay ? this._buildRelayBout(slot.team_match_id, relay) : null;
+    }
+
     if (slot.type === 'pool') {
       const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
@@ -542,6 +600,92 @@ const Pipeline = {
     if (slot.type !== 'de' || slot.bout_count != null || !slot.tableau) return slot;
     const [lo, hi] = partitionToRange(slot.partition, slot.tableau);
     return { ...slot, bout_count: hi - lo + 1 };
+  },
+
+  // ── Team match relay helpers ─────────────────────────────────────────────
+
+  // Resolve which competitor fences at a given position for a given relay.
+  _resolveRelayFencer(matchId, position, relayNumber) {
+    if (!position) return null;
+    const row = db.prepare(`
+      SELECT COALESCE(sub.substitute_competitor_id, ord.competitor_id) AS competitor_id
+      FROM team_match_orders ord
+      LEFT JOIN team_match_substitutions sub
+        ON sub.team_match_id = ord.team_match_id
+        AND sub.team_id = ord.team_id
+        AND sub.position_replaced = ord.position
+        AND sub.effective_from_relay <= ?
+      WHERE ord.team_match_id = ? AND ord.position = ?
+    `).get(relayNumber, matchId, position);
+    if (!row?.competitor_id) return null;
+    return db.prepare(`
+      SELECT c.id AS competitor_id, p.first_name, p.last_name, p.nationality
+      FROM competitors c
+      JOIN fencers f ON f.id = c.fencer_id
+      JOIN people p  ON p.id = f.person_id
+      WHERE c.id = ?
+    `).get(row.competitor_id);
+  },
+
+  // Build the full relay bout object returned by nextBout / prevBout for team_match slots.
+  _buildRelayBout(matchId, relay) {
+    const match = db.prepare(`
+      SELECT tm.id, tm.left_team_id, tm.right_team_id, tm.phase_id,
+             tl.name AS left_team_name, tr.name AS right_team_name,
+             ph.phase_order,
+             co.name AS competition_name, co.weapon
+      FROM team_matches tm
+      LEFT JOIN teams tl ON tl.id = tm.left_team_id
+      LEFT JOIN teams tr ON tr.id = tm.right_team_id
+      JOIN phases ph       ON ph.id = tm.phase_id
+      JOIN competitions co ON co.id = ph.competition_id
+      WHERE tm.id = ?
+    `).get(matchId);
+    if (!match) return null;
+
+    const leftFencer  = this._resolveRelayFencer(matchId, relay.left_position,  relay.relay_number);
+    const rightFencer = this._resolveRelayFencer(matchId, relay.right_position, relay.relay_number);
+
+    const cumul = db.prepare(`
+      SELECT COALESCE(SUM(left_touches),  0) AS cum_left,
+             COALESCE(SUM(right_touches), 0) AS cum_right
+      FROM relays
+      WHERE team_match_id = ? AND relay_number < ? AND status = 'finished'
+    `).get(matchId, relay.relay_number);
+
+    const relayTotal = db.prepare(
+      'SELECT COUNT(*) AS n FROM relays WHERE team_match_id = ?'
+    ).get(matchId).n;
+
+    return {
+      id:              relay.id,
+      relay_number:    relay.relay_number,
+      relay_total:     relayTotal,
+      target:          relay.target,
+      status:          relay.status,
+      left_touches:    relay.left_touches,
+      right_touches:   relay.right_touches,
+      left_position:   relay.left_position,
+      right_position:  relay.right_position,
+      left_id:         leftFencer?.competitor_id  ?? null,
+      left_first:      leftFencer?.first_name     ?? '',
+      left_last:       leftFencer?.last_name      ?? '',
+      left_nation:     leftFencer?.nationality    ?? '',
+      right_id:        rightFencer?.competitor_id ?? null,
+      right_first:     rightFencer?.first_name    ?? '',
+      right_last:      rightFencer?.last_name     ?? '',
+      right_nation:    rightFencer?.nationality   ?? '',
+      team_match_id:   matchId,
+      left_team_id:    match.left_team_id,
+      left_team_name:  match.left_team_name,
+      right_team_id:   match.right_team_id,
+      right_team_name: match.right_team_name,
+      cumul_left:      cumul.cum_left,
+      cumul_right:     cumul.cum_right,
+      weapon:          match.weapon,
+      competition_name: match.competition_name,
+      phase_order:     match.phase_order,
+    };
   },
 
   // ── Predicted end helper ─────────────────────────────────────────────────
