@@ -211,7 +211,11 @@
                   </select>
                   <!-- Multi-strip distribution: shown when pool has ≥ 8 bouts -->
                   <div x-show="multiPool?.bouts_total >= 8" style="margin-top:.5rem;border-top:1px solid #ddd;padding-top:.5rem">
-                    <div style="font-size:.8rem;font-weight:600;margin-bottom:.25rem">Multi-strip distribution</div>
+                    <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;cursor:pointer;margin-bottom:.35rem">
+                      <input type="checkbox" x-model="wantMulti" @change="if(!wantMulti){multiStrips=[];multiDynamic=false;}">
+                      <span style="font-weight:600">Split across multiple pistes</span>
+                    </label>
+                    <div x-show="wantMulti">
                     <div style="font-size:.78rem;color:#555;margin-bottom:.35rem"
                       x-text="(multiPool?.bouts_total||0)+' bouts — select additional strips to split across pistes:'"></div>
                     <div style="margin-bottom:.3rem">
@@ -234,6 +238,7 @@
                         <span>Dynamic reordering — CMS adjusts bout order to respect rest time as the pool progresses</span>
                       </label>
                     </div>
+                    </div><!-- /wantMulti -->
                   </div>
                 </div>
               </template>
@@ -400,6 +405,7 @@ function app() {
     addForm: {},
     multiStrips: [],
     multiDynamic: false,
+    wantMulti: false,
     selectedReferee: '',
     refSchedule: [],
 
@@ -556,6 +562,7 @@ function app() {
                         scheduled_start: suggested, minutes_per_bout: '' };
       this.multiStrips = [];
       this.multiDynamic = false;
+      this.wantMulti = false;
     },
 
     async loadDeRounds(phaseId) {
