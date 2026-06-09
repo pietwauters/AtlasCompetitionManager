@@ -140,9 +140,14 @@ const TeamPhase = {
       "SELECT COUNT(*) AS n FROM relays WHERE team_match_id = ? AND status = 'finished'"
     ).get(m.id).n, 0);
 
+    // Real matches have relays; byes were inserted as 'finished' with no relays.
+    const realMatchIds = matches.length === 0 ? new Set() : new Set(
+      db.prepare('SELECT DISTINCT team_match_id FROM relays WHERE team_match_id IN ('+matches.map(()=>'?').join(',')+')')
+        .all(...matches.map(m=>m.id)).map(r=>r.team_match_id)
+    );
     phase.matches         = matches;
-    phase.matches_total   = matches.filter(m => !m.place_rank || m.de_round).length;
-    phase.matches_complete = matches.filter(m => m.status === 'finished').length;
+    phase.matches_total   = matches.filter(m => realMatchIds.has(m.id)).length;
+    phase.matches_complete = matches.filter(m => realMatchIds.has(m.id) && m.status === 'finished').length;
 
     return phase;
   },

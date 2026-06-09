@@ -140,8 +140,10 @@ router.post('/team-phases/:id/close', (req, res) => {
 
 router.post('/team-phases/:id/simulate', (req, res) => {
   try {
+    const phase = TeamPhase.findById(req.params.id);
+    if (!phase) return res.status(404).json({ error: 'Phase not found' });
+    if (phase.status === 'pending') TeamPhase.activate(req.params.id);
     TeamPhase.simulate(req.params.id);
-    TeamPhase.activate(req.params.id); // no-op if already active — handle gracefully
     res.json(TeamPhase.findById(req.params.id));
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
