@@ -82,9 +82,9 @@
   <div class="card" x-show="match">
     <div class="score-header">
       <div class="team-name" x-text="match?.left_team_name||'Team A'"></div>
-      <div class="score-val" x-text="match?.left_score??'—'"></div>
+      <div class="score-val" x-text="match?.left_score??match?.left_cumulative??'—'"></div>
       <div class="vs">vs</div>
-      <div class="score-val" x-text="match?.right_score??'—'"></div>
+      <div class="score-val" x-text="match?.right_score??match?.right_cumulative??'—'"></div>
       <div class="team-name" x-text="match?.right_team_name||'Team B'"></div>
     </div>
     <div style="display:flex;justify-content:center;gap:.75rem;margin-top:.4rem;align-items:center">
