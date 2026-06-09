@@ -98,6 +98,10 @@
         <label>Gender * <select x-model="compForm.gender"><option value="">—</option><option value="M">Male</option><option value="F">Female</option><option value="X">Mixed / Open</option></select></label>
         <label>Date <input type="date" x-model="compForm.date"></label>
         <label>Tournament (optional) <select x-model="compForm.tournament_id"><option value="">— Standalone —</option><template x-for="t in tournaments" :key="t.id"><option :value="t.id" x-text="t.name"></option></template></select></label>
+        <label style="flex-direction:row;align-items:center;gap:.4rem;cursor:pointer">
+          <input type="checkbox" x-model="compForm.is_team">
+          Team competition
+        </label>
         <div class="section-title">Age categories</div>
         <div class="full" style="display:flex;flex-wrap:wrap;gap:.5rem">
           <template x-for="ac in ageCategories" :key="ac.id">
@@ -193,7 +197,7 @@ function app() {
       }));
     },
     notice:{text:'',error:false},
-    compFormOpen:false, compForm:{id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]},
+    compFormOpen:false, compForm:{id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[],is_team:false},
     tournFormOpen:false, tournForm:{id:null,name:'',city:'',country:'',date_start:'',date_end:'',organizer:'',level:''},
 
     async init() { await Promise.all([this.loadComps(),this.loadTourns(),this.loadAgeCats()]); },
@@ -205,9 +209,9 @@ function app() {
     async loadTourns() { this.tournaments = await fetch('/api/tournaments').then(r=>r.json()); },
     async loadAgeCats() { this.ageCategories = await fetch('/api/age-categories').then(r=>r.json()); },
 
-    openCompForm() { this.compForm={id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[]}; this.compFormOpen=true; },
+    openCompForm() { this.compForm={id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[],is_team:false}; this.compFormOpen=true; },
     editComp(c) {
-      this.compForm={id:c.id,name:c.name,weapon:c.weapon,gender:c.gender,date:c.date||'',tournament_id:c.tournament_id||'',age_category_ids:c.age_categories?.map(a=>a.id)||[]};
+      this.compForm={id:c.id,name:c.name,weapon:c.weapon,gender:c.gender,date:c.date||'',tournament_id:c.tournament_id||'',age_category_ids:c.age_categories?.map(a=>a.id)||[],is_team:!!c.is_team};
       this.compFormOpen=true;
     },
     toggleAgeCat(id,checked) {
@@ -215,7 +219,7 @@ function app() {
       else{this.compForm.age_category_ids=this.compForm.age_category_ids.filter(x=>x!==id);}
     },
     async saveComp() {
-      const body={name:this.compForm.name,weapon:this.compForm.weapon,gender:this.compForm.gender,date:this.compForm.date||null,tournament_id:this.compForm.tournament_id||null,age_category_ids:this.compForm.age_category_ids};
+      const body={name:this.compForm.name,weapon:this.compForm.weapon,gender:this.compForm.gender,date:this.compForm.date||null,tournament_id:this.compForm.tournament_id||null,age_category_ids:this.compForm.age_category_ids,is_team:this.compForm.is_team?1:0};
       const url=this.compForm.id?'/api/competitions/'+this.compForm.id:'/api/competitions';
       const method=this.compForm.id?'PATCH':'POST';
       const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

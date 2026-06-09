@@ -62,15 +62,16 @@ const Competition = {
     return withAgeCategories(comp);
   },
 
-  create({ tournament_id, name, weapon, gender, date, status, age_category_ids }) {
+  create({ tournament_id, name, weapon, gender, date, status, age_category_ids, is_team }) {
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO competitions (tournament_id, name, weapon, gender, date, status)
-      VALUES (@tournament_id, @name, @weapon, @gender, @date, @status)
+      INSERT INTO competitions (tournament_id, name, weapon, gender, date, status, is_team)
+      VALUES (@tournament_id, @name, @weapon, @gender, @date, @status, @is_team)
     `).run({
       tournament_id: tournament_id || null,
       name, weapon, gender,
       date: date || null,
       status: status || 'draft',
+      is_team: is_team ? 1 : 0,
     });
     if (age_category_ids?.length) {
       this.setAgeCategories(lastInsertRowid, age_category_ids);
@@ -84,11 +85,12 @@ const Competition = {
     const m = { ...current, ...fields };
     db.prepare(`
       UPDATE competitions SET tournament_id=@tournament_id, name=@name,
-        weapon=@weapon, gender=@gender, date=@date, status=@status
+        weapon=@weapon, gender=@gender, date=@date, status=@status, is_team=@is_team
       WHERE id=@id
     `).run({ id: Number(id), tournament_id: m.tournament_id || null,
              name: m.name, weapon: m.weapon, gender: m.gender,
-             date: m.date || null, status: m.status });
+             date: m.date || null, status: m.status,
+             is_team: fields.is_team !== undefined ? (fields.is_team ? 1 : 0) : (current.is_team || 0) });
     if (fields.age_category_ids !== undefined) {
       this.setAgeCategories(id, fields.age_category_ids || []);
     }
