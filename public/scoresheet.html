@@ -99,9 +99,11 @@
     /* ── Status bar ── */
     .status-bar{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;font-size:.85rem;font-weight:600}
     .status-bar.ok{background:var(--ok-bg);color:var(--ok)}
+    .status-bar.warn{background:#fff3cd;color:#856404}
     .status-bar.err{background:var(--err-bg);color:var(--err)}
     .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .ok .status-dot{background:var(--ok)}
+    .warn .status-dot{background:#f0ad4e}
     .err .status-dot{background:var(--err)}
     .slot-label{margin-left:auto;font-size:.78rem;font-weight:400;color:var(--slot-lbl)}
     .theme-btn{background:none;border:1px solid var(--border-2);border-radius:5px;color:var(--text-3);
@@ -238,10 +240,17 @@
 <body x-data="app()" x-init="init()" :class="darkTheme ? '' : 'light'">
 
   <!-- Status bar -->
-  <div class="status-bar" :class="connected ? 'ok' : 'err'">
+  <div class="status-bar" :class="!connected ? 'err' : (apparatusOnline ? 'ok' : 'warn')">
     <span class="status-dot"></span>
-    <span x-text="connected ? 'Connected — Piste ' + pisteId : (pisteId ? 'Not connected' : 'Add ?piste=NAME to URL')"></span>
+    <span x-text="!connected ? (pisteId ? 'Not connected' : 'Add ?piste=NAME to URL') : (apparatusOnline ? 'Piste ' + pisteId + ' — Apparatus online' : 'Piste ' + pisteId + ' — Apparatus offline')"></span>
     <span x-show="slotLabel" class="slot-label" x-text="slotLabel"></span>
+    <template x-if="auth && !auth.authenticated">
+      <a :href="'/login.html?next=' + encodeURIComponent(location.pathname + location.search)"
+         style="margin-left:auto;font-size:.78rem;opacity:.8;color:inherit;font-weight:600">Sign in</a>
+    </template>
+    <template x-if="auth && auth.authenticated">
+      <span style="margin-left:auto;font-size:.78rem;opacity:.65" x-text="auth.username + ' · ' + auth.role"></span>
+    </template>
     <button class="theme-btn" @click="toggleTheme()" x-text="darkTheme ? '☀ Light' : '🌙 Dark'"></button>
   </div>
 
@@ -414,9 +423,11 @@ function reasonsFor(defs, card, weapon, step) {
 
 function app() {
   return {
-    pisteId:     new URLSearchParams(location.search).get('piste') || '',
-    connected:   false,
-    mqttClient:  null,
+    pisteId:         new URLSearchParams(location.search).get('piste') || '',
+    connected:       false,
+    apparatusOnline: false,
+    auth:            null,
+    mqttClient:      null,
     brokerWsUrl: null,
     seq:         0,
     darkTheme:   true,
@@ -438,6 +449,7 @@ function app() {
       const allReasons = await fetch('/data/reasons.json').then(r => r.json()).catch(() => ({}));
       this.reasonDefs = allReasons[lang] || allReasons['en'] || null;
 
+      this.auth = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
       const settings = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
       const brokerUrl = settings.broker_url || 'mqtt://openpiste.local:1883';
       this.brokerWsUrl = brokerUrl.replace(/^mqtts?:\/\//, 'ws://').replace(/:\d+$/, ':9001');
@@ -456,12 +468,13 @@ function app() {
       const clientId = 'atlas-scoresheet-' + Math.random().toString(16).slice(2, 8);
       const c        = new Paho.MQTT.Client(host, port, clientId);
 
-      c.onConnectionLost = () => { this.connected = false; setTimeout(() => this.connectMqtt(), 5000); };
+      c.onConnectionLost = () => { this.connected = false; this.apparatusOnline = false; setTimeout(() => this.connectMqtt(), 5000); };
       c.onMessageArrived = (msg) => this.onMessage(msg);
       c.connect({
         onSuccess: () => {
           this.connected = true; this.mqttClient = c;
           this.baselineSeq = null; this.lastScore = null;
+          c.subscribe(`openpiste/${this.pisteId}/apparatus/connection`);
           c.subscribe(`openpiste/${this.pisteId}/apparatus/score`);
           c.subscribe(`openpiste/${this.pisteId}/software/fencers`);
           c.subscribe(`openpiste/${this.pisteId}/software/match`);
@@ -478,6 +491,7 @@ function app() {
       try { payload = JSON.parse(msg.payloadString); } catch { return; }
       const parts = msg.destinationName.split('/'), pub = parts[2], type = parts[3];
 
+      if (pub === 'apparatus'  && type === 'connection') { this.apparatusOnline = payload.online === true; return; }
       if (pub === 'software'   && type === 'record') { this.onRecord(payload); return; }
       if (pub === 'scoresheet' && type === 'record') { this.onScoresheetRecord(payload); return; }
       if (pub === 'software'   && type === 'fencers') {
