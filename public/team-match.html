@@ -193,7 +193,7 @@
         <template x-for="relay in relays" :key="relay.id">
           <tr :class="relayRowClass(relay)">
             <td x-text="relay.relay_number"></td>
-            <td x-text="relay.left_fencer_name||'—'"></td>
+            <td x-text="relay.left_fencer||'—'"></td>
             <td style="text-align:center">
               <!-- Result display -->
               <span x-show="relay.status==='finished'"
@@ -213,7 +213,7 @@
                         @click="saveRelay(relay.id)">Save</button>
               </div>
             </td>
-            <td x-text="relay.right_fencer_name||'—'"></td>
+            <td x-text="relay.right_fencer||'—'"></td>
             <td style="text-align:center">
               <span class="cumul" x-show="relay.status==='finished'"
                     x-text="relay.cumul_left+' – '+relay.cumul_right"></span>
