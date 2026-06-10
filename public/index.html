@@ -186,8 +186,8 @@ function app() {
 
     async loadComps() {
       const all = await fetch('/api/competitions/active').then(r => r.json()).catch(() => []);
-      this.active   = all.filter(c => c.phase_status === 'active');
-      this.upcoming = all.filter(c => c.phase_status === 'pending');
+      this.active   = all.filter(c => c.phase_status === 'active' && c.progress?.done > 0);
+      this.upcoming = all.filter(c => c.phase_status === 'active' && !c.progress?.done);
       this.between  = all.filter(c => !c.phase_id);
     },
 

@@ -78,8 +78,6 @@
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
       <button x-show="!comp?.is_team" @click="autoSeed()">⚡ Auto-seed by ranking</button>
       <button x-show="comp?.is_team"  @click="autoSeedTeams()">⚡ Auto-seed teams by ranking</button>
-      <button class="success" x-show="comp?.status==='draft'" @click="setStatus('active')">▶ Start competition</button>
-      <button x-show="comp?.status==='active'" @click="setStatus('draft')">⏸ Back to draft</button>
       <button x-show="comp?.status==='active'"
               style="background:#fff3cd;color:#856404;border-color:#ffc107"
               @click="closeCompetition()">✓ Close competition</button>

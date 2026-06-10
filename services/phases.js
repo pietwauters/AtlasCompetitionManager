@@ -104,12 +104,12 @@ const Phase = {
 
       const { lastInsertRowid: phaseId } = db.prepare(`
         INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
-        VALUES (@comp_id, @order, 'pool', @rule_doc, 'pending')
+        VALUES (@comp_id, @order, 'pool', @rule_doc, 'active')
       `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
 
       for (const pool of pools) {
         const { lastInsertRowid: poolId } = db.prepare(`
-          INSERT INTO pools (phase_id, pool_number, status) VALUES (?, ?, 'pending')
+          INSERT INTO pools (phase_id, pool_number, status) VALUES (?, ?, 'active')
         `).run(phaseId, pool.poolNumber);
 
         for (const fencer of pool.fencers) {
@@ -129,12 +129,6 @@ const Phase = {
       return phaseId;
     })();
 
-    return this.findById(phaseId);
-  },
-
-  activate(phaseId) {
-    db.prepare("UPDATE phases SET status='active' WHERE id=?").run(phaseId);
-    db.prepare("UPDATE pools  SET status='active' WHERE phase_id=?").run(phaseId);
     return this.findById(phaseId);
   },
 
@@ -499,7 +493,7 @@ const Phase = {
 
       const { lastInsertRowid: phaseId } = db.prepare(`
         INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
-        VALUES (@comp_id, @order, 'de', @rule_doc, 'pending')
+        VALUES (@comp_id, @order, 'de', @rule_doc, 'active')
       `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
 
       // Pass 1 — insert every bout; collect DB ids indexed by tempId.
@@ -578,7 +572,6 @@ const Phase = {
   simulate(phaseId) {
     const phase = this.findById(phaseId);
     if (!phase) throw Object.assign(new Error('Phase not found'), { status: 404 });
-    if (phase.status !== 'active') throw Object.assign(new Error('Phase must be active to simulate'), { status: 400 });
 
     const rule        = loadRule(phase.rule_doc);
     const touchTarget = rule.bout?.touchTarget ?? (phase.type === 'de' ? 15 : 5);

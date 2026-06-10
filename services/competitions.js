@@ -70,7 +70,7 @@ const Competition = {
       tournament_id: tournament_id || null,
       name, weapon, gender,
       date: date || null,
-      status: status || 'draft',
+      status: status || 'active',
       is_team: is_team ? 1 : 0,
     });
     if (age_category_ids?.length) {
@@ -113,15 +113,14 @@ const Competition = {
     return db.prepare("UPDATE competitions SET status='archived' WHERE id=?").run(id);
   },
 
-  // Returns competitions that have an active or pending phase, with progress.
-  // active phases = currently being fenced; pending = set up but not started yet.
+  // Returns competitions that have an active phase, with progress.
   withLivePhases() {
     const rows = db.prepare(`
       SELECT c.id, c.name, c.weapon, c.gender,
              p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
       FROM competitions c
-      LEFT JOIN phases p ON p.competition_id = c.id AND p.status IN ('active','pending')
-      WHERE c.status = 'active'
+      JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
+      WHERE c.status != 'archived'
       ORDER BY c.name, p.phase_order DESC
     `).all();
 

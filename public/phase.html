@@ -62,7 +62,6 @@
       <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
-      <button x-show="phase?.status==='pending'" class="primary" @click="activate()">▶ Activate round</button>
       <button x-show="phase?.status==='finished'"
               style="background:#fff3cd;color:#856404;border-color:#ffc107"
               @click="reopenPhase()">↩ Reopen round</button>
@@ -195,7 +194,7 @@ function app() {
     async init() {
       if(!phaseId){this.showNotice('No phase ID in URL',true);return;}
       await Promise.all([this.loadPhase(),this.loadStrips(),this.loadReferees()]);
-      if(this.phase?.status!=='pending') await this.loadRankings();
+      await this.loadRankings();
     },
 
     async loadPhase() {
@@ -218,13 +217,6 @@ function app() {
 
     async loadStrips()   { this.strips   = await fetch('/api/strips').then(r=>r.json()).catch(()=>[]); },
     async loadReferees() { this.referees = await fetch('/api/people?role=referee').then(r=>r.json()).catch(()=>[]); },
-
-    async activate() {
-      const r = await fetch('/api/phases/'+phaseId+'/activate',{method:'POST'});
-      if(!r.ok){this.showNotice('Activate failed',true);return;}
-      this.showNotice('Round activated');
-      await this.loadPhase();
-    },
 
     async simulate() {
       const r = await fetch('/api/phases/'+phaseId+'/simulate',{method:'POST'});

@@ -126,14 +126,6 @@ router.post('/team-phases', (req, res) => {
   }
 });
 
-router.post('/team-phases/:id/activate', (req, res) => {
-  try {
-    res.json(TeamPhase.activate(req.params.id));
-  } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
-  }
-});
-
 router.post('/team-phases/:id/close', (req, res) => {
   try {
     res.json(TeamPhase.close(req.params.id));
@@ -146,7 +138,6 @@ router.post('/team-phases/:id/simulate', (req, res) => {
   try {
     const phase = TeamPhase.findById(req.params.id);
     if (!phase) return res.status(404).json({ error: 'Phase not found' });
-    if (phase.status === 'pending') TeamPhase.activate(req.params.id);
     TeamPhase.simulate(req.params.id);
     res.json(TeamPhase.findById(req.params.id));
   } catch (e) {

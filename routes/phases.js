@@ -60,15 +60,6 @@ router.post('/', (req, res) => {
   }
 });
 
-// Activate phase (pending → active)
-router.post('/:id/activate', (req, res) => {
-  try {
-    res.json(Phase.activate(req.params.id));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // Get live rankings (without saving)
 router.get('/:id/rankings', (req, res) => {
   res.json(Phase.calculateRankings(req.params.id));

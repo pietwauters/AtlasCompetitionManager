@@ -27,11 +27,6 @@ router.get('/:id/pools', (req, res) => {
   res.json(Pool.findByPhase(req.params.id));
 });
 
-router.post('/:id/activate', (req, res) => {
-  try { res.json(Phase.activate(req.params.id)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 router.post('/:id/close', (req, res) => {
   try {
     const result = Phase.close(req.params.id, req.body?.method ? req.body : null);

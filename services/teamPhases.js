@@ -45,7 +45,7 @@ const TeamPhase = {
 
       const { lastInsertRowid: phaseId } = db.prepare(`
         INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
-        VALUES (?, ?, 'team_de', ?, 'pending')
+        VALUES (?, ?, 'team_de', ?, 'active')
       `).run(competitionId, maxOrder + 1, ruleDoc);
 
       // Pass 1 — insert all team_match rows, collect DB ids by tempId
@@ -152,18 +152,6 @@ const TeamPhase = {
     return phase;
   },
 
-  activate(phaseId) {
-    const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
-    if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
-    if (phase.status !== 'pending') throw Object.assign(new Error('Phase is not pending.'), { status: 400 });
-
-    db.transaction(() => {
-      db.prepare("UPDATE phases SET status = 'active' WHERE id = ?").run(phaseId);
-    })();
-
-    return this.findById(phaseId);
-  },
-
   close(phaseId) {
     const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
     if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
@@ -239,7 +227,6 @@ const TeamPhase = {
   simulate(phaseId) {
     const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
     if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
-    if (phase.status !== 'active') throw Object.assign(new Error('Phase must be active to simulate.'), { status: 400 });
 
     // Process rounds in order (byes are already finished)
     const maxRound = db.prepare(
