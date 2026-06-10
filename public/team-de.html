@@ -71,7 +71,6 @@
       <h1 x-text="'Team DE — '+(phase?.competition_name||'')"></h1>
       <span class="chip" :class="'chip-'+(phase?.status||'pending')" x-text="phase?.status||''"></span>
       <div class="spacer"></div>
-      <button x-show="phase?.status==='pending'&&phase?.matches_complete<phase?.matches_total" class="primary" @click="activatePhase()">Activate</button>
       <button x-show="phase?.status!=='finished'&&phase?.matches_total>0&&phase?.matches_complete>=phase?.matches_total"
               class="success" @click="closePhase()">Close phase</button>
       <button x-show="phase?.status!=='finished'" @click="simulatePhase()">Simulate all</button>
@@ -209,14 +208,6 @@ function app() {
       this.rounds = rounds;
 
       this.rankedTeams = teams.filter(t=>t.final_rank!=null).sort((a,b)=>a.final_rank-b.final_rank);
-    },
-
-    async activatePhase() {
-      const r = await fetch('/api/team-phases/'+phaseId+'/activate', {method:'POST'});
-      const d = await r.json();
-      if (!r.ok) { this.showNotice(d.error||'Activate failed', true); return; }
-      this.showNotice('Phase activated');
-      await this.loadPhase();
     },
 
     async closePhase() {
