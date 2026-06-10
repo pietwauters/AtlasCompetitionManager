@@ -643,8 +643,19 @@ const Pipeline = {
     `).get(matchId);
     if (!match) return null;
 
-    const leftFencer  = this._resolveRelayFencer(matchId, relay.left_position,  relay.relay_number);
-    const rightFencer = this._resolveRelayFencer(matchId, relay.right_position, relay.relay_number);
+    // left_position/right_position may be null for relays created before migration 017.
+    // Fall back to the rule definition (indexed by relay_number) when not stored on the row.
+    let leftPos  = relay.left_position;
+    let rightPos = relay.right_position;
+    if (leftPos == null || rightPos == null) {
+      const phaseRow = db.prepare('SELECT rule_doc FROM phases WHERE id = ?').get(match.phase_id);
+      const rule     = require('../lib/rules').loadRule(phaseRow.rule_doc);
+      const def      = rule.relays?.[relay.relay_number - 1];
+      if (def) { leftPos = def.left; rightPos = def.right; }
+    }
+
+    const leftFencer  = this._resolveRelayFencer(matchId, leftPos,  relay.relay_number);
+    const rightFencer = this._resolveRelayFencer(matchId, rightPos, relay.relay_number);
 
     const cumul = db.prepare(`
       SELECT COALESCE(SUM(left_touches),  0) AS cum_left,
@@ -665,8 +676,8 @@ const Pipeline = {
       status:          relay.status,
       left_touches:    relay.left_touches,
       right_touches:   relay.right_touches,
-      left_position:   relay.left_position,
-      right_position:  relay.right_position,
+      left_position:   leftPos,
+      right_position:  rightPos,
       left_id:         leftFencer?.competitor_id  ?? null,
       left_first:      leftFencer?.first_name     ?? '',
       left_last:       leftFencer?.last_name      ?? '',
