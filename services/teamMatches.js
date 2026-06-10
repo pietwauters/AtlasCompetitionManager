@@ -388,13 +388,16 @@ const TeamMatch = {
   },
 
   // All non-finished team matches with both teams set — used by pipeline builder.
+  // Includes draw_done and order_count so the UI can warn when a match isn't ready.
   findAvailable() {
     return db.prepare(`
       SELECT tm.id, tm.status, tm.left_team_id, tm.right_team_id,
              tm.left_score, tm.right_score, tm.phase_id, tm.de_round, tm.place_rank,
              tl.name AS left_team_name, tr.name AS right_team_name,
              co.name AS competition_name, co.weapon,
-             ph.phase_order
+             ph.phase_order,
+             CASE WHEN tm.draw_winner_team_id IS NOT NULL THEN 1 ELSE 0 END AS draw_done,
+             (SELECT COUNT(*) FROM team_match_orders o WHERE o.team_match_id = tm.id) AS order_count
       FROM team_matches tm
       LEFT JOIN teams tl ON tl.id = tm.left_team_id
       LEFT JOIN teams tr ON tr.id = tm.right_team_id

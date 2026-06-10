@@ -290,10 +290,22 @@
                     <option value="">— Select team match —</option>
                     <template x-for="m in availableTeamMatches" :key="m.id">
                       <option :value="m.id"
-                        x-text="m.competition_name+' — '+m.left_team_name+' vs '+m.right_team_name"></option>
+                        x-text="(m.draw_done && m.order_count>=6 ? '' : '⚠ ') + m.competition_name+' — '+m.left_team_name+' vs '+m.right_team_name"></option>
                     </template>
                   </select>
                   <div x-show="!availableTeamMatches.length" style="font-size:.78rem;color:#888">No active team matches available.</div>
+                  <template x-if="addForm.team_match_id">
+                    <div x-data="{ get m() { return availableTeamMatches.find(x => x.id == addForm.team_match_id); } }">
+                      <div x-show="m && !m.draw_done"
+                           style="font-size:.78rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-top:.3rem">
+                        ⚠ Draw not done — fencer names will be empty on the apparatus.
+                      </div>
+                      <div x-show="m && m.draw_done && m.order_count < 6"
+                           style="font-size:.78rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-top:.3rem">
+                        ⚠ Fencer order not fully submitted (<span x-text="m.order_count"></span>/6) — names will be empty on the apparatus.
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </template>
 
