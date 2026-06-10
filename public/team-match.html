@@ -63,15 +63,18 @@
 </head>
 <body x-data="app()" x-init="init()">
 <header x-data="navApp()" x-init="initNav()">
-  <nav class="nav-bar">
-    <a class="nav-brand" href="/">Atlas</a>
-    <span class="nav-sep">|</span>
-    <span class="nav-item" x-text="match?match.left_team_name+' vs '+match.right_team_name:'Team Match'"></span>
-    <div class="nav-right">
-      <span class="nav-user" x-text="user?.username||''"></span>
-      <a class="nav-item" href="#" @click.prevent="logout()">Logout</a>
-    </div>
-  </nav>
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+  </template>
+  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </div>
 </header>
 <main>
   <a class="back" :href="phaseId?'/team-de.html?phase='+phaseId+'&comp='+compId:'/competition-detail.html?id='+compId">← Back</a>
@@ -296,6 +299,9 @@ function app() {
     async init() {
       if (!matchId) { this.showNotice('No match ID in URL', true); return; }
       await this.load();
+      const es = new EventSource('/api/team-matches/' + matchId + '/events');
+      window.addEventListener('beforeunload', () => es.close());
+      es.addEventListener('relay-updated', () => this.load());
     },
 
     async load() {
