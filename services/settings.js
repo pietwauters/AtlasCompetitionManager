@@ -18,6 +18,10 @@ const Settings = {
     return db.prepare('SELECT key, value FROM settings').all()
       .reduce((acc, { key, value }) => { acc[key] = value; return acc; }, {});
   },
+
+  delete(key) {
+    db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  },
 };
 
 module.exports = Settings;

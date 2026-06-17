@@ -5,6 +5,7 @@ const { loadRule }   = require('../lib/rules');
 const { formPools, calcPoolOptions } = require('../lib/poolFormation');
 const { buildFullBracket } = require('../lib/deFormation');
 const Competitor     = require('./competitors');
+const Settings       = require('./settings');
 
 const DEFAULT_CRITERIA = [
   'victory_ratio_desc', 'indicator_desc',
@@ -255,7 +256,63 @@ const Phase = {
       sorted = Object.values(stats).sort(compareByCriteria);
     }
 
-    return sorted.map((s, i) => ({ ...s, position: i + 1 }));
+    const tieBreak      = Settings.get('tie_break_method') || 'alphabetical';
+    const manualEnabled = Settings.get('manual_tie_break') === '1';
+
+    // Manual tie order: flat array of competitor_ids in desired position order.
+    let tieOrderMap = null;
+    if (manualEnabled) {
+      const raw = Settings.get('tie_order_' + phaseId);
+      if (raw) {
+        try {
+          const arr = JSON.parse(raw);
+          tieOrderMap = new Map(arr.map((id, idx) => [id, idx]));
+        } catch {}
+      }
+    }
+
+    // Detect tied groups: same V/M, indicator, TS, TR.
+    // Within each group apply the chosen tiebreaker, then assign rank (shared)
+    // and position (sequential, used for DE seeding).
+    const result = [];
+    let gi = 0;
+    while (gi < sorted.length) {
+      let gj = gi + 1;
+      const a = sorted[gi];
+      while (gj < sorted.length) {
+        const b = sorted[gj];
+        if (
+          Math.abs(a.victory_ratio - b.victory_ratio) < 1e-9 &&
+          a.indicator        === b.indicator &&
+          a.touches_scored   === b.touches_scored &&
+          a.touches_received === b.touches_received
+        ) { gj++; } else { break; }
+      }
+      const group = sorted.slice(gi, gj);
+      if (group.length > 1) {
+        if (tieOrderMap) {
+          group.sort((x, y) => {
+            const px = tieOrderMap.has(x.competitor_id) ? tieOrderMap.get(x.competitor_id) : 999999;
+            const py = tieOrderMap.has(y.competitor_id) ? tieOrderMap.get(y.competitor_id) : 999999;
+            return px - py;
+          });
+        } else if (tieBreak === 'random') {
+          for (let k = group.length - 1; k > 0; k--) {
+            const m = Math.floor(Math.random() * (k + 1));
+            [group[k], group[m]] = [group[m], group[k]];
+          }
+        } else {
+          group.sort((x, y) => (x.last_name || '').localeCompare(y.last_name || ''));
+        }
+      }
+      const rank = result.length + 1;
+      const tied = group.length > 1;
+      for (const s of group) {
+        result.push({ ...s, position: result.length + 1, rank, tied });
+      }
+      gi = gj;
+    }
+    return result;
   },
 
   // ---------------------------------------------------------------------------
@@ -332,6 +389,9 @@ const Phase = {
       db.prepare("UPDATE phases SET status='finished' WHERE id=?").run(phaseId);
       db.prepare("UPDATE pools  SET status='finished' WHERE phase_id=?").run(phaseId);
     })();
+
+    // Remove any manual tie order stored for this phase — no longer needed.
+    Settings.delete('tie_order_' + phaseId);
 
     return { rankings, advanced: advanceN, eliminated: N - advanceN };
   },

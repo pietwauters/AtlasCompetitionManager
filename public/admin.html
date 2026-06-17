@@ -107,6 +107,30 @@
     </table>
   </div>
 
+  <!-- ── Competition settings ──────────────────────────────────────────── -->
+  <div class="card">
+    <h2 style="margin:0 0 1rem">Competition Settings</h2>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+      <label class="form-label" style="margin:0;flex-shrink:0">Pool tie-break ordering</label>
+      <select x-model="tieBreakMethod" class="form-input" style="width:auto">
+        <option value="alphabetical">Alphabetical (placeholder)</option>
+        <option value="random">Random (FIE-compliant)</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+      <input type="checkbox" id="manualTieBreak" x-model="manualTieBreak" style="width:1.1rem;height:1.1rem">
+      <label for="manualTieBreak" style="font-size:.9rem;cursor:pointer">
+        Allow manual tie-break reordering on phase page
+      </label>
+    </div>
+    <button class="primary" @click="saveTieBreak()">Save</button>
+    <p style="font-size:.82rem;color:#6b7280;margin:.75rem 0 0">
+      When fencers are equal on all pool ranking criteria (V/M, indicator, TS, TR),
+      this setting controls how they are ordered for DE seeding.
+      Enable manual reordering to adjust tied groups from the phase rankings page (for testing/verification).
+    </p>
+  </div>
+
   <!-- ── Create user modal ───────────────────────────────────────────────── -->
   <div x-show="createModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
        display:flex;align-items:center;justify-content:center" @click.self="createModal.open=false">
@@ -169,19 +193,26 @@
 <script>
 function app() {
   return {
-    notice:      { text: '', error: false },
-    status:      { connected: false, brokerUrl: '', pistes: [] },
-    brokerUrl:   '',
-    autoNextOnEnd: false,
-    users:       [],
-    createModal: { open: false, username: '', role: 'director' },
-    pinModal:    { open: false, pin: '', label: '' },
-    qrModal:     { open: false, user: null },
+    notice:         { text: '', error: false },
+    status:         { connected: false, brokerUrl: '', pistes: [] },
+    brokerUrl:      '',
+    autoNextOnEnd:  false,
+    tieBreakMethod:  'alphabetical',
+    manualTieBreak:  false,
+    users:          [],
+    createModal:    { open: false, username: '', role: 'director' },
+    pinModal:       { open: false, pin: '', label: '' },
+    qrModal:        { open: false, user: null },
 
     async init() {
-      const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
-      this.brokerUrl     = s.broker_url || 'mqtt://openpiste.local:1883';
-      this.autoNextOnEnd = s.auto_next_on_end || false;
+      const [s, cs] = await Promise.all([
+        fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({})),
+        fetch('/api/settings').then(r => r.json()).catch(() => ({})),
+      ]);
+      this.brokerUrl      = s.broker_url || 'mqtt://openpiste.local:1883';
+      this.autoNextOnEnd  = s.auto_next_on_end || false;
+      this.tieBreakMethod = cs.tie_break_method || 'alphabetical';
+      this.manualTieBreak = cs.manual_tie_break === '1';
       await Promise.all([ this.loadStatus(), this.loadUsers() ]);
       setInterval(() => this.loadStatus(), 5000);
     },
@@ -220,6 +251,18 @@ function app() {
         body: JSON.stringify({ broker_url: this.brokerUrl, auto_next_on_end: this.autoNextOnEnd }),
       });
       this.showNotice('Settings saved');
+    },
+
+    async saveTieBreak() {
+      const r = await fetch('/api/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tie_break_method: this.tieBreakMethod,
+          manual_tie_break: this.manualTieBreak ? '1' : '0',
+        }),
+      });
+      if (r.ok) this.showNotice('Tie-break settings saved');
+      else this.showNotice('Save failed', true);
     },
 
     openCreate() {
