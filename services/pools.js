@@ -21,15 +21,14 @@ const Pool = {
     pool.competitors = db.prepare(`
       SELECT
         c.id AS competitor_id, c.initial_seed,
-        p2.first_name, p2.last_name, p2.nationality,
+        c.first_name, c.last_name, c.nationality,
         cl.name AS club_name
       FROM pool_competitors pc
       JOIN competitors c  ON c.id  = pc.competitor_id
-      JOIN fencers     f  ON f.id  = c.fencer_id
-      JOIN people      p2 ON p2.id = f.person_id
+      LEFT JOIN people p2 ON p2.id = c.person_id
       LEFT JOIN clubs  cl ON cl.id = p2.club_id
       WHERE pc.pool_id = ?
-      ORDER BY c.initial_seed ASC, p2.last_name
+      ORDER BY c.initial_seed ASC, c.last_name
     `).all(poolId);
 
     pool.bouts = Bout.findByPool(poolId);

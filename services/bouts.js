@@ -3,16 +3,12 @@ const db = require('../db');
 
 const BASE = `
   SELECT b.*, ph.competition_id,
-    lp.first_name AS left_first,  lp.last_name AS left_last,
-    rp.first_name AS right_first, rp.last_name AS right_last
+    lc.first_name AS left_first,  lc.last_name AS left_last,
+    rc.first_name AS right_first, rc.last_name AS right_last
   FROM bouts b
   LEFT JOIN phases      ph ON ph.id = b.phase_id
   LEFT JOIN competitors lc ON lc.id = b.left_id
-  LEFT JOIN fencers     lf ON lf.id = lc.fencer_id
-  LEFT JOIN people      lp ON lp.id = lf.person_id
   LEFT JOIN competitors rc ON rc.id = b.right_id
-  LEFT JOIN fencers     rf ON rf.id = rc.fencer_id
-  LEFT JOIN people      rp ON rp.id = rf.person_id
 `;
 
 const Bout = {

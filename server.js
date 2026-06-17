@@ -74,6 +74,7 @@ app.use('/api/rules',  require('./routes/rules'));
 app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
 app.use('/api/opp2',   writeOnly('director'), require('./routes/opp2'));
 app.use('/api/users',  auth.require('admin'), require('./routes/users'));
+app.use('/api/fie',    writeOnly('director'), require('./routes/fieImport'));
 app.use('/api',        writeOnly('director'), require('./routes/teamMatches'));
 
 app.get('/health', (req, res) => {

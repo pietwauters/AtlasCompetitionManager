@@ -64,6 +64,7 @@
     <div class="card">
       <div class="toolbar">
         <h2 style="margin:0;flex:1">Competitions</h2>
+        <button @click="openFieImport()">Import FIE XML</button>
         <button class="primary" @click="openCompForm()">+ New competition</button>
       </div>
       <table>
@@ -89,6 +90,43 @@
           <tr x-show="competitions.length===0"><td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No competitions yet.</td></tr>
         </tbody>
       </table>
+    </div>
+    <div class="card" x-show="fieImportOpen">
+      <h2>Import FIE XML</h2>
+      <div class="form-grid">
+        <div class="full" style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem">
+          XML file *
+          <input type="file" accept=".xml" @change="fieReadFile($event)" style="padding:.3rem 0;font-size:.9rem">
+          <span x-show="fieForm.fileName" x-text="'Selected: '+fieForm.fileName" style="font-size:.8rem;color:#555"></span>
+        </div>
+        <label>Attach to existing tournament (optional)
+          <select x-model="fieForm.tournamentId">
+            <option value="">— Auto-create from XML —</option>
+            <template x-for="t in tournaments" :key="t.id">
+              <option :value="t.id" x-text="t.name"></option>
+            </template>
+          </select>
+        </label>
+        <div class="form-actions">
+          <button class="primary" @click="submitFieImport()" :disabled="fieImportLoading || !fieForm.xmlText"
+            x-text="fieImportLoading ? 'Importing…' : 'Import'"></button>
+          <button @click="fieImportOpen=false">Cancel</button>
+        </div>
+        <div class="full" x-show="fieImportResult" style="background:#d5f5e3;color:#1e5631;padding:.75rem 1rem;border-radius:5px;font-size:.9rem">
+          <div>
+            <strong x-text="(fieImportResult?.created||0)+' created, '+(fieImportResult?.updated||0)+' updated'"></strong>
+            <span x-show="fieImportResult?.skipped" x-text="' · '+(fieImportResult?.skipped)+' skipped'"></span>
+          </div>
+          <div x-show="fieImportResult?.warnings?.length" style="margin-top:.4rem;color:#856404">
+            <template x-for="w in (fieImportResult?.warnings||[])" :key="w">
+              <div x-text="w"></div>
+            </template>
+          </div>
+          <div style="margin-top:.5rem">
+            <a class="comp-link" :href="'/competition-detail.html?id='+fieImportResult?.competition_id">Go to competition →</a>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="card" x-show="compFormOpen">
       <h2 x-text="compForm.id?'Edit competition':'New competition'"></h2>
@@ -189,6 +227,8 @@
 function app() {
   return {
     tab:'competitions', competitions:[], tournaments:[], ageCategories:[],
+    fieImportOpen:false, fieImportLoading:false, fieImportResult:null,
+    fieForm:{ tournamentId:'', xmlText:'', fileName:'' },
 
     get tournamentGroups() {
       return this.tournaments.map(t => ({
@@ -208,6 +248,33 @@ function app() {
     },
     async loadTourns() { this.tournaments = await fetch('/api/tournaments').then(r=>r.json()); },
     async loadAgeCats() { this.ageCategories = await fetch('/api/age-categories').then(r=>r.json()); },
+
+    openFieImport() {
+      this.fieForm={ tournamentId:'', xmlText:'', fileName:'' };
+      this.fieImportResult=null;
+      this.fieImportOpen=true;
+      this.compFormOpen=false;
+    },
+    fieReadFile(evt) {
+      const file=evt.target.files[0];
+      if(!file)return;
+      this.fieForm.fileName=file.name;
+      const reader=new FileReader();
+      reader.onload=e=>{ this.fieForm.xmlText=e.target.result; };
+      reader.readAsText(file);
+    },
+    async submitFieImport() {
+      if(!this.fieForm.xmlText){this.showNotice('Select an XML file first',true);return;}
+      this.fieImportLoading=true; this.fieImportResult=null;
+      const body={xml:this.fieForm.xmlText};
+      if(this.fieForm.tournamentId) body.tournament_id=Number(this.fieForm.tournamentId);
+      const r=await fetch('/api/fie/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      this.fieImportLoading=false;
+      const data=await r.json();
+      if(!r.ok){this.showNotice(data.error||'Import failed',true);return;}
+      this.fieImportResult=data;
+      await Promise.all([this.loadComps(),this.loadTourns()]);
+    },
 
     openCompForm() { this.compForm={id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[],is_team:false}; this.compFormOpen=true; },
     editComp(c) {

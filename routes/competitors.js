@@ -9,22 +9,22 @@ router.get('/', (req, res) => {
   res.json(Competitor.findAll(req.params.compId));
 });
 
-// Add one fencer to the competition.
-// Body: { fencer_id, initial_seed? }
+// Add one person from the local roster to the competition.
+// Body: { person_id, initial_seed? }
 router.post('/', (req, res) => {
   try {
-    const c = Competitor.add(req.params.compId, req.body.fencer_id, req.body.initial_seed ?? null);
+    const c = Competitor.add(req.params.compId, req.body.person_id, req.body.initial_seed ?? null);
     res.status(201).json(c);
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    res.status(e.status || 400).json({ error: e.message });
   }
 });
 
-// Add multiple fencers at once. Skips already-registered fencers.
-// Body: { fencer_ids: [1, 2, 3] }
+// Add multiple people from the roster at once. Skips already-registered people.
+// Body: { person_ids: [1, 2, 3] }
 router.post('/bulk', (req, res) => {
   try {
-    const added = Competitor.bulkAdd(req.params.compId, req.body.fencer_ids || []);
+    const added = Competitor.bulkAdd(req.params.compId, req.body.person_ids || []);
     res.json({ added });
   } catch (e) {
     res.status(400).json({ error: e.message });

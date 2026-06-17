@@ -5,14 +5,12 @@ const db = require('../db');
 function membersOf(teamId) {
   return db.prepare(`
     SELECT tm.id, tm.competitor_id, tm.role,
-           p.first_name, p.last_name, f.ranking,
+           co.first_name, co.last_name, co.initial_seed AS ranking,
            co.initial_seed, co.checked_in, co.status AS competitor_status
     FROM team_members tm
     JOIN competitors co ON co.id = tm.competitor_id
-    JOIN fencers f      ON f.id  = co.fencer_id
-    JOIN people p       ON p.id  = f.person_id
     WHERE tm.team_id = ?
-    ORDER BY tm.role ASC, p.last_name, p.first_name
+    ORDER BY tm.role ASC, co.last_name, co.first_name
   `).all(teamId);
 }
 
@@ -77,12 +75,11 @@ const Team = {
   autoSeed(competitionId) {
     const teams = db.prepare(`
       SELECT t.id,
-             COALESCE(SUM(f.ranking), 999999) AS rank_sum,
+             COALESCE(SUM(co.seeding_position), 999999) AS rank_sum,
              t.name
       FROM teams t
       LEFT JOIN team_members tm ON tm.team_id = t.id AND tm.role = 'regular'
-      LEFT JOIN competitors co  ON co.id = tm.competitor_id
-      LEFT JOIN fencers f       ON f.id  = co.fencer_id AND f.ranking IS NOT NULL
+      LEFT JOIN competitors co  ON co.id = tm.competitor_id AND co.seeding_position IS NOT NULL
       WHERE t.competition_id = ? AND t.status = 'active'
       GROUP BY t.id
       ORDER BY rank_sum ASC, t.name ASC

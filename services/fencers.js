@@ -20,9 +20,9 @@ function hydrate(row) {
 const BASE = `
   SELECT
     f.id AS fencer_id,
-    f.licence, f.weapons, f.handedness, f.ranking, f.points,
+    f.weapons, f.handedness, f.fie_statut,
     p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
-    p.nationality, p.club_id, c.name AS club_name
+    p.nationality, p.club_id, p.fie_id, c.name AS club_name
   FROM fencers f
   JOIN  people p ON p.id = f.person_id
   LEFT JOIN clubs c ON c.id = p.club_id
@@ -54,22 +54,24 @@ const Fencer = {
     return hydrate(db.prepare(`${BASE} WHERE f.person_id = ?`).get(personId));
   },
 
-  findByLicence(licence) {
-    return hydrate(db.prepare(`${BASE} WHERE f.licence = ?`).get(licence));
+  // Match on any licence number across all issuers.
+  findByLicence(number) {
+    return hydrate(db.prepare(`
+      ${BASE}
+      JOIN licences l ON l.person_id = p.id
+      WHERE l.number = ?
+    `).get(number));
   },
 
   // Add a fencer profile to an existing person.
-  create(personId, { licence, weapons, handedness, ranking, points } = {}) {
+  create(personId, { weapons, handedness } = {}) {
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO fencers (person_id, licence, weapons, handedness, ranking, points)
-      VALUES (@person_id, @licence, @weapons, @handedness, @ranking, @points)
+      INSERT INTO fencers (person_id, weapons, handedness)
+      VALUES (@person_id, @weapons, @handedness)
     `).run({
       person_id:  Number(personId),
-      licence:    licence    || null,
       weapons:    serializeWeapons(weapons),
       handedness: handedness || null,
-      ranking:    ranking != null ? Number(ranking) : null,
-      points:     points  != null ? Number(points)  : null,
     });
     return this.findById(lastInsertRowid);
   },
@@ -81,16 +83,12 @@ const Fencer = {
     const m = { ...current, ...fields };
     db.prepare(`
       UPDATE fencers
-      SET licence = @licence, weapons = @weapons,
-          handedness = @handedness, ranking = @ranking, points = @points
+      SET weapons = @weapons, handedness = @handedness
       WHERE id = @id
     `).run({
       id:         Number(fencerId),
-      licence:    m.licence    || null,
       weapons:    serializeWeapons(m.weapons),
       handedness: m.handedness || null,
-      ranking:    m.ranking != null ? Number(m.ranking) : null,
-      points:     m.points  != null ? Number(m.points)  : null,
     });
     return this.findById(fencerId);
   },

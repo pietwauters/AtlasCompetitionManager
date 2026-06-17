@@ -146,14 +146,14 @@ const Phase = {
     // All competitors in this phase, including their pool_number for level-pool ranking
     const competitorRows = db.prepare(`
       SELECT DISTINCT pc.competitor_id, c.initial_seed,
-        p.first_name, p.last_name, cl.name AS club_name, p.nationality,
+        c.first_name, c.last_name, c.nationality,
+        cl.name AS club_name,
         ph.pool_number
       FROM pool_competitors pc
       JOIN pools ph ON ph.id = pc.pool_id AND ph.phase_id = ?
       JOIN competitors c ON c.id = pc.competitor_id
-      JOIN fencers f ON f.id = c.fencer_id
-      JOIN people p ON p.id = f.person_id
-      LEFT JOIN clubs cl ON cl.id = p.club_id
+      LEFT JOIN people p  ON p.id  = c.person_id
+      LEFT JOIN clubs  cl ON cl.id = p.club_id
     `).all(phaseId);
 
     // All finished bouts

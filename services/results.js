@@ -21,17 +21,15 @@ function getCompetitionResults(compId) {
     const bouts = db.prepare(`
       SELECT b.de_round, b.tableau_position, b.status, b.bracket,
              b.left_id, b.right_id, b.winner_id, b.place_rank,
-             lp.first_name AS lf, lp.last_name AS ll, lcl.name AS lclub,
-             rp.first_name AS rf, rp.last_name AS rl, rcl.name AS rclub
+             lc.first_name AS lf, lc.last_name AS ll, lcl.name AS lclub,
+             rc.first_name AS rf, rc.last_name AS rl, rcl.name AS rclub
       FROM bouts b
       LEFT JOIN competitors lc  ON lc.id  = b.left_id
-      LEFT JOIN fencers     lf2 ON lf2.id = lc.fencer_id
-      LEFT JOIN people      lp  ON lp.id  = lf2.person_id
-      LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+      LEFT JOIN people      lpl ON lpl.id = lc.person_id
+      LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
       LEFT JOIN competitors rc  ON rc.id  = b.right_id
-      LEFT JOIN fencers     rf2 ON rf2.id = rc.fencer_id
-      LEFT JOIN people      rp  ON rp.id  = rf2.person_id
-      LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      LEFT JOIN people      rpl ON rpl.id = rc.person_id
+      LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
       WHERE b.phase_id = ?
       ORDER BY b.de_round, b.tableau_position
     `).all(dePhase.id);
@@ -204,11 +202,10 @@ function getCompetitionResults(compId) {
 
     const fetchPoolRows = (phaseId, onlyEliminated) => db.prepare(`
       SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
-             p.first_name, p.last_name, cl.name AS club_name
+             c.first_name, c.last_name, cl.name AS club_name
       FROM rankings r
       JOIN competitors c  ON c.id  = r.competitor_id
-      JOIN fencers     f  ON f.id  = c.fencer_id
-      JOIN people      p  ON p.id  = f.person_id
+      LEFT JOIN people p  ON p.id  = c.person_id
       LEFT JOIN clubs  cl ON cl.id = p.club_id
       WHERE r.phase_id = ? ${onlyEliminated ? 'AND r.advanced = 0' : ''}
       ORDER BY r.position

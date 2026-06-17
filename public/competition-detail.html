@@ -343,18 +343,18 @@
           <th @click="eligSort('rank')" style="cursor:pointer;user-select:none">Ranking <span x-text="eligSortIcon('rank')"></span></th>
         </tr></thead>
         <tbody>
-          <template x-for="f in filteredEligible" :key="f.fencer_id">
+          <template x-for="f in filteredEligible" :key="f.person_id">
             <tr :class="'elig-row'+(f.is_registered?' registered':'')">
               <td>
                 <template x-if="!f.is_registered">
-                  <input type="checkbox" :checked="selectedIds.includes(f.fencer_id)" @change="toggleSelect(f.fencer_id,$event.target.checked)">
+                  <input type="checkbox" :checked="selectedIds.includes(f.person_id)" @change="toggleSelect(f.person_id,$event.target.checked)">
                 </template>
                 <span class="badge badge-registered" x-show="f.is_registered">✓ added</span>
               </td>
               <td x-text="f.last_name+', '+f.first_name"></td>
               <td x-text="f.club_name||'—'"></td>
               <td x-text="f.age||calcAge(f.date_of_birth)"></td>
-              <td x-text="f.ranking||'—'"></td>
+              <td x-text="f.initial_seed||'—'"></td>
             </tr>
           </template>
           <tr x-show="filteredEligible.length===0">
@@ -395,7 +395,7 @@ function app() {
         if (k==='name')  { av=a.last_name+a.first_name; bv=b.last_name+b.first_name; }
         else if (k==='club') { av=a.club_name||''; bv=b.club_name||''; }
         else if (k==='age')  { av=a.age||999; bv=b.age||999; }
-        else                 { av=a.ranking||9999; bv=b.ranking||9999; }
+        else                 { av=a.initial_seed||9999; bv=b.initial_seed||9999; }
         return av<bv ? -d : av>bv ? d : 0;
       });
     },
@@ -428,7 +428,7 @@ function app() {
 
     async addSelected() {
       if(!this.selectedIds.length)return;
-      const r=await fetch('/api/competitions/'+compId+'/competitors/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fencer_ids:this.selectedIds})});
+      const r=await fetch('/api/competitions/'+compId+'/competitors/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_ids:this.selectedIds})});
       const data=await r.json();
       if(!r.ok){this.showNotice(data.error||'Add failed',true);return;}
       this.showNotice('Added '+data.added+' fencer(s)');
@@ -468,8 +468,8 @@ function app() {
     },
 
     toggleSelect(id,checked){ if(checked){if(!this.selectedIds.includes(id))this.selectedIds.push(id);}else{this.selectedIds=this.selectedIds.filter(x=>x!==id);} },
-    toggleSelectAll(checked){ this.selectedIds=checked?this.filteredEligible.filter(f=>!f.is_registered).map(f=>f.fencer_id):[]; },
-    allEligibleSelected() { const u=this.filteredEligible.filter(f=>!f.is_registered); return u.length>0&&u.every(f=>this.selectedIds.includes(f.fencer_id)); },
+    toggleSelectAll(checked){ this.selectedIds=checked?this.filteredEligible.filter(f=>!f.is_registered).map(f=>f.person_id):[]; },
+    allEligibleSelected() { const u=this.filteredEligible.filter(f=>!f.is_registered); return u.length>0&&u.every(f=>this.selectedIds.includes(f.person_id)); },
     calcAge(dob){ if(!dob)return'—'; return new Date().getFullYear()-new Date(dob).getFullYear(); },
     async loadPhases() {
       this.phases = await fetch('/api/competitions/'+compId+'/phases').then(r=>r.json()).catch(()=>[]);

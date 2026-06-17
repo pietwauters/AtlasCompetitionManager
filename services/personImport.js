@@ -7,16 +7,25 @@ const Csv    = require('./csv');
 
 // Expected CSV columns (first_name and last_name are required; all others optional):
 //   first_name, last_name, date_of_birth, gender, nationality,
-//   club, licence, weapons, handedness, ranking
+//   club, licence, weapons, handedness
+//
+// licence is stored in the licences table with issuer='national'.
+// Rankings are managed separately via fencer_rankings (not part of CSV import).
 //
 // Conflict detection (determines update vs. create):
-//   1. If licence is provided → match on licence
+//   1. If licence is provided → match on licence number
 //   2. Otherwise             → match on first_name + last_name + date_of_birth
 
 function parseWeaponsFromCsv(raw) {
   if (!raw || !raw.trim()) return null;
   return raw.split(',').map(w => w.trim()).filter(Boolean);
 }
+
+const upsertLicence = db.prepare(`
+  INSERT INTO licences (person_id, issuer, issuer_type, number)
+  VALUES (?, 'national', 'national', ?)
+  ON CONFLICT(person_id, issuer) DO UPDATE SET number = excluded.number
+`);
 
 function importRow(row) {
   let club_id = null;
@@ -34,21 +43,21 @@ function importRow(row) {
   };
 
   const fencerData = {
-    licence:    row.licence?.trim()    || null,
     weapons:    parseWeaponsFromCsv(row.weapons),
     handedness: row.handedness?.trim() || null,
-    ranking:    row.ranking ? parseInt(row.ranking, 10) || null : null,
-    points:     row.points  ? parseInt(row.points,  10) || null : null,
   };
+
+  const licence = row.licence?.trim() || null;
 
   // --- Try to find existing record ---
 
   // Match by licence (most reliable)
-  if (fencerData.licence) {
-    const existing = Fencer.findByLicence(fencerData.licence);
+  if (licence) {
+    const existing = Fencer.findByLicence(licence);
     if (existing) {
       Person.update(existing.id, personData);
       Fencer.update(existing.fencer_id, fencerData);
+      upsertLicence.run(existing.id, licence);
       return 'updated';
     }
   }
@@ -66,12 +75,14 @@ function importRow(row) {
     const existingFencer = Fencer.findByPersonId(byName.id);
     if (existingFencer) Fencer.update(existingFencer.fencer_id, fencerData);
     else                Fencer.create(byName.id, fencerData);
+    if (licence) upsertLicence.run(byName.id, licence);
     return 'updated';
   }
 
   // Create new person + fencer profile
   const person = Person.create(personData);
   Fencer.create(person.id, fencerData);
+  if (licence) upsertLicence.run(person.id, licence);
   return 'created';
 }
 

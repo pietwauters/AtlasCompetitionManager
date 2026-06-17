@@ -391,11 +391,11 @@ const Pipeline = {
     if (slot.type === 'pool') {
       const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
-          lp.first_name AS left_first,  lp.last_name  AS left_last,
-          lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-          rp.first_name AS right_first, rp.last_name  AS right_last,
-          rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
+          lc.first_name AS left_first,  lc.last_name  AS left_last,
+          lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+          rc.first_name AS right_first, rc.last_name  AS right_last,
+          rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
           po.pool_number,
           ph.phase_order,
           co.name AS competition_name, co.weapon
@@ -404,13 +404,11 @@ const Pipeline = {
         JOIN phases     ph  ON ph.id  = po.phase_id
         JOIN competitions co ON co.id = ph.competition_id
         LEFT JOIN competitors lc  ON lc.id  = b.left_id
-        LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
-        LEFT JOIN people      lp  ON lp.id  = lf.person_id
-        LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+        LEFT JOIN people      lpl ON lpl.id = lc.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
         LEFT JOIN competitors rc  ON rc.id  = b.right_id
-        LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
-        LEFT JOIN people      rp  ON rp.id  = rf.person_id
-        LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+        LEFT JOIN people      rpl ON rpl.id = rc.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
         LEFT JOIN pools       po2 ON po2.id = b.pool_id
         LEFT JOIN referees    ref ON ref.id  = po2.referee_id
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
@@ -445,11 +443,11 @@ const Pipeline = {
     return db.prepare(`
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
-        lp.first_name AS left_first,  lp.last_name  AS left_last,
-        lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-        rp.first_name AS right_first, rp.last_name  AS right_last,
-        rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-        ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
+        lc.first_name AS left_first,  lc.last_name  AS left_last,
+        lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+        rc.first_name AS right_first, rc.last_name  AS right_last,
+        rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+        ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
         ph.phase_order,
         co.name AS competition_name, co.weapon
       FROM bouts b
@@ -457,13 +455,11 @@ const Pipeline = {
       JOIN phases     ph  ON ph.id  = b.phase_id
       JOIN competitions co ON co.id = ph.competition_id
       LEFT JOIN competitors lc  ON lc.id  = b.left_id
-      LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
-      LEFT JOIN people      lp  ON lp.id  = lf.person_id
-      LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+      LEFT JOIN people      lpl ON lpl.id = lc.person_id
+      LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
       LEFT JOIN competitors rc  ON rc.id  = b.right_id
-      LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
-      LEFT JOIN people      rp  ON rp.id  = rf.person_id
-      LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      LEFT JOIN people      rpl ON rpl.id = rc.person_id
+      LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
       LEFT JOIN phases      ph2 ON ph2.id = b.phase_id
       LEFT JOIN referees    ref ON ref.id  = ph2.competition_id  -- placeholder; DE ref TBD
       LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
@@ -516,11 +512,11 @@ const Pipeline = {
     if (slot.type === 'pool') {
       const POOL_JOIN = `
         SELECT b.*, b.id AS bout_id,
-          lp.first_name AS left_first,  lp.last_name  AS left_last,
-          lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-          rp.first_name AS right_first, rp.last_name  AS right_last,
-          rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last, ref_p.nationality AS ref_nation,
+          lc.first_name AS left_first,  lc.last_name  AS left_last,
+          lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+          rc.first_name AS right_first, rc.last_name  AS right_last,
+          rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+          ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
           po.pool_number, ph.phase_order,
           co.name AS competition_name, co.weapon
         FROM bouts b
@@ -528,13 +524,11 @@ const Pipeline = {
         JOIN phases     ph  ON ph.id  = po.phase_id
         JOIN competitions co ON co.id = ph.competition_id
         LEFT JOIN competitors lc  ON lc.id  = b.left_id
-        LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
-        LEFT JOIN people      lp  ON lp.id  = lf.person_id
-        LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+        LEFT JOIN people      lpl ON lpl.id = lc.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
         LEFT JOIN competitors rc  ON rc.id  = b.right_id
-        LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
-        LEFT JOIN people      rp  ON rp.id  = rf.person_id
-        LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+        LEFT JOIN people      rpl ON rpl.id = rc.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
         LEFT JOIN pools       po2 ON po2.id = b.pool_id
         LEFT JOIN referees    ref ON ref.id  = po2.referee_id
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
@@ -558,23 +552,21 @@ const Pipeline = {
     return db.prepare(`
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
-        lp.first_name AS left_first,  lp.last_name  AS left_last,
-        lp.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-        rp.first_name AS right_first, rp.last_name  AS right_last,
-        rp.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+        lc.first_name AS left_first,  lc.last_name  AS left_last,
+        lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+        rc.first_name AS right_first, rc.last_name  AS right_last,
+        rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
         ph.phase_order, co.name AS competition_name, co.weapon
       FROM bouts b
       JOIN ordered o ON o.id = b.id
       JOIN phases ph ON ph.id = b.phase_id
       JOIN competitions co ON co.id = ph.competition_id
       LEFT JOIN competitors lc  ON lc.id  = b.left_id
-      LEFT JOIN fencers     lf  ON lf.id  = lc.fencer_id
-      LEFT JOIN people      lp  ON lp.id  = lf.person_id
-      LEFT JOIN clubs       lcl ON lcl.id = lp.club_id
+      LEFT JOIN people      lpl ON lpl.id = lc.person_id
+      LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
       LEFT JOIN competitors rc  ON rc.id  = b.right_id
-      LEFT JOIN fencers     rf  ON rf.id  = rc.fencer_id
-      LEFT JOIN people      rp  ON rp.id  = rf.person_id
-      LEFT JOIN clubs       rcl ON rcl.id = rp.club_id
+      LEFT JOIN people      rpl ON rpl.id = rc.person_id
+      LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
       WHERE b.phase_id = ? AND b.de_round = ?
         AND o.round_index BETWEEN ? AND ?
         AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)

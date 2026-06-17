@@ -3,7 +3,7 @@ const db = require('../db');
 
 const BASE = `
   SELECT
-    r.id AS referee_id, r.licence, r.level,
+    r.id AS referee_id, r.level,
     p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
     p.nationality, p.club_id, c.name AS club_name
   FROM referees r
@@ -25,11 +25,11 @@ const Referee = {
   },
 
   // Add a referee profile to an existing person.
-  create(personId, { licence, level } = {}) {
+  create(personId, { level } = {}) {
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO referees (person_id, licence, level)
-      VALUES (@person_id, @licence, @level)
-    `).run({ person_id: Number(personId), licence: licence || null, level: level || null });
+      INSERT INTO referees (person_id, level)
+      VALUES (@person_id, @level)
+    `).run({ person_id: Number(personId), level: level || null });
     return this.findById(lastInsertRowid);
   },
 
@@ -38,8 +38,8 @@ const Referee = {
     if (!current) return null;
     const m = { ...current, ...fields };
     db.prepare(`
-      UPDATE referees SET licence = @licence, level = @level WHERE id = @id
-    `).run({ id: Number(refereeId), licence: m.licence || null, level: m.level || null });
+      UPDATE referees SET level = @level WHERE id = @id
+    `).run({ id: Number(refereeId), level: m.level || null });
     return this.findById(refereeId);
   },
 

@@ -2,43 +2,38 @@
 const db          = require('../db');
 const Competition = require('./competitions');
 
-function parseWeapons(raw) {
-  if (!raw) return [];
-  try { return JSON.parse(raw); } catch { return [raw]; }
-}
-
-// Full competitor row with person + fencer data.
+// Full competitor row. Person data lives directly on competitors (snapshot model).
+// In Mode 2 (DB-driven), person_id is set and club comes via the people join.
+// In Mode 1 (FIE XML / file-based), person_id is NULL and club_name is always NULL.
 const BASE = `
   SELECT
-    comp.id AS competitor_id, comp.initial_seed, comp.status AS competitor_status,
+    comp.id AS competitor_id, comp.competition_id,
+    comp.initial_seed, comp.status AS competitor_status,
     comp.checked_in, comp.final_rank, comp.eliminated_after,
-    f.id AS fencer_id, f.licence, f.weapons, f.handedness, f.ranking,
-    p.id, p.first_name, p.last_name, p.date_of_birth, p.gender, p.nationality, p.club_id,
-    c.name AS club_name
+    comp.first_name, comp.last_name, comp.date_of_birth,
+    comp.gender, comp.nationality, comp.handedness,
+    comp.fie_id, comp.fie_licence,
+    comp.seeding_points, comp.seeding_position, comp.seeding_issuer,
+    comp.person_id,
+    cl.name AS club_name
   FROM competitors comp
-  JOIN fencers f ON f.id = comp.fencer_id
-  JOIN people  p ON p.id = f.person_id
-  LEFT JOIN clubs c ON c.id = p.club_id
+  LEFT JOIN people p  ON p.id  = comp.person_id
+  LEFT JOIN clubs  cl ON cl.id = p.club_id
 `;
-
-function hydrate(row) {
-  if (!row) return null;
-  return { ...row, weapons: parseWeapons(row.weapons) };
-}
 
 const Competitor = {
   findAll(competitionId) {
     return db.prepare(`${BASE} WHERE comp.competition_id = ?
-      ORDER BY comp.initial_seed ASC, p.last_name, p.first_name`)
-      .all(competitionId).map(hydrate);
+      ORDER BY comp.initial_seed ASC, comp.last_name, comp.first_name`)
+      .all(competitionId);
   },
 
   findById(competitorId) {
-    return hydrate(db.prepare(`${BASE} WHERE comp.id = ?`).get(competitorId));
+    return db.prepare(`${BASE} WHERE comp.id = ?`).get(competitorId) || null;
   },
 
-  // All fencers eligible for a competition (filtered by gender, weapon, age).
-  // Returns every fencer with is_registered flag — caller decides what to show.
+  // All fencers from the local roster eligible for a competition
+  // (filtered by gender, weapon, age). Returns fencer rows with is_registered flag.
   findEligible(competitionId) {
     const comp = Competition.findById(competitionId);
     if (!comp) return [];
@@ -49,8 +44,8 @@ const Competitor = {
 
     return db.prepare(`
       SELECT
-        f.id AS fencer_id, f.licence, f.weapons, f.handedness, f.ranking,
-        p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
+        f.id AS fencer_id, f.weapons, f.handedness,
+        p.id AS person_id, p.first_name, p.last_name, p.date_of_birth, p.gender,
         p.nationality, p.club_id, c.name AS club_name,
         CASE WHEN comp.id IS NOT NULL THEN 1 ELSE 0 END AS is_registered,
         comp.id AS competitor_id, comp.initial_seed,
@@ -61,15 +56,11 @@ const Competitor = {
       JOIN people p ON p.id = f.person_id
       LEFT JOIN clubs c ON c.id = p.club_id
       LEFT JOIN competitors comp
-        ON comp.fencer_id = f.id AND comp.competition_id = @comp_id
+        ON comp.person_id = p.id AND comp.competition_id = @comp_id
       WHERE
-        -- Gender: X (mixed) competitions accept anyone
         (@gender = 'X' OR p.gender IS NULL OR p.gender = @gender OR p.gender = 'X')
-        -- Weapon: include fencers with no weapon set (field is optional)
         AND (f.weapons IS NULL OR f.weapons = '[]'
              OR instr(f.weapons, '"' || @weapon || '"') > 0)
-        -- Age eligibility: fencer qualifies for at least one of the competition's
-        -- age categories; if none are defined, all ages are eligible.
         AND (
           p.date_of_birth IS NULL
           OR NOT EXISTS (
@@ -86,34 +77,52 @@ const Competitor = {
           )
         )
       ORDER BY p.last_name, p.first_name
-    `).all({ comp_id: competitionId, gender: comp.gender, weapon: comp.weapon, year: compYear })
-      .map(hydrate);
+    `).all({ comp_id: competitionId, gender: comp.gender, weapon: comp.weapon, year: compYear });
   },
 
-  add(competitionId, fencerId, initialSeed = null) {
+  // Mode 2 (DB-driven): enrol a person from the local roster.
+  // Copies person snapshot from people+fencers into competitors.
+  add(competitionId, personId, initialSeed = null) {
+    const person = db.prepare(`
+      SELECT p.*, f.handedness
+      FROM people p
+      LEFT JOIN fencers f ON f.person_id = p.id
+      WHERE p.id = ?
+    `).get(personId);
+    if (!person) throw Object.assign(new Error('Person not found.'), { status: 404 });
+
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO competitors (competition_id, fencer_id, initial_seed, status)
-      VALUES (@competition_id, @fencer_id, @initial_seed, 'active')
-    `).run({ competition_id: Number(competitionId), fencer_id: Number(fencerId),
-             initial_seed: initialSeed });
+      INSERT INTO competitors
+        (competition_id, person_id, last_name, first_name, date_of_birth,
+         gender, nationality, handedness, initial_seed, status)
+      VALUES
+        (@competition_id, @person_id, @last_name, @first_name, @date_of_birth,
+         @gender, @nationality, @handedness, @initial_seed, 'active')
+    `).run({
+      competition_id: Number(competitionId),
+      person_id:      Number(personId),
+      last_name:      person.last_name  || null,
+      first_name:     person.first_name || null,
+      date_of_birth:  person.date_of_birth || null,
+      gender:         person.gender || null,
+      nationality:    person.nationality || null,
+      handedness:     person.handedness || null,
+      initial_seed:   initialSeed,
+    });
     return this.findById(lastInsertRowid);
   },
 
-  // Add multiple fencers at once. Skips fencers already registered.
-  bulkAdd(competitionId, fencerIds) {
+  // Add multiple people from the roster at once. Skips already-registered people.
+  bulkAdd(competitionId, personIds) {
     const existing = new Set(
-      db.prepare('SELECT fencer_id FROM competitors WHERE competition_id = ?')
-        .all(competitionId).map(r => r.fencer_id)
+      db.prepare('SELECT person_id FROM competitors WHERE competition_id = ? AND person_id IS NOT NULL')
+        .all(competitionId).map(r => r.person_id)
     );
-    const insert = db.prepare(`
-      INSERT INTO competitors (competition_id, fencer_id, status)
-      VALUES (@competition_id, @fencer_id, 'active')
-    `);
     const run = db.transaction(() => {
       let added = 0;
-      for (const fid of fencerIds) {
-        if (!existing.has(Number(fid))) {
-          insert.run({ competition_id: Number(competitionId), fencer_id: Number(fid) });
+      for (const pid of personIds) {
+        if (!existing.has(Number(pid))) {
+          this.add(competitionId, pid);
           added++;
         }
       }
@@ -141,27 +150,21 @@ const Competitor = {
     return db.prepare('DELETE FROM competitors WHERE id = ?').run(competitorId);
   },
 
-  // Assign seeds 1..N sorted by fencer ranking ASC (1 = best), then name.
-  // ranking = position on the national/club list; lower is better.
-  // Fencers without a ranking go last. points is not used for seeding (yet).
+  // Assign seeds 1..N sorted by seeding_position ASC (lower = better), then name.
+  // Competitors without a seeding_position go last.
   autoSeed(competitionId) {
     const rows = db.prepare(`
-      SELECT comp.id, f.ranking, p.last_name, p.first_name
-      FROM competitors comp
-      JOIN fencers f ON f.id = comp.fencer_id
-      JOIN people  p ON p.id = f.person_id
-      WHERE comp.competition_id = ? AND comp.status = 'active'
-      ORDER BY CASE WHEN f.ranking IS NULL THEN 1 ELSE 0 END,
-               f.ranking ASC, p.last_name, p.first_name
+      SELECT id, seeding_position, last_name, first_name
+      FROM competitors
+      WHERE competition_id = ? AND status = 'active'
+      ORDER BY CASE WHEN seeding_position IS NULL THEN 1 ELSE 0 END,
+               seeding_position ASC, last_name, first_name
     `).all(competitionId);
 
-    const update = db.prepare(
-      'UPDATE competitors SET initial_seed = ? WHERE id = ?'
-    );
-    const run = db.transaction(() => {
+    const update = db.prepare('UPDATE competitors SET initial_seed = ? WHERE id = ?');
+    db.transaction(() => {
       rows.forEach((r, i) => update.run(i + 1, r.id));
-    });
-    run();
+    })();
     return rows.length;
   },
 };

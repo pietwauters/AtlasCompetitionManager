@@ -54,12 +54,12 @@ const Person = {
     if (!person) return null;
 
     const fencer = db.prepare(
-      'SELECT id, licence, weapons, handedness, ranking FROM fencers WHERE person_id = ?'
+      'SELECT id, weapons, handedness, fie_statut FROM fencers WHERE person_id = ?'
     ).get(id);
     if (fencer) fencer.weapons = parseWeapons(fencer.weapons);
 
     const referee = db.prepare(
-      'SELECT id, licence, level FROM referees WHERE person_id = ?'
+      'SELECT id, level FROM referees WHERE person_id = ?'
     ).get(id);
 
     return { ...person, fencer: fencer || null, referee: referee || null };
