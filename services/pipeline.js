@@ -91,8 +91,11 @@ const Pipeline = {
           ELSE NULL  -- computed in JS for DE slots (depends on partition)
         END AS bout_count,
         COALESCE(ps.minutes_per_bout,
-          (SELECT ds.minutes_per_bout FROM bout_duration_standards ds
-           WHERE ds.weapon = co.weapon
+          (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
+                       THEN ds.observed_average
+                       ELSE ds.minutes_per_bout END
+           FROM bout_duration_standards ds
+           WHERE ds.weapon = co.weapon AND ds.gender = co.gender
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps
@@ -126,8 +129,11 @@ const Pipeline = {
           ELSE NULL
         END AS bout_count,
         COALESCE(ps.minutes_per_bout,
-          (SELECT ds.minutes_per_bout FROM bout_duration_standards ds
-           WHERE ds.weapon = co.weapon
+          (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
+                       THEN ds.observed_average
+                       ELSE ds.minutes_per_bout END
+           FROM bout_duration_standards ds
+           WHERE ds.weapon = co.weapon AND ds.gender = co.gender
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps

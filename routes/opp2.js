@@ -1,11 +1,12 @@
 'use strict';
-const express     = require('express');
-const OPP2        = require('../lib/opp2Client');
-const Settings    = require('../services/settings');
-const Pipeline    = require('../services/pipeline');
-const CardReason  = require('../services/cardReasons');
-const SSE         = require('../lib/sse');
-const auth        = require('../middleware/auth');
+const express                = require('express');
+const OPP2                   = require('../lib/opp2Client');
+const Settings               = require('../services/settings');
+const Pipeline               = require('../services/pipeline');
+const CardReason             = require('../services/cardReasons');
+const BoutDurationStandards  = require('../services/boutDurationStandards');
+const SSE                    = require('../lib/sse');
+const auth                   = require('../middleware/auth');
 
 const adminOnly = auth.require('admin');
 
@@ -116,6 +117,30 @@ router.delete('/pipeline/slots/:id', (req, res) => {
 // Card reasons for the current bout on a piste (read by the scoresheet page)
 router.get('/piste/:pisteId/card-reasons', (req, res) => {
   res.json(CardReason.findByPiste(req.params.pisteId));
+});
+
+// Bout duration standards (defaults + observed averages)
+router.get('/bout-standards', (req, res) => {
+  res.json(BoutDurationStandards.getAll());
+});
+
+router.patch('/bout-standards/:weapon/:gender/:phase_type', adminOnly, (req, res) => {
+  const { weapon, gender, phase_type } = req.params;
+  const { minutes_per_bout } = req.body;
+  if (!minutes_per_bout || minutes_per_bout < 1)
+    return res.status(400).json({ error: 'minutes_per_bout must be >= 1' });
+  const db = require('../db');
+  db.prepare(`
+    UPDATE bout_duration_standards SET minutes_per_bout = ?
+    WHERE weapon = ? AND gender = ? AND phase_type = ?
+  `).run(minutes_per_bout, weapon, gender, phase_type);
+  res.json({ ok: true });
+});
+
+router.post('/bout-standards/:weapon/:gender/:phase_type/reset', adminOnly, (req, res) => {
+  const { weapon, gender, phase_type } = req.params;
+  BoutDurationStandards.resetObserved(weapon, gender, phase_type);
+  res.json({ ok: true });
 });
 
 module.exports = router;
