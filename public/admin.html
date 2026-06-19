@@ -131,6 +131,58 @@
     </p>
   </div>
 
+  <!-- ── Bout timing defaults ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2 style="margin:0 0 .4rem">Bout Timing Defaults</h2>
+    <p style="font-size:.82rem;color:#6b7280;margin:0 0 1rem">
+      Used to compute predicted end times in the piste schedule.
+      Observed average activates after 4 bouts and overrides the configured default automatically.
+    </p>
+
+    <template x-for="weapon in ['F','E','S']" :key="weapon">
+      <div style="margin-bottom:1.25rem">
+        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:.4rem"
+             x-text="{'F':'Foil','E':'Épée','S':'Sabre'}[weapon]"></div>
+        <table class="table" style="width:100%">
+          <thead>
+            <tr>
+              <th style="width:5rem">Gender</th>
+              <th>Pool default (min/bout)</th>
+              <th style="color:#1a6bab">Pool observed</th>
+              <th>DE default (min/bout)</th>
+              <th style="color:#1a6bab">DE observed</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="gender in ['M','F','X']" :key="gender">
+              <tr>
+                <td style="font-weight:600" x-text="{'M':'Men','F':'Women','X':'Mixed'}[gender]"></td>
+                <td>
+                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
+                    :value="getStd(weapon,gender,'pool')?.minutes_per_bout"
+                    @change="saveDefault(weapon,gender,'pool',+$event.target.value)">
+                </td>
+                <td style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'pool')"></td>
+                <td>
+                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
+                    :value="getStd(weapon,gender,'de')?.minutes_per_bout"
+                    @change="saveDefault(weapon,gender,'de',+$event.target.value)">
+                </td>
+                <td style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'de')"></td>
+                <td style="text-align:right">
+                  <button style="font-size:.78rem;padding:.25rem .6rem"
+                          x-show="hasObserved(weapon,gender)"
+                          @click="resetObserved(weapon,gender)">Reset averages</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+
   <!-- ── Create user modal ───────────────────────────────────────────────── -->
   <div x-show="createModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
        display:flex;align-items:center;justify-content:center" @click.self="createModal.open=false">
@@ -200,6 +252,7 @@ function app() {
     tieBreakMethod:  'alphabetical',
     manualTieBreak:  false,
     users:          [],
+    boutStandards:  [],
     createModal:    { open: false, username: '', role: 'director' },
     pinModal:       { open: false, pin: '', label: '' },
     qrModal:        { open: false, user: null },
@@ -213,7 +266,7 @@ function app() {
       this.autoNextOnEnd  = s.auto_next_on_end || false;
       this.tieBreakMethod = cs.tie_break_method || 'alphabetical';
       this.manualTieBreak = cs.manual_tie_break === '1';
-      await Promise.all([ this.loadStatus(), this.loadUsers() ]);
+      await Promise.all([ this.loadStatus(), this.loadUsers(), this.loadBoutStandards() ]);
       setInterval(() => this.loadStatus(), 5000);
     },
 
@@ -373,6 +426,44 @@ function app() {
     fmtDate(iso) {
       const d = new Date(iso);
       return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+
+    async loadBoutStandards() {
+      this.boutStandards = await fetch('/api/opp2/bout-standards').then(r => r.json()).catch(() => []);
+    },
+
+    getStd(weapon, gender, phaseType) {
+      return this.boutStandards.find(s => s.weapon === weapon && s.gender === gender && s.phase_type === phaseType) || null;
+    },
+
+    fmtObserved(weapon, gender, phaseType) {
+      const s = this.getStd(weapon, gender, phaseType);
+      if (!s || !s.sample_count) return '—';
+      const avg = s.observed_average != null ? s.observed_average.toFixed(1) + ' min' : '—';
+      return `${avg} (n=${s.sample_count})`;
+    },
+
+    hasObserved(weapon, gender) {
+      return ['pool','de'].some(pt => (this.getStd(weapon, gender, pt)?.sample_count || 0) > 0);
+    },
+
+    async saveDefault(weapon, gender, phaseType, minutes) {
+      if (!minutes || minutes < 1) return;
+      const r = await fetch(`/api/opp2/bout-standards/${weapon}/${gender}/${phaseType}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes_per_bout: minutes }),
+      });
+      if (!r.ok) { this.showNotice('Save failed', true); return; }
+      await this.loadBoutStandards();
+      this.showNotice('Default saved');
+    },
+
+    async resetObserved(weapon, gender) {
+      for (const pt of ['pool', 'de']) {
+        await fetch(`/api/opp2/bout-standards/${weapon}/${gender}/${pt}/reset`, { method: 'POST' });
+      }
+      await this.loadBoutStandards();
+      this.showNotice('Observed averages reset');
     },
 
     showNotice(text, error = false) {
