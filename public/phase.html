@@ -31,6 +31,8 @@
     .elim{color:#c0392b}
     .vr{font-family:monospace}
     select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
+    .modal-box{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:1.5rem;width:min(400px,90vw);max-height:90vh;overflow-y:auto}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -114,28 +116,30 @@
   </div>
 
   <!-- Assign strip/referee modal -->
-  <div class="card" x-show="assignOpen" style="max-width:400px">
-    <h3 style="margin-top:0">Assign resources — Pool <span x-text="assignPool?.pool_number"></span></h3>
-    <div style="display:flex;flex-direction:column;gap:.6rem">
-      <label style="font-size:.85rem">Strip
-        <select x-model="assignStripId">
-          <option value="">— None —</option>
-          <template x-for="s in strips" :key="s.id">
-            <option :value="s.id" x-text="s.name||'Strip '+s.strip_number"></option>
-          </template>
-        </select>
-      </label>
-      <label style="font-size:.85rem">Referee
-        <select x-model="assignRefId">
-          <option value="">— None —</option>
-          <template x-for="r in referees" :key="r.referee_id">
-            <option :value="r.referee_id" x-text="r.last_name+', '+r.first_name"></option>
-          </template>
-        </select>
-      </label>
-      <div style="display:flex;gap:.5rem">
-        <button class="primary" @click="saveAssignment()">Save</button>
-        <button @click="assignOpen=false">Cancel</button>
+  <div class="modal-backdrop" x-show="assignOpen" @click.self="assignOpen=false">
+    <div class="modal-box">
+      <h3 style="margin:0 0 1rem">Assign resources — Pool <span x-text="assignPool?.pool_number"></span></h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        <label style="font-size:.85rem">Strip
+          <select x-model="assignStripId">
+            <option value="">— None —</option>
+            <template x-for="s in strips" :key="s.id">
+              <option :value="s.id" x-text="s.name||'Strip '+s.strip_number"></option>
+            </template>
+          </select>
+        </label>
+        <label style="font-size:.85rem">Referee
+          <select x-model="assignRefId">
+            <option value="">— None —</option>
+            <template x-for="r in referees" :key="r.referee_id">
+              <option :value="r.referee_id" x-text="r.last_name+', '+r.first_name"></option>
+            </template>
+          </select>
+        </label>
+        <div style="display:flex;gap:.5rem">
+          <button class="primary" @click="saveAssignment()">Save</button>
+          <button @click="assignOpen=false">Cancel</button>
+        </div>
       </div>
     </div>
   </div>

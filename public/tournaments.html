@@ -28,6 +28,8 @@
     .notice-ok { background:#d5f5e3; color:#1e5631; }
     .notice-err { background:#fde8e8; color:#922b21; }
     main { max-width: 1200px; }
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; }
+    .modal-box { background:#fff; border-radius:8px; box-shadow:0 8px 32px rgba(0,0,0,.25); padding:1.5rem; width:min(520px,90vw); max-height:90vh; overflow-y:auto; }
     a.comp-link { color:#1a6bab; text-decoration:none; font-weight:600; }
     a.comp-link:hover { text-decoration:underline; }
     .tabs { display:flex; gap:0; border-bottom:2px solid #ddd; margin-bottom:1rem; }
@@ -91,39 +93,41 @@
         </tbody>
       </table>
     </div>
-    <div class="card" x-show="fieImportOpen">
-      <h2>Import FIE XML</h2>
-      <div class="form-grid">
-        <div class="full" style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem">
-          XML file *
-          <input type="file" accept=".xml" @change="fieReadFile($event)" style="padding:.3rem 0;font-size:.9rem">
-          <span x-show="fieForm.fileName" x-text="'Selected: '+fieForm.fileName" style="font-size:.8rem;color:#555"></span>
-        </div>
-        <label>Attach to existing tournament (optional)
-          <select x-model="fieForm.tournamentId">
-            <option value="">— Auto-create from XML —</option>
-            <template x-for="t in tournaments" :key="t.id">
-              <option :value="t.id" x-text="t.name"></option>
-            </template>
-          </select>
-        </label>
-        <div class="form-actions">
-          <button class="primary" @click="submitFieImport()" :disabled="fieImportLoading || !fieForm.xmlText"
-            x-text="fieImportLoading ? 'Importing…' : 'Import'"></button>
-          <button @click="fieImportOpen=false">Cancel</button>
-        </div>
-        <div class="full" x-show="fieImportResult" style="background:#d5f5e3;color:#1e5631;padding:.75rem 1rem;border-radius:5px;font-size:.9rem">
-          <div>
-            <strong x-text="(fieImportResult?.created||0)+' created, '+(fieImportResult?.updated||0)+' updated'"></strong>
-            <span x-show="fieImportResult?.skipped" x-text="' · '+(fieImportResult?.skipped)+' skipped'"></span>
+    <div class="modal-backdrop" x-show="fieImportOpen" @click.self="fieImportOpen=false">
+      <div class="modal-box">
+        <h2 style="margin:0 0 1rem">Import FIE XML</h2>
+        <div class="form-grid">
+          <div class="full" style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem">
+            XML file *
+            <input type="file" accept=".xml" @change="fieReadFile($event)" style="padding:.3rem 0;font-size:.9rem">
+            <span x-show="fieForm.fileName" x-text="'Selected: '+fieForm.fileName" style="font-size:.8rem;color:#555"></span>
           </div>
-          <div x-show="fieImportResult?.warnings?.length" style="margin-top:.4rem;color:#856404">
-            <template x-for="w in (fieImportResult?.warnings||[])" :key="w">
-              <div x-text="w"></div>
-            </template>
+          <label>Attach to existing tournament (optional)
+            <select x-model="fieForm.tournamentId">
+              <option value="">— Auto-create from XML —</option>
+              <template x-for="t in tournaments" :key="t.id">
+                <option :value="t.id" x-text="t.name"></option>
+              </template>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button class="primary" @click="submitFieImport()" :disabled="fieImportLoading || !fieForm.xmlText"
+              x-text="fieImportLoading ? 'Importing…' : 'Import'"></button>
+            <button @click="fieImportOpen=false">Cancel</button>
           </div>
-          <div style="margin-top:.5rem">
-            <a class="comp-link" :href="'/competition-detail.html?id='+fieImportResult?.competition_id">Go to competition →</a>
+          <div class="full" x-show="fieImportResult" style="background:#d5f5e3;color:#1e5631;padding:.75rem 1rem;border-radius:5px;font-size:.9rem">
+            <div>
+              <strong x-text="(fieImportResult?.created||0)+' created, '+(fieImportResult?.updated||0)+' updated'"></strong>
+              <span x-show="fieImportResult?.skipped" x-text="' · '+(fieImportResult?.skipped)+' skipped'"></span>
+            </div>
+            <div x-show="fieImportResult?.warnings?.length" style="margin-top:.4rem;color:#856404">
+              <template x-for="w in (fieImportResult?.warnings||[])" :key="w">
+                <div x-text="w"></div>
+              </template>
+            </div>
+            <div style="margin-top:.5rem">
+              <a class="comp-link" :href="'/competition-detail.html?id='+fieImportResult?.competition_id">Go to competition →</a>
+            </div>
           </div>
         </div>
       </div>
