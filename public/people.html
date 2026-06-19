@@ -41,6 +41,8 @@
                              border-radius: 4px; resize: vertical; }
     .import-hint { font-size: 0.78rem; color: #777; margin-top: 0.25rem; }
     details summary { cursor: pointer; font-weight: 600; color: #1a6bab; user-select: none; }
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
+    .modal-box{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:1.5rem;width:min(560px,90vw);max-height:90vh;overflow-y:auto}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -138,8 +140,9 @@
   </div>
 
   <!-- ── Add / Edit form ────────────────────────────── -->
-  <div class="card" x-show="formOpen">
-    <h2 x-text="form.id ? 'Edit person' : 'Add person'"></h2>
+  <div class="modal-backdrop" x-show="formOpen" @click.self="closeForm()">
+    <div class="modal-box">
+    <h2 x-text="form.id ? 'Edit person' : 'Add person'" style="margin:0 0 1rem"></h2>
 
     <div class="form-grid">
       <div class="section-title">Personal details</div>
@@ -230,6 +233,7 @@
         <button class="primary" @click="savePerson()">Save</button>
         <button @click="closeForm()">Cancel</button>
       </div>
+    </div>
     </div>
   </div>
 

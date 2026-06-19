@@ -132,8 +132,10 @@
         </div>
       </div>
     </div>
-    <div class="card" x-show="compFormOpen">
-      <h2 x-text="compForm.id?'Edit competition':'New competition'"></h2>
+  </div>
+  <div class="modal-backdrop" x-show="compFormOpen" @click.self="compFormOpen=false">
+    <div class="modal-box">
+      <h2 x-text="compForm.id?'Edit competition':'New competition'" style="margin:0 0 1rem"></h2>
       <div class="form-grid">
         <label class="full">Name * <input x-model="compForm.name" placeholder="U17 Foil Men"></label>
         <label>Weapon * <select x-model="compForm.weapon"><option value="">—</option><option value="foil">Foil</option><option value="epee">Épée</option><option value="sabre">Sabre</option></select></label>
@@ -209,8 +211,10 @@
         </div>
       </template>
     </div>
-    <div class="card" x-show="tournFormOpen">
-      <h2 x-text="tournForm.id?'Edit tournament':'New tournament'"></h2>
+  </div>
+  <div class="modal-backdrop" x-show="tournFormOpen" @click.self="tournFormOpen=false">
+    <div class="modal-box">
+      <h2 x-text="tournForm.id?'Edit tournament':'New tournament'" style="margin:0 0 1rem"></h2>
       <div class="form-grid">
         <label class="full">Name * <input x-model="tournForm.name" placeholder="Spring Cup 2026"></label>
         <label>City <input x-model="tournForm.city" placeholder="Brussels"></label>
