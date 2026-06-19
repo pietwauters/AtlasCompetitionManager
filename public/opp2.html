@@ -478,122 +478,192 @@
   <!-- ── Bulk assign modal ────────────────────────────────────────────────── -->
   <div class="modal-backdrop" x-show="bulkModal.open" @click.self="bulkModal.open=false">
     <div class="modal-box">
-      <h2 style="margin:0 0 1rem">Bulk assign pools / DE to pistes</h2>
+      <h2 style="margin:0 0 1rem">Bulk assign to pistes</h2>
 
-      <!-- Step 1: competition + type -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem">
+      <!-- Type tabs -->
+      <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid #ccc;border-radius:6px;overflow:hidden;width:fit-content">
+        <button @click="bulkModal.type='pools';bulkModal.selectedPisteIds=[]"
+                :style="bulkModal.type==='pools' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
+                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer">Pools</button>
+        <button @click="bulkModal.type='de';bulkModal.selectedPisteIds=[]"
+                :style="bulkModal.type==='de' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
+                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid #ccc">DE rounds</button>
+      </div>
+
+      <!-- ── Pools: competition selector ──────────────────────────── -->
+      <div x-show="bulkModal.type === 'pools'" style="margin-bottom:.75rem">
         <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Competition
           <select x-model="bulkModal.competitionId" @change="bulkModal.selectedPisteIds=[]">
-            <option value="">— Select —</option>
+            <option value="">— Select competition —</option>
             <template x-for="c in bulkCompetitions" :key="c.id">
               <option :value="c.id" x-text="c.name"></option>
             </template>
           </select>
         </label>
-        <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Assign
-          <select x-model="bulkModal.type" @change="bulkModal.selectedPisteIds=[]">
-            <option value="pools">All pools</option>
-            <option value="de">DE round</option>
-          </select>
-        </label>
       </div>
 
-      <template x-if="bulkModal.competitionId">
-        <div>
+      <!-- ── DE: phase + starting round + groups ──────────────────── -->
+      <div x-show="bulkModal.type === 'de'" style="margin-bottom:.75rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">
+          <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">DE phase
+            <select x-model="bulkModal.dePhaseId" @change="loadBulkDeRounds($event.target.value)">
+              <option value="">— Select phase —</option>
+              <template x-for="ph in availableDePhases" :key="ph.id">
+                <option :value="ph.id" x-text="ph.competition_name + ' · ' + ph.phase_label"></option>
+              </template>
+            </select>
+          </label>
+          <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Starting round
+            <select x-model="bulkModal.deStartRound" @change="bulkModal.selectedPisteIds=[]"
+                    :disabled="!bulkModal.deRoundsForBulk.length">
+              <option value="">— Select —</option>
+              <template x-for="rd in bulkModal.deRoundsForBulk" :key="rd.de_round">
+                <option :value="rd.de_round"
+                  x-text="'R' + rd.de_round + ' (' + rd.total_bouts + ' bouts)'"></option>
+              </template>
+            </select>
+          </label>
+          <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Division
+            <select x-model.number="bulkModal.deGroups" @change="bulkModal.selectedPisteIds=[]">
+              <option :value="2">Halves (2 pistes)</option>
+              <option :value="4">Quarters (4 pistes)</option>
+              <option :value="8">Eighths (8 pistes)</option>
+            </select>
+          </label>
+        </div>
+      </div>
 
-          <!-- Piste selector -->
-          <div style="margin-bottom:.75rem">
-            <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem;display:flex;align-items:center;gap:.75rem">
-              Target pistes
-              <button @click="bulkSelectAllIdle()" style="font-size:.75rem;padding:.2rem .5rem">Select all idle</button>
-              <button @click="bulkModal.selectedPisteIds=[]" style="font-size:.75rem;padding:.2rem .5rem">Clear</button>
+      <!-- ── Piste selector (common, shown when selection is ready) ── -->
+      <div x-show="bulkReady" style="margin-bottom:.75rem">
+        <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem;display:flex;align-items:center;gap:.75rem">
+          <span x-show="bulkModal.type === 'pools'">Target pistes</span>
+          <span x-show="bulkModal.type === 'de'"
+            x-text="'Select exactly ' + bulkModal.deGroups + ' pistes (one per group)'"></span>
+          <button @click="bulkSelectAllIdle()" style="font-size:.75rem;padding:.2rem .5rem">Select all idle</button>
+          <button @click="bulkModal.selectedPisteIds=[]" style="font-size:.75rem;padding:.2rem .5rem">Clear</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+          <template x-for="s in strips" :key="s.id">
+            <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border:1px solid #ddd;border-radius:5px;cursor:pointer"
+                   :style="bulkModal.selectedPisteIds.includes(s.id) ? 'background:#1a6bab;color:#fff;border-color:#1a6bab' : (pisteIsBusy(s, bulkModal.startTime) ? 'background:#fff8e1' : 'background:#f8f9fb')">
+              <input type="checkbox" style="display:none"
+                :checked="bulkModal.selectedPisteIds.includes(s.id)"
+                @change="toggleBulkPiste(s.id, $event.target.checked)">
+              <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0"
+                    :style="'background:' + (liveState(s.name)?.apparatusOnline ? '#1e8449' : '#ccc')"></span>
+              <span x-text="s.name || 'Piste ' + s.strip_number"></span>
+              <span x-show="pisteIsBusy(s, bulkModal.startTime)" style="font-size:.7rem;opacity:.75">⚠ busy</span>
+            </label>
+          </template>
+        </div>
+        <div x-show="bulkModal.type === 'de' && bulkModal.selectedPisteIds.length > 0 && bulkModal.selectedPisteIds.length < bulkModal.deGroups"
+             style="font-size:.78rem;color:#922b21;margin-top:.3rem"
+             x-text="'Need ' + bulkModal.deGroups + ' pistes — ' + (bulkModal.deGroups - bulkModal.selectedPisteIds.length) + ' more to go'"></div>
+      </div>
+
+      <!-- ── Start time (common) ───────────────────────────────────── -->
+      <div x-show="bulkReady" style="margin-bottom:.6rem;display:flex;align-items:center;gap:.75rem">
+        <label style="font-size:.83rem;display:flex;align-items:center;gap:.4rem">
+          Start time
+          <input type="time" step="300" x-model="bulkModal.startTime"
+                 @change="bulkModal.startTime = round5($event.target.value)"
+                 style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+        </label>
+        <span style="font-size:.78rem;color:#888">Leave blank to assign without times.</span>
+      </div>
+
+      <!-- ── Pools: conflict action ────────────────────────────────── -->
+      <div x-show="bulkModal.type === 'pools' && bulkPreview.some(r => r.conflict)"
+           style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;font-size:.83rem">
+        <strong>⚠ Some selected pistes already have slots.</strong>
+        <div style="margin-top:.3rem;display:flex;gap:1rem">
+          <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+            <input type="radio" x-model="bulkModal.conflictAction" value="append"> Append anyway
+          </label>
+          <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+            <input type="radio" x-model="bulkModal.conflictAction" value="skip"> Skip busy pistes
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Pools: preview table ──────────────────────────────────── -->
+      <div x-show="bulkModal.type === 'pools' && bulkModal.selectedPisteIds.length > 0 && bulkPreview.length > 0"
+           style="margin-bottom:.75rem">
+        <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem">
+          Assignment preview
+          <span style="font-weight:400;color:#888;font-size:.78rem"
+            x-text="' — ' + bulkPreview.filter(r=>r.piste).length + ' of ' + bulkPreview.length + ' pools assigned'"></span>
+        </div>
+        <table class="bulk-table">
+          <thead><tr><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Status</th></tr></thead>
+          <tbody>
+            <template x-for="row in bulkPreview" :key="row.pool.id">
+              <tr :class="!row.piste ? 'bulk-row-unassigned' : (row.conflict ? 'bulk-row-conflict' : '')">
+                <td x-text="row.pool.competition_name + ' — Pool ' + row.pool.pool_number"></td>
+                <td x-text="row.pool.bouts_total + ' bouts'"></td>
+                <td style="color:#888">→</td>
+                <td x-text="row.piste ? (row.piste.name || 'Piste ' + row.piste.strip_number) : '— no piste available'"></td>
+                <td>
+                  <span x-show="!row.piste" style="color:#922b21;font-size:.78rem">unassigned</span>
+                  <span x-show="row.piste && row.conflict" style="color:#856404;font-size:.78rem">
+                    ⚠ busy (<span x-text="row.piste ? pendingSlotCount(row.piste) : 0"></span> slots)
+                  </span>
+                  <span x-show="row.piste && !row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <div x-show="bulkPreview.some(r => !r.piste)" style="font-size:.78rem;color:#922b21;margin-top:.3rem">
+          ⚠ Not enough pistes for all pools — add more pistes or deselect some.
+        </div>
+      </div>
+
+      <!-- ── DE: preview (rounds × groups) ────────────────────────── -->
+      <div x-show="bulkModal.type === 'de' && bulkDePreview.length > 0" style="margin-bottom:.75rem">
+        <div style="font-size:.83rem;font-weight:600;margin-bottom:.5rem">
+          Round assignments
+          <span style="font-weight:400;color:#888;font-size:.78rem"
+            x-text="' — ' + bulkDePreview.length + ' round' + (bulkDePreview.length !== 1 ? 's' : '') + ', ' + (bulkDePreview.length * bulkModal.deGroups) + ' slots total'"></span>
+        </div>
+        <template x-for="row in bulkDePreview" :key="row.de_round">
+          <div style="margin-bottom:.5rem;padding:.5rem .6rem;border:1px solid #dde3ea;border-radius:5px;background:#f8f9fb">
+            <div style="font-size:.8rem;font-weight:600;margin-bottom:.35rem;display:flex;align-items:center;gap:.5rem">
+              <span x-text="'Round ' + row.de_round + ' · ' + row.totalBouts + ' bouts (' + row.boutsPerGroup + '/piste)'"></span>
+              <span x-show="row.scheduledStart" style="font-size:.75rem;color:#1a6bab;font-weight:400"
+                x-text="'→ ' + row.scheduledStart"></span>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:.4rem">
-              <template x-for="s in strips" :key="s.id">
-                <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border:1px solid #ddd;border-radius:5px;cursor:pointer"
-                       :style="bulkModal.selectedPisteIds.includes(s.id) ? 'background:#1a6bab;color:#fff;border-color:#1a6bab' : (pisteIsBusy(s, bulkModal.startTime) ? 'background:#fff8e1' : 'background:#f8f9fb')">
-                  <input type="checkbox" style="display:none"
-                    :checked="bulkModal.selectedPisteIds.includes(s.id)"
-                    @change="toggleBulkPiste(s.id, $event.target.checked)">
-                  <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0"
-                        :style="'background:' + (liveState(s.name)?.apparatusOnline ? '#1e8449' : '#ccc')"></span>
-                  <span x-text="s.name || 'Piste ' + s.strip_number"></span>
-                  <span x-show="pisteIsBusy(s, bulkModal.startTime)" style="font-size:.7rem;opacity:.75">⚠ busy</span>
-                </label>
+            <div style="display:flex;flex-wrap:wrap;gap:.3rem">
+              <template x-for="pa in row.pisteRows" :key="pa.piste.id">
+                <div style="padding:.25rem .5rem;border-radius:4px;font-size:.78rem;display:flex;align-items:center;gap:.3rem"
+                     :style="pa.conflict ? 'background:#fff8e1;border:1px solid #ffc107' : 'background:#e8f0fb;border:1px solid #b8cfef'">
+                  <span style="font-weight:600" x-text="pa.label + ':'"></span>
+                  <span x-text="pa.piste.name || 'Piste ' + pa.piste.strip_number"></span>
+                  <span style="color:#666" x-text="'(' + pa.bout_start + '–' + pa.bout_end + ')'"></span>
+                  <span x-show="pa.conflict" style="color:#856404">⚠</span>
+                </div>
               </template>
             </div>
           </div>
+        </template>
+        <div x-show="bulkDeNextRoundWarning"
+             style="font-size:.78rem;color:#555;padding:.3rem .5rem;background:#f0f2f5;border-radius:4px;margin-top:.25rem"
+             x-text="bulkDeNextRoundWarning"></div>
+      </div>
 
-          <!-- Start time -->
-          <div style="margin-bottom:.6rem;display:flex;align-items:center;gap:.75rem">
-            <label style="font-size:.83rem;display:flex;align-items:center;gap:.4rem">
-              Start time (all pistes)
-              <input type="time" step="300" x-model="bulkModal.startTime"
-                     @change="bulkModal.startTime = round5($event.target.value)"
-                     style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
-            </label>
-            <span style="font-size:.78rem;color:#888">Leave blank to set times individually later.</span>
-          </div>
+      <!-- ── No piste message ──────────────────────────────────────── -->
+      <div x-show="bulkReady && bulkModal.selectedPisteIds.length === 0"
+           style="font-size:.85rem;color:#aaa;margin-bottom:.75rem">
+        Select pistes above to see the assignment preview.
+      </div>
 
-          <!-- Conflict action (shown only when there are conflicts in the preview) -->
-          <div x-show="bulkPreview.some(r => r.conflict)" style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;font-size:.83rem">
-            <strong>⚠ Some selected pistes already have slots.</strong>
-            <div style="margin-top:.3rem;display:flex;gap:1rem">
-              <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
-                <input type="radio" x-model="bulkModal.conflictAction" value="append"> Append anyway (fence after current schedule)
-              </label>
-              <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
-                <input type="radio" x-model="bulkModal.conflictAction" value="skip"> Skip busy pistes
-              </label>
-            </div>
-          </div>
-
-          <!-- Preview table -->
-          <div x-show="bulkModal.selectedPisteIds.length > 0 && bulkPreview.length > 0" style="margin-bottom:.75rem">
-            <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem">
-              Assignment preview
-              <span style="font-weight:400;color:#888;font-size:.78rem"
-                x-text="' — ' + bulkPreview.filter(r=>r.piste).length + ' of ' + bulkPreview.length + ' pools assigned'"></span>
-            </div>
-            <table class="bulk-table">
-              <thead><tr><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Status</th></tr></thead>
-              <tbody>
-                <template x-for="row in bulkPreview" :key="row.pool.id">
-                  <tr :class="!row.piste ? 'bulk-row-unassigned' : (row.conflict ? 'bulk-row-conflict' : '')">
-                    <td x-text="row.pool.competition_name + ' — Pool ' + row.pool.pool_number"></td>
-                    <td x-text="row.pool.bouts_total + ' bouts'"></td>
-                    <td style="color:#888">→</td>
-                    <td x-text="row.piste ? (row.piste.name || 'Piste ' + row.piste.strip_number) : '—  no piste available'"></td>
-                    <td>
-                      <span x-show="!row.piste" style="color:#922b21;font-size:.78rem">unassigned</span>
-                      <span x-show="row.piste && row.conflict" style="color:#856404;font-size:.78rem">
-                        ⚠ busy (<span x-text="row.piste ? pendingSlotCount(row.piste) : 0"></span> slots)
-                      </span>
-                      <span x-show="row.piste && !row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-            <div x-show="bulkPreview.some(r => !r.piste)" style="font-size:.78rem;color:#922b21;margin-top:.3rem">
-              ⚠ Not enough pistes selected for all pools. Add more pistes or deselect some.
-            </div>
-          </div>
-
-          <div x-show="bulkModal.selectedPisteIds.length === 0" style="font-size:.85rem;color:#aaa;margin-bottom:.75rem">
-            Select at least one piste above to see the assignment preview.
-          </div>
-
-        </div>
-      </template>
-
+      <!-- ── Footer ────────────────────────────────────────────────── -->
       <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
         <button @click="bulkModal.open=false">Cancel</button>
         <button class="primary"
-                :disabled="bulkModal.loading || !bulkModal.competitionId || !bulkPreview.some(r => r.piste)"
+                :disabled="bulkModal.loading || !bulkReadyToSubmit"
                 @click="submitBulkAssign()"
-                x-text="bulkModal.loading ? 'Assigning…' : 'Assign ' + bulkPreview.filter(r=>r.piste).length + ' pool' + (bulkPreview.filter(r=>r.piste).length !== 1 ? 's' : '')">
-        </button>
+                x-text="bulkSubmitLabel"></button>
       </div>
     </div>
   </div>
@@ -648,7 +718,15 @@ function app() {
     addForm: {},
     boutStandards: [],
     poolAssignmentMap: {},   // { pool_id: [strip names] }
-    bulkModal: { open: false, competitionId: '', type: 'pools', selectedPisteIds: [], conflictAction: 'append', startTime: '', loading: false },
+    bulkModal: {
+      open: false, type: 'pools', loading: false,
+      // pools
+      competitionId: '', conflictAction: 'append',
+      // de
+      dePhaseId: '', deRoundsForBulk: [], deStartRound: '', deGroups: 4,
+      // shared
+      selectedPisteIds: [], startTime: '',
+    },
     lastBulkSlotIds: [],
     wantMulti: false,
     multiStrips: [],
@@ -715,6 +793,7 @@ function app() {
             }
           } else if (ph.type === 'de') {
             dePhases.push({ ...ph, competition_name: c.name,
+              weapon: c.weapon, gender: c.gender,
               phase_label: `DE Phase ${ph.phase_order} (${ph.status})` });
           }
         }
@@ -1047,6 +1126,134 @@ function app() {
 
     // ── Bulk assign ───────────────────────────────────────────────────────────
 
+    // Partition codes matching pipeline.js partitionToRange convention.
+    // Each char: A/1/a/c/e/g = lower half, B/2/b/d/f/h = upper half.
+    get bulkDePartitions() {
+      return { 2: ['A','B'], 4: ['A1','A2','B1','B2'], 8: ['A1a','A1b','A2a','A2b','B1a','B1b','B2a','B2b'] }[this.bulkModal.deGroups] || [];
+    },
+
+    get bulkDeGroupLabels() {
+      const n = this.bulkModal.deGroups;
+      if (n === 2) return ['Half A', 'Half B'];
+      if (n === 4) return ['Q1','Q2','Q3','Q4'];
+      return Array.from({ length: n }, (_, i) => 'E' + (i + 1));
+    },
+
+    boutRangeForPartition(partition, tableau) {
+      const n = tableau / 2;
+      if (!partition || partition === 'full') return [1, n];
+      let lo = 1, hi = n;
+      for (const ch of partition) {
+        const mid = Math.floor((lo + hi) / 2);
+        if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
+      }
+      return [lo, hi];
+    },
+
+    get bulkReady() {
+      if (this.bulkModal.type === 'pools') return !!this.bulkModal.competitionId;
+      return !!(this.bulkModal.dePhaseId && this.bulkModal.deStartRound);
+    },
+
+    get bulkDePreview() {
+      if (this.bulkModal.type !== 'de') return [];
+      const { dePhaseId, deRoundsForBulk, deStartRound, deGroups, selectedPisteIds, startTime } = this.bulkModal;
+      if (!dePhaseId || !deStartRound || !selectedPisteIds.length) return [];
+      const partitions = this.bulkDePartitions;
+      const labels = this.bulkDeGroupLabels;
+      if (!partitions.length) return [];
+
+      const pistes = [...selectedPisteIds]
+        .map(id => this.strips.find(s => s.id === id))
+        .filter(Boolean)
+        .sort((a, b) => a.strip_number - b.strip_number)
+        .slice(0, deGroups);
+      if (pistes.length < deGroups) return [];
+
+      const phase = this.availableDePhases.find(p => p.id == dePhaseId);
+      const minsDE = phase ? this.effectiveMinutes(phase.weapon, phase.gender, 'de') : null;
+
+      const rows = [];
+      let curStart = startTime;
+      const relevantRounds = deRoundsForBulk
+        .filter(r => r.de_round >= Number(deStartRound))
+        .sort((a, b) => a.de_round - b.de_round);
+
+      for (const rd of relevantRounds) {
+        const tableau = rd.total_bouts * 2;
+        const [lo0, hi0] = this.boutRangeForPartition(partitions[0], tableau);
+        const boutsPerGroup = hi0 - lo0 + 1;
+        if (boutsPerGroup < 1) break;
+
+        rows.push({
+          de_round: rd.de_round,
+          tableau,
+          totalBouts: rd.total_bouts,
+          boutsPerGroup,
+          scheduledStart: curStart,
+          pisteRows: partitions.map((part, i) => {
+            const [lo, hi] = this.boutRangeForPartition(part, tableau);
+            return { piste: pistes[i], partition: part, label: labels[i], tableau,
+                     bout_start: lo, bout_end: hi,
+                     conflict: this.pisteIsBusy(pistes[i], curStart) };
+          }),
+        });
+
+        if (curStart && minsDE) {
+          const [h, m] = curStart.split(':').map(Number);
+          const endMin = h * 60 + m + Math.ceil(boutsPerGroup * minsDE) + 5;
+          curStart = this.round5(
+            `${String(Math.floor(endMin / 60) % 24).padStart(2,'0')}:${String(endMin % 60).padStart(2,'0')}`
+          );
+        } else {
+          curStart = '';
+        }
+      }
+      return rows;
+    },
+
+    get bulkDeNextRoundWarning() {
+      if (!this.bulkDePreview.length) return '';
+      const last = this.bulkDePreview[this.bulkDePreview.length - 1];
+      const nextRound = this.bulkModal.deRoundsForBulk.find(r => r.de_round === last.de_round + 1);
+      if (!nextRound) return '';
+      const boutsInNext = nextRound.total_bouts;
+      if (boutsInNext < this.bulkModal.deGroups)
+        return `R${nextRound.de_round} has only ${boutsInNext} bouts — can't split ${this.bulkModal.deGroups} ways. Assign semi-finals/final separately.`;
+      return '';
+    },
+
+    get bulkReadyToSubmit() {
+      if (this.bulkModal.type === 'pools') return this.bulkPreview.some(r => r.piste);
+      return this.bulkDePreview.length > 0;
+    },
+
+    get bulkSubmitLabel() {
+      if (this.bulkModal.loading) return 'Assigning…';
+      if (this.bulkModal.type === 'pools') {
+        const n = this.bulkPreview.filter(r => r.piste).length;
+        return `Assign ${n} pool${n !== 1 ? 's' : ''}`;
+      }
+      const n = this.bulkDePreview.length * this.bulkModal.deGroups;
+      return `Assign ${n} slot${n !== 1 ? 's' : ''} (${this.bulkDePreview.length} rounds × ${this.bulkModal.deGroups})`;
+    },
+
+    async loadBulkDeRounds(phaseId) {
+      this.bulkModal.deStartRound = '';
+      this.bulkModal.deRoundsForBulk = [];
+      this.bulkModal.selectedPisteIds = [];
+      if (!phaseId) return;
+      const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json()).catch(() => []);
+      const map = {};
+      for (const b of bouts) {
+        if (b.de_round == null) continue;
+        map[b.de_round] = (map[b.de_round] || 0) + 1;
+      }
+      this.bulkModal.deRoundsForBulk = Object.entries(map)
+        .map(([r, n]) => ({ de_round: Number(r), total_bouts: n }))
+        .sort((a, b) => a.de_round - b.de_round);
+    },
+
     get bulkCompetitions() {
       const seen = new Set();
       const comps = [];
@@ -1094,12 +1301,12 @@ function app() {
     },
 
     openBulkModal() {
-      this.bulkModal.competitionId = '';
-      this.bulkModal.type = 'pools';
-      this.bulkModal.selectedPisteIds = [];
-      this.bulkModal.conflictAction = 'append';
-      this.bulkModal.startTime = '';
-      this.bulkModal.loading = false;
+      Object.assign(this.bulkModal, {
+        type: 'pools', loading: false,
+        competitionId: '', conflictAction: 'append',
+        dePhaseId: '', deRoundsForBulk: [], deStartRound: '', deGroups: 4,
+        selectedPisteIds: [], startTime: '',
+      });
       this.bulkModal.open = true;
     },
 
@@ -1117,29 +1324,46 @@ function app() {
     },
 
     async submitBulkAssign() {
-      const preview = this.bulkPreview.filter(r => r.piste);
-      if (!preview.length) return;
+      if (!this.bulkReadyToSubmit) return;
       this.bulkModal.loading = true;
       const errors = [];
       const createdIds = [];
-      for (const { pool, piste } of preview) {
-        const r = await fetch(`/api/opp2/pipeline/strip/${piste.id}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'pool',
-            pool_id: pool.id,
-            scheduled_start: this.bulkModal.startTime || null,
-            minutes_per_bout: this.effectiveMinutes(pool.weapon, pool.gender, 'pool'),
-          }),
-        });
-        if (!r.ok) {
-          const d = await r.json().catch(() => ({}));
-          errors.push(`${piste.name || 'Piste ' + piste.strip_number}: ${d.error || 'failed'}`);
-        } else {
-          const slot = await r.json();
-          if (slot?.id) createdIds.push(slot.id);
+
+      if (this.bulkModal.type === 'pools') {
+        for (const { pool, piste } of this.bulkPreview.filter(r => r.piste)) {
+          const r = await fetch(`/api/opp2/pipeline/strip/${piste.id}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'pool', pool_id: pool.id,
+              scheduled_start: this.bulkModal.startTime || null,
+              minutes_per_bout: this.effectiveMinutes(pool.weapon, pool.gender, 'pool'),
+            }),
+          });
+          if (!r.ok) { const d = await r.json().catch(()=>({})); errors.push(d.error || 'failed'); }
+          else { const s = await r.json(); if (s?.id) createdIds.push(s.id); }
+        }
+      } else {
+        const phase = this.availableDePhases.find(p => p.id == this.bulkModal.dePhaseId);
+        const minsDE = phase ? this.effectiveMinutes(phase.weapon, phase.gender, 'de') : null;
+        for (const row of this.bulkDePreview) {
+          for (const pa of row.pisteRows) {
+            const r = await fetch(`/api/opp2/pipeline/strip/${pa.piste.id}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'de',
+                phase_id: Number(this.bulkModal.dePhaseId),
+                tableau: pa.tableau,
+                partition: pa.partition,
+                scheduled_start: row.scheduledStart || null,
+                minutes_per_bout: minsDE || null,
+              }),
+            });
+            if (!r.ok) { const d = await r.json().catch(()=>({})); errors.push(d.error || 'failed'); }
+            else { const s = await r.json(); if (s?.id) createdIds.push(s.id); }
+          }
         }
       }
+
       this.lastBulkSlotIds = createdIds;
       await this.loadStrips();
       this.bulkModal.loading = false;
@@ -1147,7 +1371,7 @@ function app() {
       if (errors.length)
         this.showNotice('Some assignments failed: ' + errors.join('; '), true);
       else
-        this.showNotice(`Assigned ${preview.length} pool${preview.length !== 1 ? 's' : ''} to pistes. Use ↩ Undo to reverse.`);
+        this.showNotice(`${createdIds.length} slot${createdIds.length !== 1 ? 's' : ''} assigned. Use ↩ Undo to reverse.`);
     },
 
     async undoBulkAssign() {
