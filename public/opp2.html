@@ -56,7 +56,7 @@
     .slot-actions{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.4rem}
 
     /* ── Add slot form ─────────────────────────────────── */
-    .add-slot-section{padding:.75rem 1rem;border-top:2px solid #e0e0e0;background:#f8f9fb;flex-shrink:0}
+    .add-slot-section{padding:.75rem 1rem;border-top:2px solid #e0e0e0;background:#f8f9fb;flex-shrink:0;max-height:50%;overflow-y:auto}
     .add-slot-section h3{margin:0 0 .6rem;font-size:.85rem;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.04em}
     .add-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
     .add-form-grid .full{grid-column:1/-1}
@@ -64,14 +64,14 @@
     .add-form-grid label{font-size:.78rem;color:#555;display:flex;flex-direction:column;gap:.15rem}
     .form-actions{grid-column:1/-1;display:flex;gap:.5rem;margin-top:.25rem}
 
-    /* ── Broadcast section ─────────────────────────────── */
-    .broadcast-section{border:1px solid #c8d8f0;border-radius:6px;background:#f0f5fc;padding:.5rem .75rem;margin-top:.5rem}
-    .broadcast-section-title{font-size:.78rem;font-weight:700;color:#1a6bab;margin-bottom:.35rem}
-    .broadcast-strip-row{display:flex;align-items:flex-start;gap:.5rem;padding:.3rem 0;border-bottom:1px solid #dce8f7}
-    .broadcast-strip-row:last-child{border-bottom:none}
-    .broadcast-strip-label{display:flex;align-items:center;gap:.35rem;font-size:.82rem;min-width:90px;padding-top:.3rem;cursor:pointer}
-    .broadcast-strip-pool{flex:1}
-    .broadcast-strip-pool select{width:100%;padding:.25rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
+    /* ── Bulk assign modal ─────────────────────────────── */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
+    .modal-box{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:1.5rem;width:min(740px,94vw);max-height:90vh;overflow-y:auto}
+    .bulk-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
+    .bulk-table th{text-align:left;padding:.4rem .6rem;background:#f0f2f5;border-bottom:2px solid #ddd;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555}
+    .bulk-table td{padding:.4rem .6rem;border-bottom:1px solid #eee;vertical-align:middle}
+    .bulk-row-conflict td{background:#fff8e1}
+    .bulk-row-unassigned td{background:#fde8e8;color:#922b21}
 
     /* ── Piste status dots ─────────────────────────────── */
     .piste-status-grid{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem}
@@ -145,7 +145,18 @@
     <div class="strip-list-panel">
       <div class="strip-list-header">
         Strips
-        <label><input type="checkbox" x-model="hideOffline"> Hide offline</label>
+        <label style="font-weight:400;text-transform:none;letter-spacing:0;font-size:.75rem;display:flex;align-items:center;gap:.25rem;cursor:pointer">
+          <input type="checkbox" x-model="hideOffline"> Hide offline
+        </label>
+      </div>
+      <div style="padding:.5rem .75rem;border-bottom:1px solid #ddd;display:flex;flex-direction:column;gap:.3rem">
+        <button @click="openBulkModal()" style="width:100%;font-size:.8rem;background:#1a6bab;color:#fff;border:none;padding:.4rem;border-radius:4px;cursor:pointer">
+          ⚡ Bulk assign pools / DE
+        </button>
+        <button x-show="lastBulkSlotIds.length > 0" @click="undoBulkAssign()"
+                style="width:100%;font-size:.78rem;background:#fff;color:#922b21;border:1px solid #e5a0a0;padding:.3rem;border-radius:4px;cursor:pointer"
+                x-text="'↩ Undo last bulk assign (' + lastBulkSlotIds.length + ' slots)'">
+        </button>
       </div>
       <div class="strip-rows">
         <template x-for="strip in sortedStrips" :key="strip.id">
@@ -403,38 +414,6 @@
                   :placeholder="addForm.standardMinutes ? addForm.standardMinutes + ' (default)' : ''">
               </label>
 
-              <!-- Broadcast section: also add to other strips -->
-              <div class="full">
-                <div class="broadcast-section">
-                  <div class="broadcast-section-title">Also add to other strips</div>
-                  <template x-if="otherStrips.length === 0">
-                    <div style="font-size:.78rem;color:#888">No other strips configured.</div>
-                  </template>
-                  <template x-for="s in otherStrips" :key="s.id">
-                    <div class="broadcast-strip-row">
-                      <label class="broadcast-strip-label">
-                        <input type="checkbox" :checked="broadcastStrips.includes(s.id)"
-                          @change="toggleBroadcast(s.id, $event.target.checked)">
-                        <span x-text="s.name || 'Piste ' + s.strip_number"></span>
-                      </label>
-                      <!-- Per-strip pool picker when broadcasting pools -->
-                      <template x-if="addForm.type === 'pool' && broadcastStrips.includes(s.id)">
-                        <div class="broadcast-strip-pool">
-                          <select @change="broadcastPoolIds = {...broadcastPoolIds, [s.id]: $event.target.value}">
-                            <option value="">— Select pool —</option>
-                            <template x-for="p in availablePools" :key="p.id">
-                              <option :value="p.id" :disabled="p.id == addForm.pool_id || poolIsAssigned(p.id)"
-                                x-text="p.competition_name + ' — Pool ' + p.pool_number + (poolIsAssigned(p.id) ? ' (⊗)' : '')">
-                              </option>
-                            </template>
-                          </select>
-                        </div>
-                      </template>
-                    </div>
-                  </template>
-                </div>
-              </div>
-
               <!-- Actions -->
               <div class="form-actions">
                 <button class="primary" @click="submitAddSlot()">Add slot</button>
@@ -496,6 +475,129 @@
     </div>
   </div>
 
+  <!-- ── Bulk assign modal ────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" x-show="bulkModal.open" @click.self="bulkModal.open=false">
+    <div class="modal-box">
+      <h2 style="margin:0 0 1rem">Bulk assign pools / DE to pistes</h2>
+
+      <!-- Step 1: competition + type -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem">
+        <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Competition
+          <select x-model="bulkModal.competitionId" @change="bulkModal.selectedPisteIds=[]">
+            <option value="">— Select —</option>
+            <template x-for="c in bulkCompetitions" :key="c.id">
+              <option :value="c.id" x-text="c.name"></option>
+            </template>
+          </select>
+        </label>
+        <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Assign
+          <select x-model="bulkModal.type" @change="bulkModal.selectedPisteIds=[]">
+            <option value="pools">All pools</option>
+            <option value="de">DE round</option>
+          </select>
+        </label>
+      </div>
+
+      <template x-if="bulkModal.competitionId">
+        <div>
+
+          <!-- Piste selector -->
+          <div style="margin-bottom:.75rem">
+            <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem;display:flex;align-items:center;gap:.75rem">
+              Target pistes
+              <button @click="bulkSelectAllIdle()" style="font-size:.75rem;padding:.2rem .5rem">Select all idle</button>
+              <button @click="bulkModal.selectedPisteIds=[]" style="font-size:.75rem;padding:.2rem .5rem">Clear</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+              <template x-for="s in strips" :key="s.id">
+                <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border:1px solid #ddd;border-radius:5px;cursor:pointer"
+                       :style="bulkModal.selectedPisteIds.includes(s.id) ? 'background:#1a6bab;color:#fff;border-color:#1a6bab' : (pisteIsBusy(s, bulkModal.startTime) ? 'background:#fff8e1' : 'background:#f8f9fb')">
+                  <input type="checkbox" style="display:none"
+                    :checked="bulkModal.selectedPisteIds.includes(s.id)"
+                    @change="toggleBulkPiste(s.id, $event.target.checked)">
+                  <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0"
+                        :style="'background:' + (liveState(s.name)?.apparatusOnline ? '#1e8449' : '#ccc')"></span>
+                  <span x-text="s.name || 'Piste ' + s.strip_number"></span>
+                  <span x-show="pisteIsBusy(s, bulkModal.startTime)" style="font-size:.7rem;opacity:.75">⚠ busy</span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- Start time -->
+          <div style="margin-bottom:.6rem;display:flex;align-items:center;gap:.75rem">
+            <label style="font-size:.83rem;display:flex;align-items:center;gap:.4rem">
+              Start time (all pistes)
+              <input type="time" step="300" x-model="bulkModal.startTime"
+                     @change="bulkModal.startTime = round5($event.target.value)"
+                     style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+            </label>
+            <span style="font-size:.78rem;color:#888">Leave blank to set times individually later.</span>
+          </div>
+
+          <!-- Conflict action (shown only when there are conflicts in the preview) -->
+          <div x-show="bulkPreview.some(r => r.conflict)" style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;font-size:.83rem">
+            <strong>⚠ Some selected pistes already have slots.</strong>
+            <div style="margin-top:.3rem;display:flex;gap:1rem">
+              <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+                <input type="radio" x-model="bulkModal.conflictAction" value="append"> Append anyway (fence after current schedule)
+              </label>
+              <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+                <input type="radio" x-model="bulkModal.conflictAction" value="skip"> Skip busy pistes
+              </label>
+            </div>
+          </div>
+
+          <!-- Preview table -->
+          <div x-show="bulkModal.selectedPisteIds.length > 0 && bulkPreview.length > 0" style="margin-bottom:.75rem">
+            <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem">
+              Assignment preview
+              <span style="font-weight:400;color:#888;font-size:.78rem"
+                x-text="' — ' + bulkPreview.filter(r=>r.piste).length + ' of ' + bulkPreview.length + ' pools assigned'"></span>
+            </div>
+            <table class="bulk-table">
+              <thead><tr><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Status</th></tr></thead>
+              <tbody>
+                <template x-for="row in bulkPreview" :key="row.pool.id">
+                  <tr :class="!row.piste ? 'bulk-row-unassigned' : (row.conflict ? 'bulk-row-conflict' : '')">
+                    <td x-text="row.pool.competition_name + ' — Pool ' + row.pool.pool_number"></td>
+                    <td x-text="row.pool.bouts_total + ' bouts'"></td>
+                    <td style="color:#888">→</td>
+                    <td x-text="row.piste ? (row.piste.name || 'Piste ' + row.piste.strip_number) : '—  no piste available'"></td>
+                    <td>
+                      <span x-show="!row.piste" style="color:#922b21;font-size:.78rem">unassigned</span>
+                      <span x-show="row.piste && row.conflict" style="color:#856404;font-size:.78rem">
+                        ⚠ busy (<span x-text="row.piste ? pendingSlotCount(row.piste) : 0"></span> slots)
+                      </span>
+                      <span x-show="row.piste && !row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div x-show="bulkPreview.some(r => !r.piste)" style="font-size:.78rem;color:#922b21;margin-top:.3rem">
+              ⚠ Not enough pistes selected for all pools. Add more pistes or deselect some.
+            </div>
+          </div>
+
+          <div x-show="bulkModal.selectedPisteIds.length === 0" style="font-size:.85rem;color:#aaa;margin-bottom:.75rem">
+            Select at least one piste above to see the assignment preview.
+          </div>
+
+        </div>
+      </template>
+
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+        <button @click="bulkModal.open=false">Cancel</button>
+        <button class="primary"
+                :disabled="bulkModal.loading || !bulkModal.competitionId || !bulkPreview.some(r => r.piste)"
+                @click="submitBulkAssign()"
+                x-text="bulkModal.loading ? 'Assigning…' : 'Assign ' + bulkPreview.filter(r=>r.piste).length + ' pool' + (bulkPreview.filter(r=>r.piste).length !== 1 ? 's' : '')">
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Referee schedule ──────────────────────────────────────────────────── -->
   <div class="card" x-show="referees.length">
     <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem">
@@ -546,8 +648,8 @@ function app() {
     addForm: {},
     boutStandards: [],
     poolAssignmentMap: {},   // { pool_id: [strip names] }
-    broadcastStrips: [],     // strip IDs to also add to
-    broadcastPoolIds: {},    // { strip_id: pool_id } for pool broadcast
+    bulkModal: { open: false, competitionId: '', type: 'pools', selectedPisteIds: [], conflictAction: 'append', startTime: '', loading: false },
+    lastBulkSlotIds: [],
     wantMulti: false,
     multiStrips: [],
     multiDynamic: false,
@@ -608,8 +710,8 @@ function app() {
           if (ph.type === 'pool') {
             const phPools = await fetch(`/api/phases/${ph.id}/pools`).then(r => r.json()).catch(() => []);
             for (const p of phPools) {
-              pools.push({ ...p, competition_name: c.name, phase_status: ph.status,
-                           weapon: c.weapon, gender: c.gender });
+              pools.push({ ...p, competition_name: c.name, competition_id: c.id,
+                           phase_status: ph.status, weapon: c.weapon, gender: c.gender });
             }
           } else if (ph.type === 'de') {
             dePhases.push({ ...ph, competition_name: c.name,
@@ -763,8 +865,6 @@ function app() {
       this.addForm = { type: 'pool', pool_id: '', phase_id: '', team_match_id: '',
                        de_round: '', bout_start: '', bout_end: '',
                        scheduled_start: suggested, minutes_per_bout: '', standardMinutes: null };
-      this.broadcastStrips = [];
-      this.broadcastPoolIds = {};
       this.wantMulti = false;
       this.multiStrips = [];
       this.multiDynamic = false;
@@ -780,37 +880,27 @@ function app() {
       this.addForm.bout_end = '';
       this.addForm.standardMinutes = null;
       this.addForm.minutes_per_bout = '';
-      this.broadcastStrips = [];
-      this.broadcastPoolIds = {};
       this.deRounds = [];
       this.wantMulti = false;
       this.multiStrips = [];
     },
 
+    effectiveMinutes(weapon, gender, phaseType) {
+      const w = weapon === 'foil' ? 'F' : weapon === 'epee' ? 'E' : weapon === 'sabre' ? 'S' : weapon;
+      const std = this.boutStandards.find(s =>
+        s.weapon === w && s.gender === gender && s.phase_type === phaseType);
+      if (!std) return null;
+      if (std.sample_count >= 4 && std.observed_average != null)
+        return Math.round(std.observed_average * 10) / 10;
+      return std.minutes_per_bout;
+    },
+
     onPoolSelected(poolId) {
       const pool = this.availablePools.find(p => p.id == poolId);
       if (!pool) { this.addForm.standardMinutes = null; return; }
-      const std = this.boutStandards.find(s =>
-        s.weapon === pool.weapon && s.gender === pool.gender && s.phase_type === 'pool');
-      const mins = std
-        ? (std.sample_count >= 4 && std.observed_average != null
-            ? Math.round(std.observed_average * 10) / 10
-            : std.minutes_per_bout)
-        : null;
+      const mins = this.effectiveMinutes(pool.weapon, pool.gender, 'pool');
       this.addForm.standardMinutes = mins;
-      // Pre-fill only if user hasn't manually typed a value.
       if (!this.addForm.minutes_per_bout) this.addForm.minutes_per_bout = '';
-    },
-
-    toggleBroadcast(stripId, checked) {
-      if (checked) {
-        if (!this.broadcastStrips.includes(stripId)) this.broadcastStrips.push(stripId);
-      } else {
-        this.broadcastStrips = this.broadcastStrips.filter(id => id !== stripId);
-        const ids = { ...this.broadcastPoolIds };
-        delete ids[stripId];
-        this.broadcastPoolIds = ids;
-      }
     },
 
     toggleMultiStrip(stripId) {
@@ -859,29 +949,10 @@ function app() {
         }
       }
 
-      // Broadcast to other strips
-      const errors = [];
-      for (const sid of this.broadcastStrips) {
-        const bBody = { ...body };
-        if (body.type === 'pool') {
-          bBody.pool_id = this.broadcastPoolIds[sid] || null;
-          if (!bBody.pool_id) continue; // skip if no pool selected for this strip
-        }
-        const br = await fetch(`/api/opp2/pipeline/strip/${sid}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bBody),
-        });
-        if (!br.ok) {
-          const d = await br.json().catch(() => ({}));
-          errors.push(`Piste ${sid}: ${d.error || 'failed'}`);
-        }
-      }
-
       await this.loadStrips();
       this.resetAddForm();
 
-      if (errors.length) this.showNotice('Some broadcasts failed: ' + errors.join('; '), true);
-      else if (extraNotice) this.showNotice(extraNotice.text, extraNotice.error);
+      if (extraNotice) this.showNotice(extraNotice.text, extraNotice.error);
       else this.showNotice('Slot added');
     },
 
@@ -972,6 +1043,122 @@ function app() {
       if (!this.selectedReferee) { this.refSchedule = []; return; }
       this.refSchedule = await fetch(`/api/opp2/pipeline/referee/${this.selectedReferee}`)
         .then(r => r.json()).catch(() => []);
+    },
+
+    // ── Bulk assign ───────────────────────────────────────────────────────────
+
+    get bulkCompetitions() {
+      const seen = new Set();
+      const comps = [];
+      for (const p of this.availablePools) {
+        const key = String(p.competition_id);
+        if (!seen.has(key)) {
+          seen.add(key);
+          comps.push({ id: p.competition_id, name: p.competition_name });
+        }
+      }
+      return comps;
+    },
+
+    get bulkPreview() {
+      if (!this.bulkModal.competitionId) return [];
+      const pools = this.availablePools
+        .filter(p => p.competition_id == this.bulkModal.competitionId)
+        .slice()
+        .sort((a, b) => (b.bouts_total || 0) - (a.bouts_total || 0));
+
+      let pistes = this.bulkModal.selectedPisteIds
+        .map(id => this.strips.find(s => s.id === id))
+        .filter(Boolean)
+        .sort((a, b) => a.strip_number - b.strip_number);
+
+      if (this.bulkModal.conflictAction === 'skip')
+        pistes = pistes.filter(s => !this.pisteIsBusy(s, this.bulkModal.startTime));
+
+      return pools.map((pool, i) => {
+        const piste = pistes[i] || null;
+        return { pool, piste, conflict: piste ? this.pisteIsBusy(piste, this.bulkModal.startTime) : false };
+      });
+    },
+
+    pisteIsBusy(strip, startTime) {
+      const nonDone = strip.slots.filter(s => s.status !== 'done');
+      if (!nonDone.length) return false;
+      if (!startTime) return true;
+      // Busy if any non-done slot has no predicted end or its predicted end is after startTime
+      return nonDone.some(s => !s.predicted_end || s.predicted_end > startTime);
+    },
+
+    pendingSlotCount(strip) {
+      return strip.slots.filter(s => s.status !== 'done').length;
+    },
+
+    openBulkModal() {
+      this.bulkModal.competitionId = '';
+      this.bulkModal.type = 'pools';
+      this.bulkModal.selectedPisteIds = [];
+      this.bulkModal.conflictAction = 'append';
+      this.bulkModal.startTime = '';
+      this.bulkModal.loading = false;
+      this.bulkModal.open = true;
+    },
+
+    bulkSelectAllIdle() {
+      this.bulkModal.selectedPisteIds = this.strips
+        .filter(s => !this.pisteIsBusy(s, this.bulkModal.startTime))
+        .map(s => s.id);
+    },
+
+    toggleBulkPiste(id, checked) {
+      if (checked && !this.bulkModal.selectedPisteIds.includes(id))
+        this.bulkModal.selectedPisteIds = [...this.bulkModal.selectedPisteIds, id];
+      else if (!checked)
+        this.bulkModal.selectedPisteIds = this.bulkModal.selectedPisteIds.filter(x => x !== id);
+    },
+
+    async submitBulkAssign() {
+      const preview = this.bulkPreview.filter(r => r.piste);
+      if (!preview.length) return;
+      this.bulkModal.loading = true;
+      const errors = [];
+      const createdIds = [];
+      for (const { pool, piste } of preview) {
+        const r = await fetch(`/api/opp2/pipeline/strip/${piste.id}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'pool',
+            pool_id: pool.id,
+            scheduled_start: this.bulkModal.startTime || null,
+            minutes_per_bout: this.effectiveMinutes(pool.weapon, pool.gender, 'pool'),
+          }),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          errors.push(`${piste.name || 'Piste ' + piste.strip_number}: ${d.error || 'failed'}`);
+        } else {
+          const slot = await r.json();
+          if (slot?.id) createdIds.push(slot.id);
+        }
+      }
+      this.lastBulkSlotIds = createdIds;
+      await this.loadStrips();
+      this.bulkModal.loading = false;
+      this.bulkModal.open = false;
+      if (errors.length)
+        this.showNotice('Some assignments failed: ' + errors.join('; '), true);
+      else
+        this.showNotice(`Assigned ${preview.length} pool${preview.length !== 1 ? 's' : ''} to pistes. Use ↩ Undo to reverse.`);
+    },
+
+    async undoBulkAssign() {
+      if (!this.lastBulkSlotIds.length) return;
+      if (!confirm(`Remove ${this.lastBulkSlotIds.length} slot${this.lastBulkSlotIds.length !== 1 ? 's' : ''} from the last bulk assign?`)) return;
+      for (const id of this.lastBulkSlotIds) {
+        await fetch(`/api/opp2/pipeline/slots/${id}`, { method: 'DELETE' });
+      }
+      this.lastBulkSlotIds = [];
+      await this.loadStrips();
+      this.showNotice('Bulk assignment undone.');
     },
 
     showNotice(text, error = false) {

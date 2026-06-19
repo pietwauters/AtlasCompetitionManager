@@ -95,7 +95,8 @@ const Pipeline = {
                        THEN ds.observed_average
                        ELSE ds.minutes_per_bout END
            FROM bout_duration_standards ds
-           WHERE ds.weapon = co.weapon AND ds.gender = co.gender
+           WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
+             AND ds.gender = co.gender
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps
@@ -133,7 +134,8 @@ const Pipeline = {
                        THEN ds.observed_average
                        ELSE ds.minutes_per_bout END
            FROM bout_duration_standards ds
-           WHERE ds.weapon = co.weapon AND ds.gender = co.gender
+           WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
+             AND ds.gender = co.gender
              AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
         ) AS effective_minutes_per_bout
       FROM pipeline_slots ps
