@@ -101,7 +101,7 @@
           <template x-for="(_, j) in matrix.comps" :key="j">
             <th x-text="j + 1"></th>
           </template>
-          <th class="td-stat">V</th>
+          <th class="td-stat" title="Victory ratio">V/M</th>
           <th class="td-stat">Ind</th>
           <th class="td-stat">TS</th>
           <th class="td-stat">TR</th>
@@ -116,7 +116,7 @@
             <template x-for="cell in row.cells" :key="cell.k">
               <td :class="cell.cls" x-text="cell.txt"></td>
             </template>
-            <td class="td-stat" x-text="row.v"></td>
+            <td class="td-stat" x-text="row.m > 0 ? (row.v / row.m).toFixed(2) : '—'"></td>
             <td class="td-stat" :class="row.ind > 0 ? 'td-ind-pos' : row.ind < 0 ? 'td-ind-neg' : 'td-stat'"
                 x-text="(row.ind > 0 ? '+' : '') + row.ind"></td>
             <td class="td-stat" x-text="row.ts"></td>
@@ -269,7 +269,7 @@ function app() {
         const ind = s.ts - s.tr;
         return {
           comp, idx: i, cells,
-          v: s.v, ts: s.ts, tr: s.tr, ind,
+          v: s.v, m: s.m, ts: s.ts, tr: s.tr, ind,
           rank: s.m > 0 ? rankOf[i] : null,
         };
       });

@@ -153,9 +153,8 @@
     <table>
       <thead><tr>
         <th>#</th><th>Name</th><th>Club</th>
-        <th title="Victories">V</th>
+        <th title="Victory ratio (victories / matches fenced)">V/M</th>
         <th title="Matches">M</th>
-        <th title="Victory ratio">V/M</th>
         <th title="Indicator">Ind</th>
         <th title="Touches scored">TS</th>
         <th title="Touches received">TR</th>
@@ -167,9 +166,8 @@
             <td class="rank-pos" x-text="(r.rank||r.position)+(r.tied?'T':'')"></td>
             <td x-text="r.last_name+', '+r.first_name"></td>
             <td x-text="r.club_name||'—'"></td>
-            <td x-text="r.victories"></td>
+            <td class="vr" x-text="r.matches>0?(r.victories/r.matches).toFixed(2):'—'"></td>
             <td x-text="r.matches"></td>
-            <td class="vr" x-text="r.matches>0?(r.victories/r.matches).toFixed(3):'—'"></td>
             <td x-text="(r.indicator>0?'+':'')+r.indicator"></td>
             <td x-text="r.touches_scored"></td>
             <td x-text="r.touches_received"></td>

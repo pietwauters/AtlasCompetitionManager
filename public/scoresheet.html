@@ -142,6 +142,9 @@
     /* ── Bout list ── */
     .bout-list{padding:.25rem 0}
     .bout-item{border-bottom:1px solid var(--border-3)}
+    .bout-item.live-item{border-left:3px solid var(--live);border-bottom-color:var(--live)}
+    .bout-item.live-item .bout-header{border-left:none;background:var(--active-bg)}
+    .bout-item.live-item .bout-body{background:var(--live-bg)}
 
     .bout-header{display:flex;align-items:center;gap:.5rem;padding:.75rem .85rem;
                  cursor:pointer;user-select:none;transition:background .1s;
@@ -284,7 +287,7 @@
               <template x-for="(_, j) in (matrix?.participants || [])" :key="'h' + j">
                 <th x-text="j + 1"></th>
               </template>
-              <th class="td-stat">V</th>
+              <th class="td-stat" title="Victory ratio">V/M</th>
               <th class="td-stat">Ind</th>
               <th class="td-stat">TS</th>
               <th class="td-stat">TR</th>
@@ -299,7 +302,7 @@
                 <template x-for="(_, j) in (matrix?.participants || [])" :key="'c' + j">
                   <td :class="matrixCellClass(i, j)" x-text="matrixCellText(i, j)"></td>
                 </template>
-                <td class="td-stat" x-text="matrix?.stats?.[i]?.v ?? ''"></td>
+                <td class="td-stat" x-text="(matrix?.stats?.[i]?.m > 0) ? (matrix.stats[i].v / matrix.stats[i].m).toFixed(2) : (matrix?.stats?.[i] ? '—' : '')"></td>
                 <td class="td-stat"
                     :class="matrixInd(i) > 0 ? 'td-ind-pos' : matrixInd(i) < 0 ? 'td-ind-neg' : ''"
                     x-text="matrixInd(i) > 0 ? '+' + matrixInd(i) : matrixInd(i)"></td>
@@ -317,7 +320,7 @@
   <!-- Bout list -->
   <div x-show="bouts.length > 0" class="bout-list">
     <template x-for="bout in bouts" :key="bout.id">
-      <div class="bout-item">
+      <div class="bout-item" :class="{ 'live-item': bout.id === activeBoutId && !bout.result }">
 
         <div class="bout-header"
              :class="{ 'bout-active': bout.id === activeBoutId && !bout.result, 'bout-finished': !!bout.result }"
@@ -326,6 +329,7 @@
           <span class="bout-fname" x-text="fencerDisplayName(bout.left)"></span>
           <span class="bout-inline-score"
                 :class="{ live: bout.id === activeBoutId && !bout.result, finished: !!bout.result }"
+                x-show="!(bout.id === activeBoutId && !bout.result && bout.expanded)"
                 x-text="boutHeaderScore(bout)"></span>
           <span class="bout-fname right" x-text="fencerDisplayName(bout.right)"></span>
           <span x-show="bout.id === activeBoutId && !bout.result" class="live-badge">LIVE</span>
