@@ -107,6 +107,24 @@ router.post('/pipeline/slots/:id/reorder', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reorder all pending slots on a strip in one shot
+router.post('/pipeline/strip/:stripId/reorder', (req, res) => {
+  const { ordered_ids } = req.body;
+  if (!Array.isArray(ordered_ids) || !ordered_ids.length)
+    return res.status(400).json({ error: 'ordered_ids array required' });
+  Pipeline.batchReorder(req.params.stripId, ordered_ids);
+  res.json({ ok: true });
+});
+
+// Move a slot to a different strip (appended at end of new strip's pipeline)
+router.post('/pipeline/slots/:id/move-strip', (req, res) => {
+  const { strip_id } = req.body;
+  if (!strip_id) return res.status(400).json({ error: 'strip_id required' });
+  const slot = Pipeline.moveToStrip(req.params.id, strip_id);
+  if (!slot) return res.status(404).json({ error: 'Slot not found' });
+  res.json(slot);
+});
+
 // Delete a slot
 router.delete('/pipeline/slots/:id', (req, res) => {
   const ok = Pipeline.deleteSlot(req.params.id);

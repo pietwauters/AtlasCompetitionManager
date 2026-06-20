@@ -49,8 +49,7 @@
     .place-label{font-size:.72rem;color:#999;padding:.2rem .5rem 0;text-align:right}
 
     /* ── Strip picker (shared) ── */
-    .strip-picker{width:100%;font-size:.74rem;padding:.2rem .3rem;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;color:#555}
-    .strip-picker-wrap{padding:.15rem .5rem .4rem;text-align:center}
+
 
     /* ── Score modal ── */
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
@@ -96,11 +95,22 @@
       <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
       <a :href="'/results.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
     </div>
-    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+    <div style="margin-top:.75rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
       <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
         <span style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
         <button x-show="phase?.status==='active'" @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
       </span>
+      <template x-if="deStripOptions.length > 0">
+        <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem;margin-left:auto">
+          <label style="color:#666">View piste:</label>
+          <select x-model="filterStripId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+            <option value="">All pistes</option>
+            <template x-for="s in deStripOptions" :key="s.id">
+              <option :value="String(s.id)" x-text="s.name"></option>
+            </template>
+          </select>
+        </span>
+      </template>
     </div>
   </div>
 
@@ -117,22 +127,14 @@
         <div class="bracket-wrap">
           <div class="bracket">
             <template x-for="(round, ri) in section.rounds" :key="ri">
-              <div class="round-col">
+              <div class="round-col" x-show="roundVisible(round)">
                 <h3 x-text="round.label"></h3>
                 <div class="round-col-note" x-show="round.note" x-text="round.note"></div>
-                <div class="strip-picker-wrap" x-show="round.stripSlot">
-                  <select class="strip-picker"
-                          :value="sectionStrip[section.id + '-' + ri] || ''"
-                          @change="sectionStrip[section.id + '-' + ri] = $event.target.value; assignStrip(section.id, ri, round)">
-                    <option value="">— no piste —</option>
-                    <template x-for="s in strips" :key="s.id">
-                      <option :value="String(s.id)" :selected="sectionStrip[section.id + '-' + ri] === String(s.id)"
-                              x-text="s.name || ('Piste ' + s.strip_number)"></option>
-                    </template>
-                  </select>
-                </div>
+                <div x-show="round.stripSlot && roundPisteLabel(round)"
+                     style="font-size:.72rem;color:#1a6bab;text-align:center;padding:.15rem .5rem .3rem"
+                     x-text="roundPisteLabel(round)"></div>
                 <template x-for="bout in round.bouts" :key="bout.id">
-                  <div class="bout-slot">
+                  <div class="bout-slot" x-show="boutVisible(round, bout) && !isBye(bout)">
                     <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
                       <template x-if="isBye(bout)">
                         <div>
@@ -173,25 +175,17 @@
       <template x-if="section.displayHint === 'list'">
         <div class="list-section">
           <template x-for="(round, ri) in section.rounds" :key="ri">
-            <div class="list-round">
+            <div class="list-round" x-show="roundVisible(round)">
               <div class="list-round-header">
                 <span class="list-round-label" x-text="round.label"></span>
                 <span class="list-round-note" x-show="round.note" x-text="round.note"></span>
-                <div x-show="round.stripSlot" style="margin-left:auto">
-                  <select class="strip-picker" style="width:auto"
-                          :value="sectionStrip[section.id + '-' + ri] || ''"
-                          @change="sectionStrip[section.id + '-' + ri] = $event.target.value; assignStrip(section.id, ri, round)">
-                    <option value="">— no piste —</option>
-                    <template x-for="s in strips" :key="s.id">
-                      <option :value="String(s.id)" :selected="sectionStrip[section.id + '-' + ri] === String(s.id)"
-                              x-text="s.name || ('Piste ' + s.strip_number)"></option>
-                    </template>
-                  </select>
-                </div>
+                <span x-show="round.stripSlot && roundPisteLabel(round)"
+                      style="margin-left:auto;font-size:.75rem;color:#1a6bab"
+                      x-text="roundPisteLabel(round)"></span>
               </div>
               <div class="list-bouts">
                 <template x-for="bout in round.bouts" :key="bout.id">
-                  <div>
+                  <div x-show="boutVisible(round, bout) && !isBye(bout)">
                     <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
                       <template x-if="isBye(bout)">
                         <div>
@@ -318,9 +312,8 @@ function app() {
     tableauSize: 0,
     nameMap:     {},   // competitor_id → display name
     seedMap:     {},   // competitor_id → original seed number
-    strips:      [],
     deSlots:     [],
-    sectionStrip: {},  // key: sectionId+'-'+roundIndex → strip_id string
+    filterStripId: '',
     selected: null,
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
@@ -350,7 +343,7 @@ function app() {
       if (this.phase.competition_id) {
         this.comp = await fetch('/api/competitions/' + this.phase.competition_id).then(r => r.json());
       }
-      this.strips = await fetch('/api/strips').then(r => r.json());
+
       document.title = 'Atlas — DE — ' + (this.comp?.name || '');
       await this.loadSections();
     },
@@ -403,40 +396,6 @@ function app() {
 
     async loadDeSlots() {
       this.deSlots = await fetch('/api/opp2/pipeline/phase/' + phaseId).then(r => r.json());
-      this.sectionStrip = {};
-      for (const section of this.sections) {
-        section.rounds.forEach((round, ri) => {
-          if (!round.stripSlot) return;
-          const key = section.id + '-' + ri;
-          const { bracket, tableau, partition } = round.stripSlot;
-          const existing = this.deSlots.find(s => {
-            if (bracket === 'main') return (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau;
-            return s.bracket === bracket && s.tableau === tableau && s.partition === partition;
-          });
-          this.sectionStrip[key] = existing ? String(existing.strip_id) : '';
-        });
-      }
-    },
-
-    async assignStrip(sectionId, ri, round) {
-      if (!round.stripSlot) return;
-      const key      = sectionId + '-' + ri;
-      const stripId  = this.sectionStrip[key];
-      const { bracket, tableau, partition } = round.stripSlot;
-      if (stripId) {
-        await fetch('/api/opp2/pipeline/strip/' + stripId, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'de', phase_id: Number(phaseId), bracket, tableau, partition }),
-        });
-      } else {
-        const existing = this.deSlots.find(s => {
-          if (bracket === 'main') return (s.bracket === 'main' || s.bracket == null) && s.tableau === tableau;
-          return s.bracket === bracket && s.tableau === tableau && s.partition === partition;
-        });
-        if (existing) await fetch('/api/opp2/pipeline/slots/' + existing.id, { method: 'DELETE' });
-      }
-      await this.loadDeSlots();
     },
 
     computeFinalResults() {
@@ -635,6 +594,59 @@ function app() {
           if (b) { this.selected = b; break outer; }
         }
       }
+    },
+
+    // ── Piste display / filter ───────────────────────────────────────────────
+
+    roundPisteLabel(round) {
+      if (!round.stripSlot) return '';
+      const { bracket, tableau } = round.stripSlot;
+      const slots = this.deSlots.filter(s =>
+        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
+        s.tableau === tableau
+      );
+      if (!slots.length) return '';
+      return slots.map(s => s.strip_name || ('Piste ' + s.strip_number)).join(' / ');
+    },
+
+    get deStripOptions() {
+      const seen = new Set();
+      return this.deSlots.filter(s => !seen.has(s.strip_id) && seen.add(s.strip_id))
+        .map(s => ({ id: s.strip_id, name: s.strip_name || ('Piste ' + s.strip_number) }));
+    },
+
+    _partitionRange(partition, tableau) {
+      const n = tableau / 2;
+      if (!partition || partition === 'full') return [1, n];
+      let lo = 1, hi = n;
+      for (const ch of partition) {
+        const mid = Math.floor((lo + hi) / 2);
+        if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
+      }
+      return [lo, hi];
+    },
+
+    roundVisible(round) {
+      if (!this.filterStripId || !round.stripSlot) return true;
+      const { bracket, tableau } = round.stripSlot;
+      return this.deSlots.some(s =>
+        String(s.strip_id) === this.filterStripId &&
+        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
+        s.tableau === tableau
+      );
+    },
+
+    boutVisible(round, bout) {
+      if (!this.filterStripId || !round.stripSlot) return true;
+      const { bracket, tableau } = round.stripSlot;
+      const slot = this.deSlots.find(s =>
+        String(s.strip_id) === this.filterStripId &&
+        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
+        s.tableau === tableau
+      );
+      if (!slot) return false;
+      const [lo, hi] = this._partitionRange(slot.partition, tableau);
+      return bout.tableau_position >= lo && bout.tableau_position <= hi;
     },
 
     showNotice(text, error = false) {

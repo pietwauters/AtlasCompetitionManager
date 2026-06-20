@@ -307,6 +307,48 @@ const Pipeline = {
     })();
   },
 
+  batchReorder(stripId, pendingOrderedIds) {
+    db.transaction(() => {
+      const maxDone = db.prepare(
+        "SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ? AND status = 'done'"
+      ).get(Number(stripId)).m;
+      const base = maxDone + 1;
+      pendingOrderedIds.forEach((id, i) => {
+        db.prepare(
+          'UPDATE pipeline_slots SET slot_order = ? WHERE id = ? AND strip_id = ?'
+        ).run(base + i, id, Number(stripId));
+      });
+    })();
+  },
+
+  moveToStrip(slotId, newStripId) {
+    return db.transaction(() => {
+      const slot = this.findById(slotId);
+      if (!slot) return null;
+      const newId = Number(newStripId);
+      if (slot.strip_id === newId) return slot;
+
+      const maxOrder = db.prepare(
+        'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
+      ).get(newId).m;
+
+      db.prepare(
+        'UPDATE pipeline_slots SET strip_id = ?, slot_order = ? WHERE id = ?'
+      ).run(newId, maxOrder + 1, slotId);
+
+      if (slot.pool_id) {
+        db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(newId, slot.pool_id);
+        const remaining = db.prepare(
+          'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
+        ).get(slot.strip_id).n;
+        if (remaining === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
+        db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(newId);
+      }
+
+      return this.findById(slotId);
+    })();
+  },
+
   // ── Pipeline navigation (used by OPP2 client) ────────────────────────────
 
   activeSlot(stripId) {
@@ -474,6 +516,7 @@ const Pipeline = {
       WHERE b.phase_id = ? AND b.de_round = ?
         AND o.round_index BETWEEN ? AND ?
         AND b.status != 'finished'
+        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
         AND (? IS NULL OR o.round_index > (
               SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?
             ))
@@ -577,6 +620,7 @@ const Pipeline = {
       LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
       WHERE b.phase_id = ? AND b.de_round = ?
         AND o.round_index BETWEEN ? AND ?
+        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
         AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)
       ORDER BY o.round_index DESC
       LIMIT 1

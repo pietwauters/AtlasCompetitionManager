@@ -43,6 +43,10 @@
 
     /* ── Slots ─────────────────────────────────────────── */
     .slot{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:.5rem;background:#fafafa}
+    .slot-dragging{opacity:.35;border-style:dashed}
+    .slot-drop-target{border-top:3px solid #1a6bab;margin-top:-.1rem}
+    .drag-handle{cursor:grab;color:#ccc;padding:0 .2rem;font-size:1rem;user-select:none;line-height:1}
+    .drag-handle:hover{color:#999}
     .slot-head{padding:.4rem .7rem;display:flex;align-items:center;gap:.4rem}
     .slot-label{flex:1;font-size:.85rem;font-weight:600}
     .slot-time{font-size:.78rem;color:#666;white-space:nowrap}
@@ -205,7 +209,7 @@
               <span style="font-size:.8rem;color:#1a6bab"
                 x-text="'▶ #' + liveState(selectedStrip.name).bout.bout_order + ' ' + liveState(selectedStrip.name).bout.left + ' — ' + liveState(selectedStrip.name).bout.right"></span>
             </template>
-            <span style="margin-left:auto;font-size:.78rem;color:#888">▲▼ to reorder · drag coming later</span>
+            <span style="margin-left:auto;font-size:.78rem;color:#888">drag or ▲▼ to reorder</span>
           </div>
 
           <!-- Slot list -->
@@ -216,7 +220,12 @@
 
             <template x-for="(slot, idx) in selectedStrip.slots" :key="slot.id">
               <div x-show="showSlot(slot, idx, selectedStrip.slots)"
-                   :class="'slot' + (slot.status === 'done' ? ' slot-done' : '')">
+                   :class="'slot' + (slot.status === 'done' ? ' slot-done' : '') + (drag.id === slot.id ? ' slot-dragging' : '') + (drag.overSlotId === slot.id && drag.id !== slot.id ? ' slot-drop-target' : '')"
+                   draggable="true"
+                   @dragstart.stop="dragStart(slot.id)"
+                   @dragover.prevent.stop="dragOver(slot.id)"
+                   @drop.prevent.stop="onDropSlot()"
+                   @dragend="dragEnd()">
 
                 <!-- Done slots: collapsed pill -->
                 <template x-if="slot.status === 'done' && !expandedSlots.has(slot.id)">
@@ -232,6 +241,7 @@
                 <template x-if="slot.status !== 'done' || expandedSlots.has(slot.id)">
                   <div>
                     <div class="slot-head" :style="slot.status === 'done' ? 'opacity:.65' : ''">
+                      <span class="drag-handle" title="Drag to reorder">⠿</span>
                       <span class="badge" :class="'badge-' + slot.status" x-text="slot.status"></span>
                       <span class="slot-label" x-text="slotLabel(slot)"></span>
                       <span x-show="slot.strip_count > 1" style="font-size:.75rem;color:#1a6bab;margin-left:.3rem"
@@ -273,6 +283,13 @@
                       <div class="slot-actions">
                         <button @click="moveSlot(slot.id, 'up')" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
                         <button @click="moveSlot(slot.id, 'down')" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
+                        <select @change="moveSlotToStrip(slot.id, $event.target.value); $event.target.value=''"
+                                style="font-size:.75rem;padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;background:#f8f9fb;cursor:pointer">
+                          <option value="">Move to →</option>
+                          <template x-for="s in strips.filter(s => s.id !== selectedStrip.id)" :key="s.id">
+                            <option :value="s.id" x-text="s.name || 'Piste ' + s.strip_number"></option>
+                          </template>
+                        </select>
                         <button @click="deleteSlot(slot.id)" style="font-size:.75rem;padding:.2rem .5rem;color:#922b21">Remove</button>
                       </div>
                     </div>
@@ -520,13 +537,13 @@
               <option value="">— Select —</option>
               <template x-for="rd in bulkModal.deRoundsForBulk" :key="rd.de_round">
                 <option :value="rd.de_round"
-                  x-text="'R' + rd.de_round + ' · ' + rd.total_bouts + ' bouts'"></option>
+                  x-text="'R' + rd.de_round + ' · ' + (rd.total_bouts - rd.bye_count) + ' bouts' + (rd.bye_count ? ' (' + rd.bye_count + ' byes)' : '')"></option>
               </template>
             </select>
           </label>
         </div>
         <div x-show="bulkModal.deStartRound" style="font-size:.8rem;color:#555;margin-bottom:.35rem">
-          Select pistes — bouts are divided equally (2, 4, or 8 pistes).
+          Select pistes — one slot per bout, pistes rotate in sequence.
         </div>
         <div x-show="bulkDePrevPisteIds">
           <button @click="bulkModal.selectedPisteIds = [...bulkDePrevPisteIds]"
@@ -623,13 +640,15 @@
       <div x-show="bulkModal.type === 'de' && bulkDePreview.length > 0" style="margin-bottom:.75rem">
         <div style="font-size:.83rem;font-weight:600;margin-bottom:.4rem">Assignment preview</div>
         <table class="bulk-table">
-          <thead><tr><th>Bouts</th><th></th><th>Piste</th><th>Status</th></tr></thead>
+          <thead><tr><th>#</th><th>Match</th><th></th><th>Piste</th><th>Start</th><th>Status</th></tr></thead>
           <tbody>
-            <template x-for="pa in bulkDePreview" :key="pa.piste.id">
+            <template x-for="pa in bulkDePreview" :key="pa.bout_start">
               <tr :class="pa.conflict ? 'bulk-row-conflict' : ''">
-                <td x-text="pa.bout_start + '–' + pa.bout_end + ' (' + pa.boutsInSlot + ')'"></td>
+                <td x-text="pa.bout_start" style="color:#888;width:2rem"></td>
+                <td x-text="pa.matchLabel" style="font-size:.8rem"></td>
                 <td style="color:#888">→</td>
                 <td x-text="pa.piste.name || 'Piste ' + pa.piste.strip_number"></td>
+                <td x-text="pa.slotStart || '—'" style="font-size:.78rem;color:#555"></td>
                 <td>
                   <span x-show="pa.conflict" style="color:#856404;font-size:.78rem">⚠ busy</span>
                   <span x-show="!pa.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
@@ -638,6 +657,9 @@
             </template>
           </tbody>
         </table>
+        <div x-show="bulkDePreview.length && bulkModal.deRoundsForBulk.find(r => r.de_round === Number(bulkModal.deStartRound))?.bye_count > 0"
+             style="font-size:.78rem;color:#856404;margin-top:.3rem"
+             x-text="'⚠ ' + bulkModal.deRoundsForBulk.find(r => r.de_round === Number(bulkModal.deStartRound))?.bye_count + ' bye position(s) in this round will be skipped automatically.'"></div>
       </div>
 
       <!-- ── No piste message ──────────────────────────────────────── -->
@@ -710,10 +732,12 @@ function app() {
     bulkModal: {
       open: false, type: 'pools', loading: false,
       competitionId: '', conflictAction: 'append',
-      dePhaseId: '', deRoundsForBulk: [], deStartRound: '',
+      dePhaseId: '', deRoundsForBulk: [], deStartRound: '', deRoundBoutsMap: {},
       selectedPisteIds: [], startTime: '',
     },
     lastBulkSlotIds: [],
+    drag: { id: null, overSlotId: null },
+    ganttVersion: 0,
     wantMulti: false,
     multiStrips: [],
     multiDynamic: false,
@@ -741,6 +765,7 @@ function app() {
     async loadStrips() {
       const data = await fetch('/api/opp2/pipeline').then(r => r.json()).catch(() => []);
       this.strips = data;
+      this.ganttVersion++;
       // Rebuild pool assignment map each time strips refresh.
       const map = {};
       for (const s of this.strips) {
@@ -832,6 +857,7 @@ function app() {
 
     get ganttData() {
       void this._tick;
+      void this.ganttVersion;
       const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
       const fmtMin = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
       const colorOf = s => s.status === 'done' ? '#999' : s.status === 'active' ? '#1e8449' : '#1a6bab';
@@ -1033,19 +1059,132 @@ function app() {
     },
 
     async moveSlot(id, direction) {
+      const strip = this.strips.find(s => s.slots.some(sl => sl.id === id));
       const r = await fetch(`/api/opp2/pipeline/slots/${id}/reorder`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Move failed', true); return; }
       await this.loadStrips();
+      if (strip) {
+        const updated = this.strips.find(s => s.id === strip.id);
+        if (updated) await this._recascadeStrip(updated);
+      }
+    },
+
+    async moveSlotToStrip(id, newStripId) {
+      if (!newStripId) return;
+      const sourceStrip = this.strips.find(s => s.slots.some(sl => sl.id === id));
+      const r = await fetch(`/api/opp2/pipeline/slots/${id}/move-strip`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strip_id: Number(newStripId) }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Move failed', true); return; }
+      await this.loadStrips();
+      if (sourceStrip) {
+        const updated = this.strips.find(s => s.id === sourceStrip.id);
+        if (updated) await this._recascadeStrip(updated);
+      }
+    },
+
+    // ── Drag-and-drop ─────────────────────────────────────────────────────────
+
+    dragStart(slotId) {
+      this.drag.id = slotId;
+    },
+
+    dragOver(slotId) {
+      this.drag.overSlotId = slotId;
+    },
+
+    dragEnd() {
+      this.drag = { id: null, overSlotId: null };
+    },
+
+    async onDropSlot() {
+      const fromId = this.drag.id;
+      const toId   = this.drag.overSlotId;
+      this.drag = { id: null, overSlotId: null };
+      if (!fromId || !toId || fromId === toId) return;
+      const strip = this.strips.find(s => s.slots.some(sl => sl.id === fromId));
+      if (!strip) return;
+      await this._reorderWithinStrip(strip, fromId, toId);
+    },
+
+    async _reorderWithinStrip(strip, draggedId, beforeId) {
+      const pending = strip.slots
+        .filter(s => s.status !== 'done')
+        .slice().sort((a, b) => a.slot_order - b.slot_order);
+      const withoutDragged = pending.filter(s => s.id !== draggedId);
+      const insertIdx = withoutDragged.findIndex(s => s.id === beforeId);
+      if (insertIdx === -1) return;
+      const dragged = pending.find(s => s.id === draggedId);
+      const newOrder = [
+        ...withoutDragged.slice(0, insertIdx),
+        dragged,
+        ...withoutDragged.slice(insertIdx),
+      ];
+      const r = await fetch(`/api/opp2/pipeline/strip/${strip.id}/reorder`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: newOrder.map(s => s.id) }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Reorder failed', true); return; }
+      await this.loadStrips();
+      const updated = this.strips.find(s => s.id === strip.id);
+      if (updated) await this._recascadeStrip(updated);
+    },
+
+    // Recascade all scheduled pending slots from the minimum scheduled time.
+    // Stops at any slot with no scheduled_start (treats it as a deliberate break).
+    async _recascadeStrip(strip) {
+      const pending = strip.slots
+        .filter(s => s.status !== 'done')
+        .slice().sort((a, b) => a.slot_order - b.slot_order);
+      const timed = pending.filter(s => s.scheduled_start);
+      if (!timed.length) return;
+      // Use the minimum scheduled_start as anchor so the block starts at the same wall-clock time.
+      const anchor = timed.reduce((mn, s) => s.scheduled_start < mn ? s.scheduled_start : mn, timed[0].scheduled_start);
+      const firstTimedIdx = pending.findIndex(s => s.scheduled_start);
+
+      const patches = [];
+      let runningTime = anchor;
+      for (let i = firstTimedIdx; i < pending.length; i++) {
+        const slot = pending[i];
+        if (!slot.scheduled_start) break; // unscheduled slot stops the chain
+        if (slot.scheduled_start !== runningTime) patches.push({ id: slot.id, scheduled_start: runningTime });
+        const end = this._computeSlotEnd(slot, runningTime);
+        if (!end) break; // no duration info — can't continue
+        runningTime = end;
+      }
+
+      for (const p of patches) await this._patchSlot(p.id, { scheduled_start: p.scheduled_start });
+      if (patches.length) await this.loadStrips();
+    },
+
+    _computeSlotEnd(slot, start) {
+      const mins   = slot.effective_minutes_per_bout || slot.minutes_per_bout;
+      const bouts  = slot.bout_count || 1;
+      if (!start || !mins || !bouts) return null;
+      return this.addMinutes(start, Math.round(mins * bouts));
+    },
+
+    async _patchSlot(id, fields) {
+      await fetch(`/api/opp2/pipeline/slots/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
     },
 
     async deleteSlot(id) {
       if (!confirm('Remove this slot from the pipeline?')) return;
+      const sourceStrip = this.strips.find(s => s.slots.some(sl => sl.id === id));
       const r = await fetch(`/api/opp2/pipeline/slots/${id}`, { method: 'DELETE' });
       if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Delete failed', true); return; }
       await this.loadStrips();
+      if (sourceStrip) {
+        const updated = this.strips.find(s => s.id === sourceStrip.id);
+        if (updated) await this._recascadeStrip(updated);
+      }
     },
 
     // ── Misc helpers ──────────────────────────────────────────────────────────
@@ -1059,11 +1198,25 @@ function app() {
     slotLabel(slot) {
       if (slot.type === 'pool')
         return `${slot.competition_name || '?'} — Pool ${slot.pool_number || '?'}`;
-      if (slot.type === 'de')
-        return `${slot.competition_name || '?'} — DE T${slot.tableau || '?'}${slot.partition && slot.partition !== 'full' ? ' ' + slot.partition : ''}`;
+      if (slot.type === 'de') {
+        const name = slot.competition_name || '?';
+        const t = slot.tableau || '?';
+        if (!slot.partition || slot.partition === 'full') return `${name} — DE T${t}`;
+        const [lo, hi] = this.boutRangeForPartition(slot.partition, slot.tableau);
+        return lo === hi
+          ? `${name} — DE T${t} bout ${lo}`
+          : `${name} — DE T${t} bouts ${lo}–${hi}`;
+      }
       if (slot.type === 'team_match')
         return `${slot.competition_name || '?'} — ${slot.left_team_name || '?'} vs ${slot.right_team_name || '?'}`;
       return slot.type || '—';
+    },
+
+    addMinutes(hhmm, mins) {
+      if (!hhmm || !mins) return hhmm || null;
+      const [h, m] = hhmm.split(':').map(Number);
+      const total = h * 60 + m + Math.round(mins);
+      return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`;
     },
 
     hasOverlap(prev, curr) {
@@ -1123,10 +1276,20 @@ function app() {
       return [lo, hi];
     },
 
-    // Partition codes for N equal groups (N must be a power of 2 ≤ 8).
-    partitionsForCount(n) {
-      return { 1: ['full'], 2: ['A','B'], 4: ['A1','A2','B1','B2'],
-               8: ['A1a','A1b','A2a','A2b','B1a','B1b','B2a','B2b'] }[n] || null;
+    // Returns the unique partition code for the single bout at round_index i (1-based)
+    // in a round of n total bouts.
+    partitionForBoutIndex(i, n) {
+      if (n === 1) return 'full';
+      const loChars = ['A', '1', 'a', 'c', 'e', 'g'];
+      const hiChars = ['B', '2', 'b', 'd', 'f', 'h'];
+      let lo = 1, hi = n, code = '', depth = 0;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (i <= mid) { code += loChars[depth]; hi = mid; }
+        else { code += hiChars[depth]; lo = mid + 1; }
+        depth++;
+      }
+      return code;
     },
 
     get bulkReady() {
@@ -1134,62 +1297,70 @@ function app() {
       return !!(this.bulkModal.dePhaseId && this.bulkModal.deStartRound);
     },
 
-    // Flat list: one entry per selected piste, for the selected round only.
+    // Flat list: one entry per real bout in the selected round, cycling across selected pistes.
     get bulkDePreview() {
       if (this.bulkModal.type !== 'de') return [];
-      const { dePhaseId, deRoundsForBulk, deStartRound, selectedPisteIds, startTime } = this.bulkModal;
+      const { dePhaseId, deRoundsForBulk, deStartRound, selectedPisteIds, startTime, deRoundBoutsMap } = this.bulkModal;
       if (!dePhaseId || !deStartRound || !selectedPisteIds.length) return [];
       const rd = deRoundsForBulk.find(r => r.de_round === Number(deStartRound));
       if (!rd) return [];
 
-      const n = selectedPisteIds.length;
-      const tableau = rd.total_bouts * 2;
-      const partitions = this.partitionsForCount(n);
-      if (!partitions || rd.total_bouts % n !== 0) return [];
+      const roundBouts = deRoundBoutsMap[Number(deStartRound)] || [];
+      const realBouts = roundBouts.filter(b => b.left_id && b.right_id);
+      if (!realBouts.length) return [];
 
       const pistes = selectedPisteIds.map(id => this.strips.find(s => s.id === id)).filter(Boolean);
-      if (pistes.length !== n) return [];
+      const tableau = rd.total_bouts * 2;
+      const phase = this.availableDePhases.find(p => p.id == dePhaseId);
+      const minsDE = phase ? this.effectiveMinutes(phase.weapon, phase.gender, 'de') : null;
+      const P = pistes.length;
 
-      return pistes.map((piste, i) => {
-        const [lo, hi] = this.boutRangeForPartition(partitions[i], tableau);
-        return { piste, partition: partitions[i], tableau,
-                 bout_start: lo, bout_end: hi, boutsInSlot: hi - lo + 1,
-                 conflict: this.pisteIsBusy(piste, startTime),
-                 de_round: Number(deStartRound) };
+      return realBouts.map((bout, i) => {
+        const piste = pistes[i % P];
+        const partition = this.partitionForBoutIndex(bout._roundIndex, rd.total_bouts);
+        const wave = Math.floor(i / P);
+        const slotStart = startTime ? this.addMinutes(startTime, wave * (minsDE || 0)) : null;
+        const ln = bout.left_last  ? bout.left_last  + (bout.left_first  ? ' ' + bout.left_first[0]  + '.' : '') : '?';
+        const rn = bout.right_last ? bout.right_last + (bout.right_first ? ' ' + bout.right_first[0] + '.' : '') : '?';
+        return {
+          piste, partition, tableau,
+          bout_start: bout._roundIndex, bout_end: bout._roundIndex, boutsInSlot: 1,
+          conflict: this.pisteIsBusy(piste, slotStart),
+          de_round: Number(deStartRound),
+          matchLabel: ln + ' v ' + rn,
+          slotStart,
+        };
       });
     },
 
     get bulkDeInvalidReason() {
-      const { deRoundsForBulk, deStartRound, selectedPisteIds } = this.bulkModal;
+      const { deRoundsForBulk, deStartRound, selectedPisteIds, deRoundBoutsMap } = this.bulkModal;
       if (!deStartRound || !selectedPisteIds.length) return '';
       const rd = deRoundsForBulk.find(r => r.de_round === Number(deStartRound));
       if (!rd) return '';
-      const n = selectedPisteIds.length;
-      if (n & (n - 1)) return `${n} pistes selected — must be a power of 2 (2, 4, 8…)`;
-      if (rd.total_bouts % n !== 0) return `${rd.total_bouts} bouts can't be split equally across ${n} pistes`;
+      const bouts = deRoundBoutsMap[Number(deStartRound)] || [];
+      if (!bouts.filter(b => b.left_id && b.right_id).length) return 'No real bouts in this round yet';
       return '';
     },
 
-    // Piste IDs in partition order from the PREVIOUS round — for the "same pistes" button.
+    // Unique piste IDs used in the previous round — for the "same pistes" button.
     get bulkDePrevPisteIds() {
       const { dePhaseId, deRoundsForBulk, deStartRound } = this.bulkModal;
       if (!dePhaseId || !deStartRound) return null;
       const prevRd = deRoundsForBulk.find(r => r.de_round === Number(deStartRound) - 1);
       if (!prevRd) return null;
       const prevTableau = prevRd.total_bouts * 2;
-      const byPartition = {};
+      const seen = new Set();
+      const ids = [];
       for (const s of this.strips) {
         for (const sl of s.slots) {
-          if (sl.type === 'de' && sl.phase_id == dePhaseId && sl.tableau == prevTableau)
-            byPartition[sl.partition || 'full'] = s.id;
+          if (sl.type === 'de' && sl.phase_id == dePhaseId && sl.tableau == prevTableau && !seen.has(s.id)) {
+            seen.add(s.id);
+            ids.push(s.id);
+          }
         }
       }
-      const n = Object.keys(byPartition).length;
-      if (!n) return null;
-      const parts = this.partitionsForCount(n);
-      if (!parts) return null;
-      const ids = parts.map(p => byPartition[p]).filter(Boolean);
-      return ids.length === n ? ids : null;
+      return ids.length ? ids : null;
     },
 
     get bulkReadyToSubmit() {
@@ -1210,17 +1381,34 @@ function app() {
     async loadBulkDeRounds(phaseId) {
       this.bulkModal.deStartRound = '';
       this.bulkModal.deRoundsForBulk = [];
+      this.bulkModal.deRoundBoutsMap = {};
       this.bulkModal.selectedPisteIds = [];
       if (!phaseId) return;
       const bouts = await fetch('/api/bouts?phase_id=' + phaseId).then(r => r.json()).catch(() => []);
-      const map = {};
+
+      const byRound = {};
       for (const b of bouts) {
         if (b.de_round == null) continue;
-        map[b.de_round] = (map[b.de_round] || 0) + 1;
+        if (!byRound[b.de_round]) byRound[b.de_round] = [];
+        byRound[b.de_round].push(b);
       }
-      this.bulkModal.deRoundsForBulk = Object.entries(map)
-        .map(([r, n]) => ({ de_round: Number(r), total_bouts: n }))
+
+      const boutsMap = {};
+      const totalMap = {};
+      const byeMap = {};
+      for (const [r, roundBouts] of Object.entries(byRound)) {
+        const dr = Number(r);
+        roundBouts.sort((a, b) => (a.tableau_position || 0) - (b.tableau_position || 0));
+        roundBouts.forEach((b, i) => { b._roundIndex = i + 1; });
+        boutsMap[dr] = roundBouts;
+        totalMap[dr] = roundBouts.length;
+        byeMap[dr] = roundBouts.filter(b => b.status === 'finished' && (!b.left_id || !b.right_id)).length;
+      }
+
+      this.bulkModal.deRoundsForBulk = Object.entries(totalMap)
+        .map(([r, n]) => ({ de_round: Number(r), total_bouts: n, bye_count: byeMap[r] || 0 }))
         .sort((a, b) => a.de_round - b.de_round);
+      this.bulkModal.deRoundBoutsMap = boutsMap;
     },
 
     get bulkCompetitions() {
@@ -1273,7 +1461,7 @@ function app() {
       Object.assign(this.bulkModal, {
         type: 'pools', loading: false,
         competitionId: '', conflictAction: 'append',
-        dePhaseId: '', deRoundsForBulk: [], deStartRound: '',
+        dePhaseId: '', deRoundsForBulk: [], deStartRound: '', deRoundBoutsMap: {},
         selectedPisteIds: [], startTime: '',
       });
       this.bulkModal.open = true;
@@ -1322,7 +1510,7 @@ function app() {
               phase_id: Number(this.bulkModal.dePhaseId),
               tableau: pa.tableau,
               partition: pa.partition,
-              scheduled_start: this.bulkModal.startTime || null,
+              scheduled_start: pa.slotStart || null,
               minutes_per_bout: minsDE || null,
             }),
           });
