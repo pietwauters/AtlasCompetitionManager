@@ -19,8 +19,8 @@
 
     /* ── Bracket (column tree) ── */
     .bracket-wrap{overflow-x:auto;padding-bottom:.5rem}
-    .bracket{display:flex;gap:0;align-items:stretch;min-width:max-content}
-    .round-col{display:flex;flex-direction:column;justify-content:space-around;width:220px;flex-shrink:0}
+    .bracket{display:flex;gap:0;align-items:stretch;width:100%}
+    .round-col{display:flex;flex-direction:column;justify-content:space-around;flex:1;min-width:180px}
     .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 0;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
     .round-col-note{font-size:.72rem;color:#aaa;text-align:center;padding:.15rem 0 .25rem}
     .bout-slot{flex:1;display:flex;align-items:center;padding:.25rem .5rem}
@@ -83,7 +83,7 @@
     <a href="/admin.html">Admin</a>
   </div>
 </header>
-<main>
+<main style="max-width:1600px">
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
@@ -100,23 +100,47 @@
         <span style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
         <button x-show="phase?.status==='active'" @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
       </span>
-      <template x-if="deStripOptions.length > 0">
-        <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem;margin-left:auto">
-          <label style="color:#666">View piste:</label>
-          <select x-model="filterStripId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
-            <option value="">All pistes</option>
-            <template x-for="s in deStripOptions" :key="s.id">
-              <option :value="String(s.id)" x-text="s.name"></option>
-            </template>
-          </select>
-        </span>
-      </template>
+      <span style="margin-left:auto;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+        <template x-if="sections.length > 1">
+          <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
+            <label style="color:#666">Section:</label>
+            <select x-model="filterSectionId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+              <option value="">All</option>
+              <template x-for="s in sections" :key="s.id">
+                <option :value="s.id" x-text="s.label"></option>
+              </template>
+            </select>
+          </span>
+        </template>
+        <template x-if="activeSectionRoundOptions.length > 0">
+          <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
+            <label style="color:#666">From:</label>
+            <select x-model.number="filterFromRoundIdx" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+              <option :value="0">All rounds</option>
+              <template x-for="opt in activeSectionRoundOptions" :key="opt.idx">
+                <option :value="opt.idx" x-text="opt.label"></option>
+              </template>
+            </select>
+          </span>
+        </template>
+        <template x-if="deStripOptions.length > 0">
+          <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
+            <label style="color:#666">Piste:</label>
+            <select x-model="filterStripId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+              <option value="">All</option>
+              <template x-for="s in deStripOptions" :key="s.id">
+                <option :value="String(s.id)" x-text="s.name"></option>
+              </template>
+            </select>
+          </span>
+        </template>
+      </span>
     </div>
   </div>
 
   <!-- Sections -->
   <template x-for="section in sections" :key="section.id">
-    <div class="card">
+    <div class="card" x-show="sectionVisible(section)">
       <h2 style="margin-top:0" x-text="section.label + (tableauSize ? ' (' + tableauSize + '-person tableau)' : '')"
           x-show="section.id === 'main'"></h2>
       <h2 style="margin-top:0" x-text="section.label" x-show="section.id !== 'main'"></h2>
@@ -127,7 +151,7 @@
         <div class="bracket-wrap">
           <div class="bracket">
             <template x-for="(round, ri) in section.rounds" :key="ri">
-              <div class="round-col" x-show="roundVisible(round)">
+              <div class="round-col" x-show="roundVisible(round, ri, section)">
                 <h3 x-text="round.label"></h3>
                 <div class="round-col-note" x-show="round.note" x-text="round.note"></div>
                 <div x-show="round.stripSlot && roundPisteLabel(round)"
@@ -175,7 +199,7 @@
       <template x-if="section.displayHint === 'list'">
         <div class="list-section">
           <template x-for="(round, ri) in section.rounds" :key="ri">
-            <div class="list-round" x-show="roundVisible(round)">
+            <div class="list-round" x-show="roundVisible(round, ri, section)">
               <div class="list-round-header">
                 <span class="list-round-label" x-text="round.label"></span>
                 <span class="list-round-note" x-show="round.note" x-text="round.note"></span>
@@ -310,16 +334,19 @@ function app() {
     phaseId, phase: null, comp: null,
     sections:    [],
     tableauSize: 0,
-    nameMap:     {},   // competitor_id → display name
-    seedMap:     {},   // competitor_id → original seed number
+    nameMap:     {},
+    seedMap:     {},
     deSlots:     [],
     filterStripId: '',
+    filterSectionId: '',
+    filterFromRoundIdx: 0,
     selected: null,
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
     finalResults: null,
 
     async init() {
+      this.$watch('filterSectionId', () => { this.filterFromRoundIdx = 0; });
       if (!phaseId) { this.showNotice('No phase ID', true); return; }
       await this.load();
       const es = new EventSource('/api/phases/' + phaseId + '/events');
@@ -596,6 +623,29 @@ function app() {
       }
     },
 
+    // ── Section / round filter ───────────────────────────────────────────────
+
+    get currentSectionForFilter() {
+      if (this.filterSectionId) return this.sections.find(s => s.id === this.filterSectionId) || null;
+      if (this.sections.length === 1) return this.sections[0];
+      return null;
+    },
+
+    get activeSectionRounds() {
+      const s = this.currentSectionForFilter;
+      return s ? s.rounds : [];
+    },
+
+    get activeSectionRoundOptions() {
+      return this.activeSectionRounds
+        .map((r, i) => ({ label: r.label, idx: i }))
+        .filter(item => item.idx > 0);
+    },
+
+    sectionVisible(section) {
+      return !this.filterSectionId || section.id === this.filterSectionId;
+    },
+
     // ── Piste display / filter ───────────────────────────────────────────────
 
     roundPisteLabel(round) {
@@ -626,7 +676,9 @@ function app() {
       return [lo, hi];
     },
 
-    roundVisible(round) {
+    roundVisible(round, ri, section) {
+      const fs = this.currentSectionForFilter;
+      if (fs && section && section.id === fs.id && ri < this.filterFromRoundIdx) return false;
       if (!this.filterStripId || !round.stripSlot) return true;
       const { bracket, tableau } = round.stripSlot;
       return this.deSlots.some(s =>
