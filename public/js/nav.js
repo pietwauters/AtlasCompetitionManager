@@ -4,14 +4,38 @@ function navApp() {
     activeComps: [],
 
     async initNav() {
+      this._initTheme();
       this._injectFullscreen();
       this._injectManualLink();
       await Promise.all([ this.loadActiveComps(), this._injectUserWidget() ]);
       setInterval(() => this.loadActiveComps(), 20000);
     },
 
+    _initTheme() {
+      const navRight = document.querySelector('header .nav-right');
+      if (!navRight) return;
+
+      const btn = document.createElement('button');
+      btn.title = 'Toggle dark / light mode';
+      btn.style.cssText = 'background:none;border:none;color:inherit;font-size:1rem;cursor:pointer;padding:.2rem .4rem;margin:0;opacity:.75';
+
+      const current = () => document.documentElement.getAttribute('data-theme') ||
+        (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const setIcon = () => { btn.textContent = current() === 'dark' ? '☀' : '🌙'; };
+      setIcon();
+
+      btn.addEventListener('click', () => {
+        const next = current() === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('atlas-theme', next);
+        setIcon();
+      });
+
+      navRight.insertBefore(btn, navRight.firstChild);
+    },
+
     _injectManualLink() {
-      const navRight = document.querySelector('header > div[style*="margin-left"]');
+      const navRight = document.querySelector('header .nav-right');
       if (!navRight) return;
       const a = document.createElement('a');
       a.href = '/manual/index.html';
@@ -55,7 +79,7 @@ function navApp() {
     },
 
     async _injectUserWidget() {
-      const navRight = document.querySelector('header > div[style*="margin-left"]');
+      const navRight = document.querySelector('header .nav-right');
       if (!navRight) return;
 
       const data = await fetch('/api/auth/me').then(r => r.json()).catch(() => ({}));

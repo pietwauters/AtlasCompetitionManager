@@ -7,6 +7,7 @@
     <title>Tournament Details — Atlas</title>
     <script src="/js/htmx.min.js"></script>
     <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/theme-init.js"></script>
     <style>
         .card {
             background: #fff;
@@ -62,11 +63,18 @@
 </head>
 
 <body>
-    <header>
-        <strong>Atlas Competition Manager</strong>
-        <a href="/">Home</a>
-        <a href="/tournaments">Tournaments</a>
-        <a href="/competitions">Competitions</a>
+    <header x-data="navApp()" x-init="initNav()">
+      <a href="/index.html"><strong>Atlas</strong></a>
+      <template x-for="comp in activeComps" :key="comp.phase_id">
+        <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+      </template>
+      <div class="nav-right">
+        <a href="/strips.html">Strips</a>
+        <a href="/opp2.html">Schedule</a>
+        <a href="/people.html">People</a>
+        <a href="/clubs.html">Clubs</a>
+        <a href="/admin.html">Admin</a>
+      </div>
     </header>
     <main>
         <div class="card" id="tournament-detail">
@@ -106,6 +114,8 @@
         function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         window.addEventListener('DOMContentLoaded', loadTournamentDetail);
     </script>
+    <script src="/js/nav.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 
 </html>

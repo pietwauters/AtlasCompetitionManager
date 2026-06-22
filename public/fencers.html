@@ -7,57 +7,13 @@
     <title>Fencers — Atlas</title>
     <script src="/js/htmx.min.js"></script>
     <script src="/js/alpinejs.min.js" defer></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/theme-init.js"></script>
     <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f0f2f5;
-            color: #1a1a2e;
-        }
-
-        header {
-            background: #1a1a2e;
-            color: #fff;
-            padding: 0.8rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        header a {
-            color: #aad4f5;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-
         main {
             max-width: 960px;
             margin: 2rem auto;
             padding: 0 1rem;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
-        }
-
-        h2 {
-            margin-top: 0;
-        }
-
-        .meta {
-            font-size: 0.85rem;
-            color: #666;
-            margin-bottom: 1rem;
         }
 
         /* Form */
@@ -98,20 +54,6 @@
 
         input[name="initial_seed"] {
             width: 65px;
-        }
-
-        button.primary {
-            background: #1a6bab;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 0.45rem 1.1rem;
-            cursor: pointer;
-            font-size: 0.93rem;
-        }
-
-        button.primary:hover {
-            background: #155594;
         }
 
         button.sm {
@@ -264,12 +206,18 @@
 </head>
 
 <body>
-    <header style="background:#222;color:#fff;padding:.7rem 2rem;display:flex;align-items:center;gap:1.5rem">
-        <strong style="font-weight:700">Atlas</strong>
-        <a href="/" style="color:#fff;text-decoration:none;">Home</a>
-        <a href="/competitions" style="color:#fff;text-decoration:none;">Competitions</a>
-        <a id="header-comp-link" href="#" style="color:#aad4f5;text-decoration:none;">Current Competition</a>
-        <span id="header-comp-name" style="margin-left:auto; opacity:.7; font-size:.9rem"></span>
+    <header x-data="navApp()" x-init="initNav()">
+        <a href="/index.html"><strong>Atlas</strong></a>
+        <template x-for="comp in activeComps" :key="comp.phase_id">
+            <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+        </template>
+        <div class="nav-right">
+            <a href="/strips.html">Strips</a>
+            <a href="/opp2.html">Schedule</a>
+            <a href="/people.html">People</a>
+            <a href="/clubs.html">Clubs</a>
+            <a href="/admin.html">Admin</a>
+        </div>
     </header>
     <main>
         <!-- Add fencer -->
@@ -612,6 +560,7 @@
             };
         }
     </script>
+    <script src="/js/nav.js"></script>
 </body>
 
 </html>

@@ -1,112 +1,239 @@
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --clr-brand:         #1a6bab;
+  --clr-brand-hover:   #155594;
+  --clr-success:       #1e8449;
+  --clr-success-hover: #196b3c;
+  --clr-danger:        #c0392b;
+  --clr-danger-hover:  #a93226;
+  --clr-de:            #8e44ad;
+  --clr-de-hover:      #7d3c98;
+
+  --clr-bg:            #f0f2f5;
+  --clr-surface:       #fff;
+  --clr-text:          #1a1a2e;
+  --clr-text-muted:    #555;
+  --clr-border:        #eee;
+  --clr-row-hover:     #fafbfc;
+  --clr-th-bg:         #f7f8fa;
+  --clr-btn-bg:        #f5f5f5;
+  --clr-btn-border:    #ccc;
+
+  --clr-nav-bg:        #1a1a2e;
+  --clr-nav-link:      #aad4f5;
+  --clr-nav-comp:      #c8e6ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --clr-bg:            #101318;
+    --clr-surface:       #1a1d24;
+    --clr-text:          #e2e8f0;
+    --clr-text-muted:    #94a3b8;
+    --clr-border:        #2a3040;
+    --clr-row-hover:     #1e2330;
+    --clr-th-bg:         #161924;
+    --clr-btn-bg:        #252a36;
+    --clr-btn-border:    #3d4555;
+
+    --clr-nav-bg:        #0d0f14;
+    --clr-nav-link:      #93c5fd;
+    --clr-nav-comp:      #bfdbfe;
+
+    --clr-brand:         #3b82f6;
+    --clr-brand-hover:   #2563eb;
+    --clr-success:       #22c55e;
+    --clr-success-hover: #16a34a;
+    --clr-danger:        #ef4444;
+    --clr-danger-hover:  #dc2626;
+    --clr-de:            #a855f7;
+    --clr-de-hover:      #9333ea;
+  }
+}
+
+[data-theme="light"] {
+  --clr-bg:            #f0f2f5;
+  --clr-surface:       #fff;
+  --clr-text:          #1a1a2e;
+  --clr-text-muted:    #555;
+  --clr-border:        #eee;
+  --clr-row-hover:     #fafbfc;
+  --clr-th-bg:         #f7f8fa;
+  --clr-btn-bg:        #f5f5f5;
+  --clr-btn-border:    #ccc;
+
+  --clr-nav-bg:        #1a1a2e;
+  --clr-nav-link:      #aad4f5;
+  --clr-nav-comp:      #c8e6ff;
+
+  --clr-brand:         #1a6bab;
+  --clr-brand-hover:   #155594;
+  --clr-success:       #1e8449;
+  --clr-success-hover: #196b3c;
+  --clr-danger:        #c0392b;
+  --clr-danger-hover:  #a93226;
+  --clr-de:            #8e44ad;
+  --clr-de-hover:      #7d3c98;
+}
+
+[data-theme="dark"] {
+  --clr-bg:            #101318;
+  --clr-surface:       #1a1d24;
+  --clr-text:          #e2e8f0;
+  --clr-text-muted:    #94a3b8;
+  --clr-border:        #2a3040;
+  --clr-row-hover:     #1e2330;
+  --clr-th-bg:         #161924;
+  --clr-btn-bg:        #252a36;
+  --clr-btn-border:    #3d4555;
+
+  --clr-nav-bg:        #0d0f14;
+  --clr-nav-link:      #93c5fd;
+  --clr-nav-comp:      #bfdbfe;
+
+  --clr-brand:         #3b82f6;
+  --clr-brand-hover:   #2563eb;
+  --clr-success:       #22c55e;
+  --clr-success-hover: #16a34a;
+  --clr-danger:        #ef4444;
+  --clr-danger-hover:  #dc2626;
+  --clr-de:            #a855f7;
+  --clr-de-hover:      #9333ea;
+}
+
+/* ── Global reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
 button,
 .actions a,
 input[type="submit"] {
-    display: inline-block;
-    font-size: 0.95rem;
-    padding: 0.45rem 1.1rem;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    background: #f5f5f5;
-    color: #1a1a2e;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
-    margin-right: 0.5rem;
+  display: inline-block;
+  font-size: 0.95rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: 5px;
+  border: 1px solid var(--clr-btn-border);
+  background: var(--clr-btn-bg);
+  color: var(--clr-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  margin-right: 0.5rem;
 }
 
 button.primary,
 .actions a.primary {
-    background: #1a6bab;
-    color: #fff;
-    border: none;
+  background: var(--clr-brand);
+  color: #fff;
+  border: none;
 }
 
 button.primary:hover,
 .actions a.primary:hover {
-    background: #155594;
+  background: var(--clr-brand-hover);
 }
 
 button.success,
 .actions a.success {
-    background: #1e8449;
-    color: #fff;
-    border: none;
+  background: var(--clr-success);
+  color: #fff;
+  border: none;
 }
 
 button.success:hover,
 .actions a.success:hover {
-    background: #196b3c;
+  background: var(--clr-success-hover);
 }
 
 button.danger,
 .actions a.danger {
-    background: #c0392b;
-    color: #fff;
-    border: none;
+  background: var(--clr-danger);
+  color: #fff;
+  border: none;
 }
 
 button.danger:hover,
 .actions a.danger:hover {
-    background: #a93226;
+  background: var(--clr-danger-hover);
 }
 
 button:disabled,
 .actions a:disabled,
 button[disabled] {
-    opacity: 0.5;
-    cursor: default;
-    pointer-events: none;
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
 }
 
-/* Shared stylesheet for Atlas Competition Manager */
-
+/* ── Layout ───────────────────────────────────────────────────────────────── */
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    background: #f0f2f5;
-    color: #1a1a2e;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: var(--clr-bg);
+  color: var(--clr-text);
 }
 
 header {
-    background: #1a1a2e;
-    color: #fff;
-    padding: 0.8rem 2rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    position: sticky;
-    top: 0;
-    z-index: 50;
+  background: var(--clr-nav-bg);
+  color: #fff;
+  padding: 0.8rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 header a {
-    color: #aad4f5;
-    text-decoration: none;
-    font-size: 0.9rem;
+  color: var(--clr-nav-link);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+header a.active {
+  color: #fff;
+  font-weight: 600;
+}
+
+.nav-right {
+  margin-left: auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.nav-comp-link {
+  color: var(--clr-nav-comp) !important;
+  font-weight: 500;
+  border-left: 1px solid #334;
+  padding-left: 0.75rem;
 }
 
 main {
-    max-width: 860px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+  max-width: 860px;
+  margin: 2rem auto;
+  padding: 0 1rem;
 }
 
+/* ── Cards ────────────────────────────────────────────────────────────────── */
 .card {
-    background: #fff;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+  background: var(--clr-surface);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
 }
 
-h1,
-h2 {
-    color: #1a1a2e;
-    margin-top: 0;
+h1, h2 {
+  color: var(--clr-text);
+  margin-top: 0;
 }
 
 .meta {
-    display: flex;
-    gap: 2rem;
-    font-size: .9rem;
+  display: flex;
+  gap: 2rem;
+  font-size: .9rem;
 }

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Clubs</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
   <style>
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th    { text-align: left; padding: 0.5rem 0.75rem; background: #f0f2f5; border-bottom: 2px solid #ddd; }
@@ -33,17 +34,16 @@
 
 <header x-data="navApp()" x-init="initNav()">
   <a href="/index.html"><strong>Atlas</strong></a>
-  <nav>
-    <template x-for="comp in activeComps" :key="comp.phase_id">
-      <a :href="phaseLink(comp)" x-text="compLabel(comp)"
-         style="font-size:.85rem;background:#1a4a7a;padding:.2rem .6rem;border-radius:4px"></a>
-    </template>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+  </template>
+  <div class="nav-right">
     <a href="/strips.html">Strips</a>
     <a href="/opp2.html">Schedule</a>
     <a href="/people.html">People</a>
     <a href="/clubs.html" class="active">Clubs</a>
     <a href="/admin.html">Admin</a>
-  </nav>
+  </div>
 </header>
 
 <main>

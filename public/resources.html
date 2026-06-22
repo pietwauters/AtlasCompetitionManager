@@ -1,23 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>Resources</title>
-    <link rel="stylesheet" href="/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Resources</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
 </head>
-
 <body>
-    <header>
-        <h1>Resources</h1>
-        <a href="/">Back to Home</a>
-    </header>
-    <main>
-        <ul>
-            <li><a href="/strips">Strips</a></li>
-            <!-- Future: <li><a href="/referees">Referees</a></li> -->
-        </ul>
-    </main>
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+  </template>
+  <div class="nav-right">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2>Resources</h2>
+    <ul>
+      <li><a href="/strips.html">Strips</a></li>
+    </ul>
+  </div>
+</main>
+<script src="/js/nav.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
-
 </html>

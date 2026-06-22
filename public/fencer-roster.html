@@ -6,47 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roster — Atlas</title>
     <script src="/js/alpinejs.min.js" defer></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/theme-init.js"></script>
     <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f0f2f5;
-            color: #1a1a2e;
-        }
-
-        header {
-            background: #1a1a2e;
-            color: #fff;
-            padding: 0.8rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        header a {
-            color: #aad4f5;
-            text-decoration: none;
-            font-size: .9rem;
-        }
-
         main {
             max-width: 1100px;
             margin: 2rem auto;
             padding: 0 1rem;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
         }
 
         /* ---- Filter bar ---- */
@@ -87,21 +53,6 @@
 
         button.sm:hover {
             background: #f0f0f0;
-        }
-
-        button.primary {
-            background: #1a6bab;
-            color: #fff;
-            border: none;
-        }
-
-        button.primary:hover {
-            background: #155594;
-        }
-
-        button.primary:disabled {
-            opacity: .5;
-            cursor: default;
         }
 
         /* ---- Roster table ---- */
@@ -215,12 +166,18 @@
 </head>
 
 <body>
-    <header>
-        <strong>Atlas</strong>
-        <a href="/">Home</a>
-        <a href="/competitions">Competitions</a>
-        <a id="comp-link" href="#">← Competition</a>
-        <span id="header-meta" style="margin-left:auto;opacity:.7;font-size:.9rem"></span>
+    <header x-data="navApp()" x-init="initNav()">
+        <a href="/index.html"><strong>Atlas</strong></a>
+        <template x-for="comp in activeComps" :key="comp.phase_id">
+            <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+        </template>
+        <div class="nav-right">
+            <a href="/strips.html">Strips</a>
+            <a href="/opp2.html">Schedule</a>
+            <a href="/people.html">People</a>
+            <a href="/clubs.html">Clubs</a>
+            <a href="/admin.html">Admin</a>
+        </div>
     </header>
 
     <main x-data="roster()" x-init="init()">
@@ -477,6 +434,7 @@
             };
         }
     </script>
+    <script src="/js/nav.js"></script>
 </body>
 
 </html>

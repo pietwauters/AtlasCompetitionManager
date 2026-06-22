@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
   <style>
     .section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
                    color:#888;margin:1.5rem 0 .6rem}
@@ -47,9 +48,9 @@
   <a href="/index.html"><strong>Atlas</strong></a>
   <template x-for="comp in activeComps" :key="comp.phase_id">
     <a :href="phaseLink(comp)" x-text="compLabel(comp)"
-       style="color:#c8e6ff;font-weight:500;border-left:1px solid #334;padding-left:.75rem"></a>
+       class="nav-comp-link"></a>
   </template>
-  <div style="margin-left:auto;display:flex;gap:1rem;align-items:center">
+  <div class="nav-right">
     <a href="/strips.html">Strips</a>
     <a href="/opp2.html">Schedule</a>
     <a href="/people.html">People</a>
