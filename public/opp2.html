@@ -7,18 +7,12 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
-    .notice-ok{background:#d5f5e3;color:#1e5631}
-    .notice-err{background:#fde8e8;color:#922b21}
-    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600;margin-right:.3rem}
+    .badge{margin-right:.3rem}
     .badge-connected{background:#d4edda;color:#155724}
     .badge-disconnected{background:#d6d8db;color:#383d41}
-    .badge-pending{background:#fef3cd;color:#856404}
-    .badge-active{background:#d4edda;color:#155724}
     .badge-done{background:#d6d8db;color:#383d41}
     .badge-online{background:#d4edda;color:#155724}
     .badge-offline{background:#fde8e8;color:#922b21}
-    select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 
     /* ── Two-panel layout ──────────────────────────────── */
     .schedule-panel{display:flex;gap:0;border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.07)}
@@ -68,11 +62,10 @@
     .add-form-grid .full{grid-column:1/-1}
     .add-form-grid select,.add-form-grid input{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.82rem;width:100%;box-sizing:border-box}
     .add-form-grid label{font-size:.78rem;color:#555;display:flex;flex-direction:column;gap:.15rem}
-    .form-actions{grid-column:1/-1;display:flex;gap:.5rem;margin-top:.25rem}
+    .form-actions{margin-top:.25rem}
 
     /* ── Bulk assign modal ─────────────────────────────── */
-    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
-    .modal-box{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:1.5rem;width:min(740px,94vw);max-height:90vh;overflow-y:auto}
+    .modal-box{width:min(740px,94vw)}
     .bulk-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
     .bulk-table th{text-align:left;padding:.4rem .6rem;background:#f0f2f5;border-bottom:2px solid #ddd;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555}
     .bulk-table td{padding:.4rem .6rem;border-bottom:1px solid #eee;vertical-align:middle}

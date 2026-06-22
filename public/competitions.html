@@ -22,28 +22,7 @@
         }
 
         /* Form */
-        .form-row {
-            display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
-            align-items: flex-end;
-        }
-
-        .form-row label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
-            font-size: 0.85rem;
-            font-weight: bold;
-        }
-
-        .form-row input,
-        .form-row select {
-            padding: 0.45rem 0.7rem;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 0.95rem;
-        }
+        .form-row label { font-weight: bold; }
 
         .form-row input[name="name"] {
             width: 260px;
@@ -58,46 +37,8 @@
         }
 
         /* Competition table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.92rem;
-            min-width: 1000px;
-        }
-
-        th {
-            text-align: left;
-            padding: 0.6rem 0.8rem;
-            background: #f7f8fa;
-            border-bottom: 2px solid #dde;
-            color: #555;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-        }
-
-        td {
-            padding: 0.7rem 0.8rem;
-            border-bottom: 1px solid #eee;
-            vertical-align: middle;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        tr:hover td {
-            background: #fafbfc;
-        }
-
-        a.row-link {
-            color: #1a6bab;
-            font-weight: bold;
-            text-decoration: none;
-        }
-
-        a.row-link:hover {
-            text-decoration: underline;
-        }
+        table { min-width: 1000px; }
+        th { text-transform: uppercase; }
 
         /* Status badge */
         .badge {
@@ -124,15 +65,6 @@
             color: #1a6bab;
         }
 
-        .empty {
-            color: #888;
-            font-style: italic;
-            padding: 1rem 0;
-        }
-
-        .loading {
-            color: #888;
-        }
     </style>
 </head>
 

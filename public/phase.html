@@ -7,33 +7,20 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    table{width:100%;border-collapse:collapse;font-size:.9rem}
-    th{text-align:left;padding:.5rem .75rem;background:#f0f2f5;border-bottom:2px solid #ddd}
-    td{padding:.5rem .75rem;border-bottom:1px solid #eee;vertical-align:middle}
-    tr:hover td{background:#f9f9f9}
-    .badge{display:inline-block;font-size:.72rem;padding:.15rem .5rem;border-radius:10px;font-weight:600;margin-right:.2rem}
-    .badge-pending{background:#fef3cd;color:#856404}
-    .badge-active{background:#d4edda;color:#155724}
-    .badge-finished{background:#d6d8db;color:#383d41}
-    .notice-bar{padding:.6rem 1rem;border-radius:5px;margin-bottom:1rem;font-size:.9rem}
-    .notice-ok{background:#d5f5e3;color:#1e5631}
-    .notice-err{background:#fde8e8;color:#922b21}
     .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:1.5rem}
-    .pool-card{background:#fff;border-radius:8px;padding:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid #ddd}
+    .pool-card{background:var(--clr-surface);border-radius:8px;padding:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid #ddd}
     .pool-card.active{border-left-color:#1e8449}
     .pool-card.finished{border-left-color:#1a6bab}
     .pool-card h3{margin:0 0 .5rem;font-size:1rem}
-    .pool-meta{font-size:.8rem;color:#666;margin-bottom:.5rem}
-    .progress-bar{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin:.4rem 0}
+    .pool-meta{font-size:.8rem;color:var(--clr-text-muted);margin-bottom:.5rem}
+    .progress-bar{height:6px;background:var(--clr-border);border-radius:3px;overflow:hidden;margin:.4rem 0}
     .progress-fill{height:100%;background:#1e8449;transition:width .3s}
     .pool-actions{margin-top:.75rem;display:flex;gap:.5rem}
     .rank-pos{font-weight:700;color:#1a6bab;width:2rem;text-align:center}
     .adv{color:#1e8449;font-weight:600}
     .elim{color:#c0392b}
     .vr{font-family:monospace}
-    select{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
-    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center}
-    .modal-box{background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:1.5rem;width:min(400px,90vw);max-height:90vh;overflow-y:auto}
+    .modal-box{width:min(400px,90vw)}
   </style>
 </head>
 <body x-data="app()" x-init="init()">

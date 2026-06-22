@@ -237,3 +237,127 @@ h1, h2 {
   gap: 2rem;
   font-size: .9rem;
 }
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: var(--clr-th-bg);
+  border-bottom: 2px solid var(--clr-border);
+  color: var(--clr-text-muted);
+}
+td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--clr-border); vertical-align: middle; }
+tr:hover td { background: var(--clr-row-hover); }
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.badge-active, .badge-open      { background: #d4edda; color: #155724; }
+.badge-pending, .badge-draft    { background: #fef3cd; color: #856404; }
+.badge-finished, .badge-closed  { background: #d6d8db; color: #383d41; }
+.badge-archived                 { background: #e2e3e5; color: #6c757d; }
+
+/* ── Notice bars ─────────────────────────────────────────────────────────── */
+.notice-bar { padding: 0.6rem 1rem; border-radius: 5px; margin-bottom: 1rem; font-size: 0.9rem; }
+.notice-ok  { background: #d4edda; color: #155724; }
+.notice-err { background: #fde8e8; color: #922b21; }
+
+/* ── Modals ──────────────────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .45);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-box, .modal {
+  background: var(--clr-surface);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
+  padding: 1.5rem;
+  width: min(520px, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+
+/* ── Form helpers ────────────────────────────────────────────────────────── */
+.form-row { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
+.form-row label,
+.form-grid label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.form-grid .full { grid-column: 1 / -1; }
+.form-actions    { grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* ── Input normalisation (dark-mode surface + text for all form controls) ── */
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+select,
+textarea {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--clr-btn-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--clr-surface);
+  color: var(--clr-text);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.tabs { display: flex; border-bottom: 2px solid var(--clr-border); margin-bottom: 1rem; }
+.tab  {
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 0.9rem;
+  color: var(--clr-text-muted);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+.tab.active { color: var(--clr-brand); border-bottom-color: var(--clr-brand); font-weight: 600; }
+
+/* ── Section label ───────────────────────────────────────────────────────── */
+.section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--clr-text-muted);
+  margin: 1rem 0 0.5rem;
+  grid-column: 1 / -1;
+}
+
+/* ── Row / comp links ────────────────────────────────────────────────────── */
+a.row-link, a.comp-link { color: var(--clr-brand); font-weight: 600; text-decoration: none; }
+a.row-link:hover, a.comp-link:hover { text-decoration: underline; }
+
+/* ── State indicators ────────────────────────────────────────────────────── */
+.empty   { color: var(--clr-text-muted); font-style: italic; }
+.loading { color: var(--clr-text-muted); }
+
+/* ── Chips (team status) ─────────────────────────────────────────────────── */
+.chip { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.78rem; font-weight: 600; }
+.chip-pending  { background: #e9ecef; color: #495057; }
+.chip-active   { background: #cfe2ff; color: #084298; }
+.chip-tiebreak { background: #fff3cd; color: #856404; }
+.chip-finished { background: #d1e7dd; color: #0f5132; }
+
+/* ── Button extras ───────────────────────────────────────────────────────── */
+button.secondary {
+  background: var(--clr-btn-bg);
+  color: var(--clr-text);
+  border: 1px solid var(--clr-btn-border);
+}
+button.secondary:hover { filter: brightness(.93); }
+button.warning { background: #f59e0b; color: #000; border: none; }
+button.warning:hover { background: #d97706; }

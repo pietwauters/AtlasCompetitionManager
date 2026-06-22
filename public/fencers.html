@@ -17,27 +17,7 @@
         }
 
         /* Form */
-        .form-row {
-            display: flex;
-            gap: 0.6rem;
-            flex-wrap: wrap;
-            align-items: flex-end;
-        }
-
-        .form-row label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
-            font-size: 0.82rem;
-            font-weight: bold;
-        }
-
-        .form-row input {
-            padding: 0.42rem 0.65rem;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 0.93rem;
-        }
+        .form-row label { font-weight: bold; }
 
         input[name="name"] {
             width: 200px;
@@ -103,105 +83,13 @@
         }
 
         /* Table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-
-        th {
-            text-align: left;
-            padding: 0.55rem 0.75rem;
-            background: #f7f8fa;
-            border-bottom: 2px solid #dde;
-            color: #555;
-            font-size: 0.78rem;
-            text-transform: uppercase;
-        }
-
-        td {
-            padding: 0.65rem 0.75rem;
-            border-bottom: 1px solid #eee;
-            vertical-align: middle;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        tr:hover td {
-            background: #fafbfc;
-        }
-
-        .badge-active {
-            color: #1e8449;
-        }
-
-        .badge-withdrawn {
-            color: #c0392b;
-        }
-
-        .badge-dns {
-            color: #888;
-        }
-
-        .empty {
-            color: #888;
-            font-style: italic;
-        }
-
-        .loading {
-            color: #888;
-        }
+        td { padding: 0.65rem 0.75rem; }
 
         /* Edit modal */
-        .modal-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, .45);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal {
-            background: #fff;
-            border-radius: 10px;
-            padding: 2rem;
-            width: 420px;
-            max-width: 95vw;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, .2);
-        }
-
-        .modal h3 {
-            margin-top: 0;
-        }
-
-        .modal .form-row {
-            margin-bottom: 1rem;
-        }
-
-        .modal-footer {
-            display: flex;
-            gap: .6rem;
-            justify-content: flex-end;
-            margin-top: 1.2rem;
-        }
-
-        button.secondary {
-            background: #e8ecf0;
-            color: #333;
-            border: none;
-            border-radius: 5px;
-            padding: .45rem 1rem;
-            cursor: pointer;
-            font-size: .93rem;
-        }
-
-        button.secondary:hover {
-            background: #d0d5db;
-        }
+        .modal { width: 420px; max-width: 95vw; padding: 2rem; border-radius: 10px; }
+        .modal h3 { margin-top: 0; }
+        .modal .form-row { margin-bottom: 1rem; }
+        .modal-footer { display: flex; gap: .6rem; justify-content: flex-end; margin-top: 1.2rem; }
     </style>
 </head>
 
