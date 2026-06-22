@@ -352,6 +352,11 @@ a.row-link:hover, a.comp-link:hover { text-decoration: underline; }
 .chip-tiebreak { background: #fff3cd; color: #856404; }
 .chip-finished { background: #d1e7dd; color: #0f5132; }
 
+/* ── Inline action group (buttons/links side-by-side in table rows) ─────── */
+.row-actions { display: flex; gap: 0.35rem; align-items: center; white-space: nowrap; }
+.row-actions button,
+.row-actions a { margin-right: 0; padding: 0.3rem 0.65rem; font-size: 0.85rem; }
+
 /* ── Button extras ───────────────────────────────────────────────────────── */
 button.secondary {
   background: var(--clr-btn-bg);

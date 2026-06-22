@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
+    main { max-width: 1100px; }
     .badge-fencer  { background: #d6eaf8; color: #1a6bab; }
     .badge-referee { background: #d5f5e3; color: #1e8449; }
     .toolbar input[type=search] { flex: 1; min-width: 180px; }
@@ -98,8 +99,10 @@
               <span class="badge badge-referee" x-show="p.is_referee">referee</span>
             </td>
             <td>
-              <button @click="editPerson(p)">Edit</button>
-              <button class="danger" @click="deletePerson(p)">Delete</button>
+              <div class="row-actions">
+                <button @click="editPerson(p)">Edit</button>
+                <button class="danger" @click="deletePerson(p)">Delete</button>
+              </div>
             </td>
           </tr>
         </template>

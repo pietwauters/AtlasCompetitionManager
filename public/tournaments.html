@@ -56,9 +56,11 @@
               <td x-text="c.competitor_count"></td>
               <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
               <td>
-                <button @click="editComp(c)">Edit</button>
-                <button @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
-                <button class="danger" @click="deleteComp(c)">Delete</button>
+                <div class="row-actions">
+                  <button @click="editComp(c)">Edit</button>
+                  <button @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
+                  <button class="danger" @click="deleteComp(c)">Delete</button>
+                </div>
               </td>
             </tr>
           </template>
