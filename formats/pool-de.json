@@ -1,0 +1,31 @@
+{
+  "id": "pool-de",
+  "description": "One Pool Round then DE",
+  "params": [
+    {
+      "id": "pool_advancement_pct",
+      "label": "Advancement after pools (%)",
+      "type": "integer",
+      "default": 70,
+      "min": 10,
+      "max": 100
+    }
+  ],
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "useParam": "pool_advancement_pct" }
+    },
+    {
+      "id": "final",
+      "label": "Final Tableau",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "participants": { "seedingMethod": "last_pool" }
+    }
+  ]
+}

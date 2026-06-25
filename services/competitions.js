@@ -62,16 +62,17 @@ const Competition = {
     return withAgeCategories(comp);
   },
 
-  create({ tournament_id, name, weapon, gender, date, status, age_category_ids, is_team }) {
+  create({ tournament_id, name, weapon, gender, date, status, age_category_ids, is_team, format_id }) {
     const { lastInsertRowid } = db.prepare(`
-      INSERT INTO competitions (tournament_id, name, weapon, gender, date, status, is_team)
-      VALUES (@tournament_id, @name, @weapon, @gender, @date, @status, @is_team)
+      INSERT INTO competitions (tournament_id, name, weapon, gender, date, status, is_team, format_id)
+      VALUES (@tournament_id, @name, @weapon, @gender, @date, @status, @is_team, @format_id)
     `).run({
       tournament_id: tournament_id || null,
       name, weapon, gender,
       date: date || null,
       status: status || 'active',
       is_team: is_team ? 1 : 0,
+      format_id: format_id || null,
     });
     if (age_category_ids?.length) {
       this.setAgeCategories(lastInsertRowid, age_category_ids);
@@ -85,12 +86,17 @@ const Competition = {
     const m = { ...current, ...fields };
     db.prepare(`
       UPDATE competitions SET tournament_id=@tournament_id, name=@name,
-        weapon=@weapon, gender=@gender, date=@date, status=@status, is_team=@is_team
+        weapon=@weapon, gender=@gender, date=@date, status=@status, is_team=@is_team,
+        format_id=@format_id, format_params=@format_params
       WHERE id=@id
     `).run({ id: Number(id), tournament_id: m.tournament_id || null,
              name: m.name, weapon: m.weapon, gender: m.gender,
              date: m.date || null, status: m.status,
-             is_team: fields.is_team !== undefined ? (fields.is_team ? 1 : 0) : (current.is_team || 0) });
+             is_team: fields.is_team !== undefined ? (fields.is_team ? 1 : 0) : (current.is_team || 0),
+             format_id: 'format_id' in fields ? (fields.format_id || null) : (current.format_id || null),
+             format_params: 'format_params' in fields
+               ? (fields.format_params ? JSON.stringify(fields.format_params) : null)
+               : (current.format_params || null) });
     if (fields.age_category_ids !== undefined) {
       this.setAgeCategories(id, fields.age_category_ids || []);
     }

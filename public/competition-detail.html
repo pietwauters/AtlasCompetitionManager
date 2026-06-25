@@ -76,11 +76,78 @@
     </div>
   </div>
 
-  <!-- ── Phases ───────────────────────────────────── -->
+  <!-- ── Rounds ──────────────────────────────────── -->
   <div class="card">
     <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
       <h2 style="margin:0;flex:1">Rounds</h2>
-      <button class="primary" @click="phaseFormOpen=!phaseFormOpen" x-show="comp?.status!=='finished'">+ New round</button>
+      <!-- Free-form new round (no format, or team comp) -->
+      <button class="primary"
+              x-show="comp?.status!=='finished' && (!comp?.format_id || comp?.is_team)"
+              @click="phaseFormOpen=!phaseFormOpen">+ New round</button>
+      <!-- Format-guided next stage -->
+      <button class="primary"
+              x-show="comp?.status!=='finished' && comp?.format_id && !comp?.is_team && formatPlan?.nextStageId"
+              @click="openNextFormatStage()">
+        + <span x-text="formatPlan ? formatStageLabel(formatPlan.nextStageId) : 'Next stage'"></span>
+      </button>
+    </div>
+
+    <!-- ── Format picker (shown only when no phases exist and no format set) ── -->
+    <div x-show="!comp?.is_team && !comp?.format_id && phases.length === 0 && comp?.status !== 'finished'"
+         style="margin-bottom:1rem;padding:.75rem;background:#f8f9ff;border-radius:6px;border:1px solid #dde">
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.5rem">Competition format <span style="font-weight:400;color:#777">(optional)</span></div>
+      <div style="font-size:.83rem;color:#666;margin-bottom:.6rem">
+        Choose a predefined format to guide phase creation with exemptions and multi-cohort finals.
+        Leave unset for manual, round-by-round control.
+      </div>
+      <select class="inline" x-model="selectedFormat" style="width:100%;margin-bottom:.5rem">
+        <option value="">— no format (manual) —</option>
+        <template x-for="f in availableFormats" :key="f.id">
+          <option :value="f.id" x-text="f.description"></option>
+        </template>
+      </select>
+      <template x-if="availableFormats.find(f=>f.id===selectedFormat)?.params?.length">
+        <div style="margin-bottom:.5rem">
+          <template x-for="p in availableFormats.find(f=>f.id===selectedFormat)?.params||[]" :key="p.id">
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
+              <label style="font-size:.83rem;min-width:200px" x-text="p.label+':'"></label>
+              <input type="number" class="inline" :min="p.min" :max="p.max"
+                     x-model.number="formatParams[p.id]" :placeholder="p.default"
+                     style="width:80px">
+            </div>
+          </template>
+        </div>
+      </template>
+      <button class="primary" :disabled="!selectedFormat" @click="applyFormat()">Apply format</button>
+    </div>
+
+    <!-- ── Format stage plan ── -->
+    <div x-show="comp?.format_id && formatPlan" style="margin-bottom:1rem">
+      <div style="font-size:.82rem;color:#666;margin-bottom:.5rem"
+           x-text="formatPlan?.format?.description"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem">
+        <template x-for="stage in formatPlan?.stages||[]" :key="stage.id">
+          <div style="border:1px solid #dde;border-radius:6px;padding:.6rem .75rem;background:#fafbff">
+            <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
+              <span class="badge"
+                    :class="stage.status==='finished'?'badge-finished':stage.status==='active'?'badge-active':'badge-pending'"
+                    x-text="stage.status"></span>
+              <span style="font-size:.72rem;padding:.1rem .35rem;border-radius:8px;font-weight:600;background:#e8eaf6;color:#3949ab"
+                    x-text="stage.phaseType==='de'?'DE':'Pool'"></span>
+            </div>
+            <div style="font-weight:600;font-size:.88rem" x-text="stage.label"></div>
+            <div style="font-size:.8rem;color:#666;margin-top:.2rem"
+                 x-text="stage.participantCount ? stage.participantCount+' fencers' : ''"></div>
+            <div x-show="stage.survivorTarget" style="font-size:.78rem;color:#856404;margin-top:.1rem"
+                 x-text="'→ top '+stage.survivorTarget+' advance'"></div>
+          </div>
+        </template>
+      </div>
+      <!-- Format removal (only before any phase is created) -->
+      <div x-show="phases.length===0" style="margin-top:.5rem">
+        <button style="font-size:.8rem;color:#999;background:none;border:none;cursor:pointer;padding:0"
+                @click="removeFormat()">✕ Remove format</button>
+      </div>
     </div>
 
     <!-- Existing phases -->
@@ -90,14 +157,21 @@
         <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
         <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:10px;font-weight:600;background:#e8eaf6;color:#3949ab" x-text="ph.type==='de'?'DE':ph.type==='team_de'?'Team DE':'Pool'"></span>
         <span style="font-weight:600;font-size:.9rem" x-text="ph.rule_doc.replace('.json','')"></span>
+        <span x-show="ph.format_stage" style="font-size:.78rem;color:#6c757d;font-style:italic" x-text="formatStageLabel(ph.format_stage)"></span>
         <span x-show="ph.type==='pool'" style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
         <span x-show="ph.type==='team_de'" style="font-size:.82rem;color:#666" x-text="'Matches: '+(ph.matches_complete||0)+'/'+(ph.matches_total||0)"></span>
         <a :href="ph.type==='team_de'?'/team-de.html?phase='+ph.id+'&comp='+compId:(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
+        <!-- Close button for format-driven preliminary DEs -->
+        <button x-show="ph.type==='de' && ph.format_stage && ph.status==='active' && isFormatPrelimDE(ph)"
+                style="font-size:.8rem;background:#fff3cd;color:#856404;border-color:#ffc107"
+                @click="closeFormatDE(ph)">
+          Close (<span x-text="getFormatStage(ph.format_stage)?.survivorTarget||'?'"></span> survivors)
+        </button>
         <button class="danger" style="font-size:.8rem" @click="deletePhase(ph)">Delete</button>
       </div>
     </template>
 
-    <!-- New phase form -->
+    <!-- New phase form (free-form, no format) -->
     <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
       <!-- Phase type selector -->
       <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
@@ -193,6 +267,58 @@
                 :disabled="teams.filter(t=>t.status==='active'&&t.seed).length < 2"
                 @click="createTeamDE()">Create Team DE tableau</button>
       </div>
+    </div>
+
+    <!-- Format-guided new stage form -->
+    <div x-show="formatStageFormOpen && formatPlan?.nextStageId"
+         style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem"
+           x-text="'Create: '+formatStageLabel(formatPlan?.nextStageId)"></div>
+
+      <template x-if="nextFormatStage()?.phaseType==='pool'">
+        <div>
+          <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+            <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Separation
+              <select class="inline" x-model="poolSeparation">
+                <option value="club">Club</option>
+                <option value="nationality">Nationality</option>
+                <option value="nationality,club">Nationality + Club</option>
+                <option value="">None</option>
+              </select>
+            </label>
+            <button @click="fetchFormatPoolOptions()" :disabled="formatPoolLoading">
+              <span x-text="formatPoolLoading ? 'Loading…' : 'Calculate pool options'"></span>
+            </button>
+          </div>
+          <div x-show="poolOptions" style="margin-top:.75rem">
+            <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
+                 x-text="'For '+(poolOptions?.fencerCount||0)+' participants in this stage:'"></div>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+              <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
+                <button
+                  :class="chosenSizes===opt?'primary':''"
+                  @click="chosenSizes=opt"
+                  x-text="formatOption(opt) + (i===poolOptions?.recommended?' (recommended)':'')"
+                  style="font-size:.85rem">
+                </button>
+              </template>
+            </div>
+            <div style="margin-top:.75rem">
+              <button class="success" :disabled="!chosenSizes" @click="createFormatPhase()">Create pools</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="nextFormatStage()?.phaseType==='de'">
+        <div>
+          <div x-show="formatDeInfo" style="font-size:.85rem;color:#555;margin-bottom:.6rem"
+               x-text="formatDeInfo?.N+' participants → T'+formatDeInfo?.tableauSize+(formatDeInfo?.byeCount?' ('+formatDeInfo?.byeCount+' bye'+(formatDeInfo?.byeCount>1?'s':'')+')':'')"></div>
+          <div x-show="nextFormatStage()?.survivorTarget" style="font-size:.83rem;color:#856404;margin-bottom:.6rem"
+               x-text="'Runs until '+nextFormatStage()?.survivorTarget+' survivors remain, then close manually'"></div>
+          <button class="success" @click="createFormatDE()">Create tableau</button>
+        </div>
+      </template>
     </div>
   </div>
 
@@ -366,6 +492,10 @@ function app() {
     notice:{text:'',error:false},
     teams:[], newTeamName:'', addingTeam:false, expandedTeam:null,
     addMemberSel:{}, addMemberRole:{},
+    // Format
+    availableFormats:[], selectedFormat:'', formatParams:{},
+    formatPlan:null, formatStageFormOpen:false,
+    formatPoolLoading:false, formatDeInfo:null,
 
     get eligClubs() {
       return [...new Set(this.eligible.map(f=>f.club_name).filter(Boolean))].sort();
@@ -399,8 +529,14 @@ function app() {
 
     async init() {
       if(!compId){this.showNotice('No competition ID in URL',true);return;}
-      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules()]);
+      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules(),this.loadFormats()]);
       if(this.comp?.is_team) await this.loadTeams();
+      if(this.comp?.format_id) await this.loadFormatPlan();
+      this.$watch('selectedFormat', id => {
+        const fmt = this.availableFormats.find(f => f.id === id);
+        this.formatParams = {};
+        if (fmt?.params) { for (const p of fmt.params) this.formatParams[p.id] = p.default; }
+      });
     },
 
     async loadComp() {
@@ -593,6 +729,127 @@ function app() {
       if(n<2)return'—';
       let t=1; while(t<n)t*=2;
       return t+'-team tableau'+(t>n?' ('+(t-n)+' bye'+(t-n>1?'s':'')+')':'');
+    },
+
+    // ── Formats ───────────────────────────────────────────────────────────────
+    async loadFormats() {
+      this.availableFormats = await fetch('/api/formats').then(r=>r.json()).catch(()=>[]);
+    },
+    async loadFormatPlan() {
+      if(!this.comp?.format_id)return;
+      const r = await fetch('/api/competitions/'+compId+'/format-plan');
+      if(r.ok) this.formatPlan = await r.json();
+    },
+    async applyFormat() {
+      if(!this.selectedFormat)return;
+      // Validate counts first
+      const v = await fetch('/api/competitions/'+compId+'/validate-format',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({format_id: this.selectedFormat})
+      });
+      const vd = await v.json();
+      if(!v.ok){ this.showNotice(vd.error||'Format not compatible with current roster',true); return; }
+      // Save format_id and any operator-supplied params
+      const r = await fetch('/api/competitions/'+compId,{
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({format_id: this.selectedFormat, format_params: Object.keys(this.formatParams).length ? this.formatParams : null})
+      });
+      if(!r.ok){ this.showNotice('Failed to set format',true); return; }
+      await this.loadComp();
+      await this.loadFormatPlan();
+      this.showNotice('Format applied');
+    },
+    async removeFormat() {
+      const r = await fetch('/api/competitions/'+compId,{
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({format_id: null, format_params: null})
+      });
+      if(!r.ok){ this.showNotice('Failed to remove format',true); return; }
+      this.formatPlan = null; this.selectedFormat = ''; this.formatParams = {};
+      await this.loadComp();
+      this.showNotice('Format removed');
+    },
+    formatStageLabel(stageId) {
+      if(!stageId||!this.formatPlan) return stageId||'';
+      const s = this.formatPlan.stages.find(s=>s.id===stageId);
+      return s ? s.label : stageId;
+    },
+    getFormatStage(stageId) {
+      if(!stageId||!this.formatPlan) return null;
+      return this.formatPlan.stages.find(s=>s.id===stageId)||null;
+    },
+    nextFormatStage() {
+      if(!this.formatPlan?.nextStageId) return null;
+      return this.getFormatStage(this.formatPlan.nextStageId);
+    },
+    isFormatPrelimDE(ph) {
+      const stage = this.getFormatStage(ph.format_stage);
+      return !!(stage?.survivorTarget);
+    },
+    openNextFormatStage() {
+      this.formatStageFormOpen = !this.formatStageFormOpen;
+      if(!this.formatStageFormOpen) return;
+      this.poolOptions = null; this.chosenSizes = null; this.formatDeInfo = null;
+      const next = this.nextFormatStage();
+      if(next?.phaseType === 'de') this.fetchFormatDeInfo();
+    },
+    async fetchFormatPoolOptions() {
+      this.formatPoolLoading = true; this.poolOptions = null; this.chosenSizes = null;
+      const next = this.nextFormatStage();
+      const url = '/api/competitions/'+compId+'/phases/pool-options?rule_doc='+encodeURIComponent(next.rule)+'&format_stage_id='+encodeURIComponent(next.id);
+      const r = await fetch(url);
+      this.formatPoolLoading = false;
+      const data = await r.json();
+      if(!r.ok){ this.showNotice(data.error||'Failed',true); return; }
+      this.poolOptions = data;
+      this.chosenSizes = data.options[data.recommended];
+    },
+    async fetchFormatDeInfo() {
+      const next = this.nextFormatStage();
+      if(!next) return;
+      // We estimate participant count from the format plan
+      const stage = this.getFormatStage(next.id);
+      const n = stage?.participantCount || 0;
+      if(n < 2) { this.formatDeInfo = null; return; }
+      const t = Math.pow(2, Math.ceil(Math.log2(n)));
+      this.formatDeInfo = { N: n, tableauSize: t, byeCount: t - n };
+    },
+    async createFormatPhase() {
+      const next = this.nextFormatStage();
+      const sep  = this.poolSeparation ? this.poolSeparation.split(',') : [];
+      const r    = await fetch('/api/competitions/'+compId+'/phases',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ rule_doc: next.rule, chosen_sizes: this.chosenSizes, separation: sep, format_stage_id: next.id })
+      });
+      const data = await r.json();
+      if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
+      this.showNotice('Round created');
+      this.formatStageFormOpen = false; this.poolOptions = null; this.chosenSizes = null;
+      await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
+    },
+    async createFormatDE() {
+      const next = this.nextFormatStage();
+      const r    = await fetch('/api/competitions/'+compId+'/phases/create-de',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ rule_doc: next.rule, format_stage_id: next.id })
+      });
+      const data = await r.json();
+      if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
+      this.showNotice('Tableau created');
+      this.formatStageFormOpen = false; this.formatDeInfo = null;
+      await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
+    },
+    async closeFormatDE(ph) {
+      const stage = this.getFormatStage(ph.format_stage);
+      const n = stage?.survivorTarget;
+      if(!confirm('Close this preliminary tableau? The '+n+' survivors will advance to the final.\nAll bouts in rounds 1–'+Math.round(Math.log2(Math.pow(2,Math.ceil(Math.log2(stage?.participantCount||1)))/n))+' must be finished.'))return;
+      const r = await fetch('/api/competitions/'+compId+'/phases/'+ph.id+'/close',{
+        method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+      });
+      const data = await r.json();
+      if(!r.ok){ this.showNotice(data.error||'Close failed',true); return; }
+      this.showNotice(data.survivors+' survivors identified — ready to create the final tableau');
+      await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
 
     showNotice(text,error=false){ this.notice={text,error}; setTimeout(()=>{this.notice={text:'',error:false};},4000); },

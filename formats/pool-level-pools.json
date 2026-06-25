@@ -1,0 +1,22 @@
+{
+  "id": "pool-level-pools",
+  "description": "Pool Round then Level Pools (final ranking)",
+  "stages": [
+    {
+      "id": "pools_1",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "noElimination": true }
+    },
+    {
+      "id": "level_pools",
+      "label": "Level Pools",
+      "phaseType": "pool",
+      "rule": "level-pools.json",
+      "participants": { "seedingMethod": "last_pool" },
+      "advancement": { "isFinalRanking": true }
+    }
+  ]
+}

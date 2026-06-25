@@ -6,6 +6,7 @@ const { formPools, calcPoolOptions } = require('../lib/poolFormation');
 const { buildFullBracket } = require('../lib/deFormation');
 const Competitor     = require('./competitors');
 const Settings       = require('./settings');
+const Format         = require('./formats');
 
 const DEFAULT_CRITERIA = [
   'victory_ratio_desc', 'indicator_desc',
@@ -40,11 +41,28 @@ const Phase = {
   // Pool options — tell the UI what pool size configurations are possible.
   // Returns { options, recommended, fencerCount } where recommended is the
   // index of the default choice (equal-size pool if N divisible by 6 or 7).
+  // formatStageId: when provided, participant count is derived from the format.
   // ---------------------------------------------------------------------------
-  calcOptions(compId, ruleDoc) {
-    const rule       = loadRule(ruleDoc);
-    const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
-    const N          = competitors.length;
+  calcOptions(compId, ruleDoc, formatStageId = null) {
+    const rule = loadRule(ruleDoc);
+
+    let N;
+    if (formatStageId) {
+      const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
+      if (comp?.format_id) {
+        const format = Format.loadFormat(comp.format_id);
+        const stage  = Format.getStage(format, formatStageId);
+        if (stage) {
+          const participants = Format.resolveParticipants(compId, format, stage);
+          N = participants.length;
+        }
+      }
+    }
+
+    if (!N) {
+      const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+      N = competitors.length;
+    }
 
     if (N < 2) throw Object.assign(new Error('At least 2 active competitors required.'), { status: 400 });
 
@@ -63,11 +81,33 @@ const Phase = {
   // chosenSizes: sorted-desc array, e.g. [7, 7, 6]
   // separation: optional override array, e.g. ['club'] or ['nationality','club']
   //             replaces the value from the rule JSON.
+  // formatStageId: when provided, participants come from the format definition.
   // ---------------------------------------------------------------------------
-  create(compId, ruleDoc, chosenSizes, separation) {
+  create(compId, ruleDoc, chosenSizes, separation, formatStageId = null) {
     const rule       = loadRule(ruleDoc);
     if (Array.isArray(separation)) rule.poolFormation.separation = separation;
-    const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+
+    // Resolve participants — format-aware or all active
+    let competitors;
+    let resolvedFormat = null;
+    let resolvedStage  = null;
+    if (formatStageId) {
+      const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
+      if (comp?.format_id) {
+        resolvedFormat = Format.loadFormat(comp.format_id);
+        resolvedStage  = Format.getStage(resolvedFormat, formatStageId);
+        Format.assertNextStage(compId, resolvedFormat, formatStageId);
+        const participants = Format.resolveParticipants(compId, resolvedFormat, resolvedStage);
+        // findAll returns full rows; we need to re-fetch details for the participant ids
+        const ids   = participants.map(p => p.competitor_id);
+        const all   = Competitor.findAll(compId);
+        competitors = all.filter(c => ids.includes(c.competitor_id));
+      }
+    }
+
+    if (!competitors) {
+      competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+    }
 
     if (!competitors.length) throw Object.assign(new Error('No active competitors.'), { status: 400 });
 
@@ -104,9 +144,9 @@ const Phase = {
       }
 
       const { lastInsertRowid: phaseId } = db.prepare(`
-        INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
-        VALUES (@comp_id, @order, 'pool', @rule_doc, 'active')
-      `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
+        INSERT INTO phases (competition_id, phase_order, type, rule_doc, status, format_stage)
+        VALUES (@comp_id, @order, 'pool', @rule_doc, 'active', @format_stage)
+      `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc, format_stage: formatStageId || null });
 
       for (const pool of pools) {
         const { lastInsertRowid: poolId } = db.prepare(`
@@ -318,22 +358,51 @@ const Phase = {
   // ---------------------------------------------------------------------------
   // Close phase: save rankings, mark advanced/eliminated, update statuses.
   // advancementOverride: optional { method, value, multipleOf } from manager.
+  // For format-driven DE stages with survivorTarget, delegates to formats.closeFormatDE.
   // ---------------------------------------------------------------------------
   close(phaseId, advancementOverride = null) {
     const phase = this.findById(phaseId);
     if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
 
+    // Format-driven DE close (preliminary tableau with survivorTarget)
+    if (phase.type === 'de' && phase.format_stage) {
+      const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(phase.competition_id);
+      if (comp?.format_id) {
+        const format = Format.loadFormat(comp.format_id);
+        const stage  = Format.getStage(format, phase.format_stage);
+        if (stage?.advancement?.survivorTarget) {
+          return Format.closeFormatDE(phaseId, stage.advancement.survivorTarget, stage.advancement.survivorCohort);
+        }
+      }
+    }
+
     const rankings = this.calculateRankings(phaseId);
     const N        = rankings.length;
 
     // Determine advancement rule
+    let resolvedFormat = null;
+    let resolvedStage  = null;
+    if (phase.format_stage) {
+      const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(phase.competition_id);
+      if (comp?.format_id) {
+        resolvedFormat = Format.loadFormat(comp.format_id);
+        resolvedStage  = Format.getStage(resolvedFormat, phase.format_stage);
+      }
+    }
+
     const rule = loadRule(phase.rule_doc);
     const adv = advancementOverride || rule.advancement || { method: 'percentage', value: 70 };
 
+    // Format-driven pool stage: delegate advancement/cohort logic to the format service.
+    // applyPoolClose returns the advanceN to use, or null to fall back to rule logic.
+    let formatAdvanceN = null;
+    if (resolvedStage && !advancementOverride) {
+      formatAdvanceN = Format.applyPoolClose(phase.competition_id, phaseId, rankings, resolvedFormat, resolvedStage);
+    }
+
     let advanceN;
-    if (!advancementOverride && adv.eliminateAfterPhase === true) {
-      // Rule says this phase is final: no one advances regardless of the percentage value.
-      advanceN = 0;
+    if (formatAdvanceN !== null) {
+      advanceN = formatAdvanceN;
     } else {
       advanceN = N;
       switch (adv.method) {
@@ -358,6 +427,8 @@ const Phase = {
       advanceN = Math.max(0, Math.min(advanceN, N));
     }
 
+    const noElimination = (resolvedStage?.advancement?.noElimination || resolvedStage?.advancement?.isFinalRanking) && !advancementOverride;
+
     db.transaction(() => {
       // Clear previous rankings for this phase (in case of re-close)
       db.prepare('DELETE FROM rankings WHERE phase_id = ?').run(phaseId);
@@ -371,12 +442,14 @@ const Phase = {
       `);
 
       for (let i = 0; i < rankings.length; i++) {
-        const r       = rankings[i];
+        const r        = rankings[i];
         const advanced = i < advanceN ? 1 : 0;
         insertRanking.run({ ...r, phase_id: phaseId, advanced });
 
-        // Update competitor status
-        if (advanced) {
+        if (noElimination) {
+          // Format stage with no elimination — applyPoolClose already set status/cohort.
+          // Do not touch competitor status here.
+        } else if (advanced) {
           db.prepare("UPDATE competitors SET status='active' WHERE id=?").run(r.competitor_id);
         } else {
           db.prepare(`
@@ -393,7 +466,7 @@ const Phase = {
     // Remove any manual tie order stored for this phase — no longer needed.
     Settings.delete('tie_order_' + phaseId);
 
-    return { rankings, advanced: advanceN, eliminated: N - advanceN };
+    return { rankings, advanced: advanceN, eliminated: noElimination ? 0 : N - advanceN };
   },
 
   // ---------------------------------------------------------------------------
@@ -526,11 +599,29 @@ const Phase = {
   // ---------------------------------------------------------------------------
   // Create DE phase: inserts phase + all bout slots for every round.
   // seedingMethod: 'last' (default) or 'combined'
+  // formatStageId: when provided, participants come from the format definition.
   // ---------------------------------------------------------------------------
-  createDE(compId, ruleDoc, seedingMethod = 'last') {
-    const seeding     = this._getDeSeeding(compId, seedingMethod);
-    const competitors = seeding.map(r => ({ competitor_id: r.competitor_id }));
-    const rule        = loadRule(ruleDoc);
+  createDE(compId, ruleDoc, seedingMethod = 'last', formatStageId = null) {
+    let competitors;
+    let resolvedFormat = null;
+    let resolvedStage  = null;
+
+    if (formatStageId) {
+      const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
+      if (comp?.format_id) {
+        resolvedFormat = Format.loadFormat(comp.format_id);
+        resolvedStage  = Format.getStage(resolvedFormat, formatStageId);
+        Format.assertNextStage(compId, resolvedFormat, formatStageId);
+        competitors = Format.resolveParticipants(compId, resolvedFormat, resolvedStage);
+      }
+    }
+
+    if (!competitors) {
+      const seeding = this._getDeSeeding(compId, seedingMethod);
+      competitors = seeding.map(r => ({ competitor_id: r.competitor_id }));
+    }
+
+    const rule = loadRule(ruleDoc);
 
     const { nodes, tableauSize, totalRounds } = buildFullBracket(competitors, rule);
 
@@ -552,9 +643,9 @@ const Phase = {
       }
 
       const { lastInsertRowid: phaseId } = db.prepare(`
-        INSERT INTO phases (competition_id, phase_order, type, rule_doc, status)
-        VALUES (@comp_id, @order, 'de', @rule_doc, 'active')
-      `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc });
+        INSERT INTO phases (competition_id, phase_order, type, rule_doc, status, format_stage)
+        VALUES (@comp_id, @order, 'de', @rule_doc, 'active', @format_stage)
+      `).run({ comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc, format_stage: formatStageId || null });
 
       // Pass 1 — insert every bout; collect DB ids indexed by tempId.
       const insertBout = db.prepare(`
@@ -721,16 +812,34 @@ const Phase = {
 
         scorePlacement(); // bronze
       } else {
-        // Standard DE: process main bracket round by round, then placement DAG.
-        const maxRound = db.prepare(
+        // For format-driven preliminary DEs, only simulate up to the stopping round.
+        // The manager closes the phase manually after that; later rounds stay pending.
+        let stoppingRound = null;
+        if (phase.format_stage) {
+          const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(phase.competition_id);
+          if (comp?.format_id) {
+            try {
+              const format = Format.loadFormat(comp.format_id);
+              const stage  = Format.getStage(format, phase.format_stage);
+              if (stage?.advancement?.survivorTarget) {
+                const tHalf = db.prepare(
+                  "SELECT COUNT(*) AS n FROM bouts WHERE phase_id=? AND de_round=1 AND bracket='main'"
+                ).get(phaseId).n;
+                stoppingRound = Math.round(Math.log2(tHalf * 2 / stage.advancement.survivorTarget));
+              }
+            } catch {}
+          }
+        }
+
+        const maxRound = stoppingRound || (db.prepare(
           "SELECT MAX(de_round) AS m FROM bouts WHERE phase_id=? AND bracket='main'"
-        ).get(phaseId).m || 1;
+        ).get(phaseId).m || 1);
 
         for (let r = 1; r <= maxRound; r++) {
           scoreRound('main', r);
         }
 
-        scorePlacement();
+        if (!stoppingRound) scorePlacement();
       }
     }
 
@@ -754,6 +863,25 @@ const Phase = {
         WHERE eliminated_after = ?
       `).run(id);
 
+      // Clear format cohorts that were assigned as part of this phase's close.
+      // For a pool phase: pool_exempt cohort. For a DE phase: de_survivors cohort.
+      if (phase.format_stage) {
+        const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(phase.competition_id);
+        if (comp?.format_id) {
+          const format = Format.loadFormat(comp.format_id);
+          const stage  = Format.getStage(format, phase.format_stage);
+          if (stage?.advancement?.exemptCohort) {
+            db.prepare("UPDATE competitors SET format_cohort=NULL WHERE competition_id=? AND format_cohort=?")
+              .run(phase.competition_id, stage.advancement.exemptCohort);
+          }
+          if (stage?.advancement?.survivorCohort || stage?.advancement?.survivorTarget) {
+            const cohort = stage.advancement.survivorCohort || 'de_survivors';
+            db.prepare("UPDATE competitors SET format_cohort=NULL WHERE competition_id=? AND format_cohort=?")
+              .run(phase.competition_id, cohort);
+          }
+        }
+      }
+
       // Drop saved rankings (live rankings are recomputed on the fly)
       db.prepare('DELETE FROM rankings WHERE phase_id = ?').run(id);
 
@@ -770,6 +898,33 @@ const Phase = {
         UPDATE competitors SET status='active', eliminated_after=NULL, final_rank=NULL
         WHERE eliminated_after = ?
       `).run(id);
+
+      // Clear format cohorts assigned during this phase
+      const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(id);
+      if (phase?.format_stage) {
+        const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(phase.competition_id);
+        if (comp?.format_id) {
+          try {
+            const format = Format.loadFormat(comp.format_id);
+            const stage  = Format.getStage(format, phase.format_stage);
+            if (stage?.advancement?.exemptCohort) {
+              db.prepare("UPDATE competitors SET format_cohort=NULL WHERE competition_id=? AND format_cohort=?")
+                .run(phase.competition_id, stage.advancement.exemptCohort);
+            }
+            if (stage?.advancement?.survivorCohort || stage?.advancement?.survivorTarget) {
+              const cohort = stage.advancement.survivorCohort || 'de_survivors';
+              db.prepare("UPDATE competitors SET format_cohort=NULL WHERE competition_id=? AND format_cohort=?")
+                .run(phase.competition_id, cohort);
+            }
+            // Also clear initial_exempt if this is the first pool stage
+            if (stage?.participants?.initialExemptCohort) {
+              db.prepare("UPDATE competitors SET format_cohort=NULL WHERE competition_id=? AND format_cohort=?")
+                .run(phase.competition_id, stage.participants.initialExemptCohort);
+            }
+          } catch {}
+        }
+      }
+
       db.prepare('DELETE FROM phases WHERE id = ?').run(id);
     })();
   },
