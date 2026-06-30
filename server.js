@@ -70,7 +70,8 @@ app.use('/api/competitions/:compId/teams',       writeOnly('director'), require(
 app.use('/api/phases', writeOnly('director'), require('./routes/phasesById'));
 app.use('/api/pools',  writeOnly('director'), require('./routes/pools'));
 app.use('/api/bouts',  writeOnly('director'), require('./routes/bouts'));
-app.use('/api/rules',  require('./routes/rules'));
+app.use('/api/rules',   require('./routes/rules'));
+app.use('/api/formats', require('./routes/formats'));
 app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
 app.use('/api/opp2',     writeOnly('director'), require('./routes/opp2'));
 app.use('/api/settings', writeOnly('director'), require('./routes/settings'));

@@ -185,7 +185,7 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 
 ### Pool phase (complete)
 - FIE serpentine seeding + separation (club/nationality)
-- FIE official bout order (pools of 4–12)
+- FIE official bout order (pools of 4–12) — **verified against real FIE GP XML**
 - Live rankings (V/M, indicator, touches scored/received)
 - Simulate function for random result entry (testing)
 - Phase close: saves rankings, applies advancement, marks eliminated
@@ -200,6 +200,15 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Simulate function
 - Final results table (1st/2nd unique; 3rd shared if no bronze; others by seed)
 - UI: `public/de.html`
+- Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
+
+### Competition formats (complete)
+- Format files in `formats/*.json` define multi-phase flows with cohorts and exemptions
+- `services/formats.js` — `loadFormat`, `resolveParticipants`, `applyPoolClose`, `closeFormatDE`, `validateCounts`
+- Migration 021: `format_id` on competitions, `format_cohort` on competitors, `format_stage` on phases
+- Implemented: `grand-prix-fie.json` (3-stage GP), `two-pool-rounds.json`
+- GP format verified against real FIE Grand Prix XML (Shanghai 2026, 233 fencers): 16 initial exempts, 70% pool advancement, 32 survivors from preliminary tableau, T=64 final
+- UI: format picker in competition detail, stage plan with "+ Next stage" guided creation
 
 ### Results
 - Full competition results page combining DE + pool-eliminated fencers
@@ -291,29 +300,36 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ### 2. Run a full tournament locally (no cloud needed)
 - Direct competition import — federation/FIE start lists without touching the local people DB
+  - Engarde XML format now fully understood (see `docs/GP/` for reference files); move this off "out of scope"
 - Registration desk — review `checkin.html` for competition-day check-in completeness
 - Card reasons — full FIE t.170 text, English + French; store OPP2 `ts` + clock at card time
 - Manual appendices B and C
+- Fencer handedness (`hand`: R/L) — not yet in `fencers` table; Engarde stores `Lateralite` (D/G); relevant for scoresheet display and OPP2 `software/fencers` payload
 
-### 3. Architecture / code hygiene
+### 3. Scoresheets
+- Pool scoresheet grid (fencer vs fencer diagonal matrix) requires each fencer's **slot position in the pool** (Engarde: `NoDansLaPoule` 1–N). Currently derivable from seeding order but not stored. If a fencer is manually moved the grid breaks. Add `pool_slot` to the pool-fencer join table via migration.
+- Cards are annotation/audit data only — Engarde does not include them in the results XML export. Keep card records separate from the authoritative bout result.
+- Per-bout scheduled time: Engarde assigns `Heure` per individual DE bout (across strips). Atlas schedules at slot (round) level. Deriving per-bout times from slot data is sufficient for now.
+
+### 4. Architecture / code hygiene
 - `bout_duration_standards` table empty — fill for automatic `predicted_end`
 - DE referee assignment in pipeline (placeholder query in `opp2Composer`)
 - Pipeline UI drag-to-reorder (▲▼ works; drag is future)
 - Resilience: discuss network loss / crash recovery across the ecosystem
 - Minor: `CyranoServer.js` missing `'use strict'`
 
-### 4. Security
+### 5. Security
 - Authentication: fully wired — session-based PIN login, roles: `admin` / `director` / `assistant` / `referee`
 - GET requests are public; mutations are gated per route (`writeOnly(role)` in `server.js`)
 - OPP2/MQTT config and user management require `admin`; phase/bout scoring requires `director`
 - Install creates an `admin` account with a one-time PIN (forced change on first login)
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
-### 5. CSS centralisation
+### 6. CSS centralisation
 - ~1 600 lines of inline `<style>` spread across 20 pages; extract to `css/style.css`
 - Do this when the UI component vocabulary is stable (after DE redesign)
 
-### 6. OPP2 cloud bridge
+### 7. OPP2 cloud bridge
 - Mosquitto bridge config to remote broker
 - `tournament_id` / `competition_id` from Atlas in payloads
 - Lower priority: local operation is fully functional without it
@@ -323,7 +339,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 |---|---|
 | Cyrano scoring machine | Lower priority than cloud bridge |
 | Team competitions | Out of scope |
-| FIE Engarde import/export | Out of scope |
+| FIE Engarde XML export | Out of scope for now; format fully understood from `docs/GP/` reference files |
 
 ---
 

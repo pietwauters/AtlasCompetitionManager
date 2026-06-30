@@ -11,10 +11,10 @@ router.get('/', (req, res) => {
 
 // Static paths — must come before /:id
 router.get('/pool-options', (req, res) => {
-  const { rule_doc } = req.query;
+  const { rule_doc, format_stage_id } = req.query;
   if (!rule_doc) return res.status(400).json({ error: 'rule_doc query param required' });
   try {
-    res.json(Phase.calcOptions(req.params.compId, rule_doc));
+    res.json(Phase.calcOptions(req.params.compId, rule_doc, format_stage_id || null));
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -29,10 +29,10 @@ router.get('/de-options', (req, res) => {
 });
 
 router.post('/create-de', (req, res) => {
-  const { rule_doc, seeding_method } = req.body;
+  const { rule_doc, seeding_method, format_stage_id } = req.body;
   if (!rule_doc) return res.status(400).json({ error: 'rule_doc required' });
   try {
-    const phase = Phase.createDE(req.params.compId, rule_doc, seeding_method || 'last');
+    const phase = Phase.createDE(req.params.compId, rule_doc, seeding_method || 'last', format_stage_id || null);
     res.status(201).json(phase);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -46,14 +46,14 @@ router.get('/:id', (req, res) => {
 });
 
 // Create pool phase.
-// Body: { rule_doc, chosen_sizes: [7, 7, 6], separation?: ['club'] }
+// Body: { rule_doc, chosen_sizes: [7, 7, 6], separation?: ['club'], format_stage_id?: 'preliminary_pools' }
 router.post('/', (req, res) => {
-  const { rule_doc, chosen_sizes, separation } = req.body;
+  const { rule_doc, chosen_sizes, separation, format_stage_id } = req.body;
   if (!rule_doc || !chosen_sizes?.length) {
     return res.status(400).json({ error: 'rule_doc and chosen_sizes required' });
   }
   try {
-    const phase = Phase.create(req.params.compId, rule_doc, chosen_sizes, separation);
+    const phase = Phase.create(req.params.compId, rule_doc, chosen_sizes, separation, format_stage_id || null);
     res.status(201).json(phase);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
