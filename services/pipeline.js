@@ -9,7 +9,7 @@ const DE_BOUT_ORDER = `
          ROW_NUMBER() OVER (PARTITION BY b.phase_id, b.de_round
                             ORDER BY b.tableau_position) AS round_index
   FROM bouts b
-  WHERE b.de_round IS NOT NULL
+  WHERE b.de_round IS NOT NULL AND b.bracket = 'main'
 `;
 
 // Convert a slot's tableau size to the de_round integer stored on bouts.
@@ -410,6 +410,7 @@ const Pipeline = {
       WHERE b.phase_id=? AND b.de_round=?
         AND o.round_index BETWEEN ? AND ?
         AND b.status != 'finished'
+        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
     `).get(slot.phase_id, deRound, lo, hi).n;
   },
 
