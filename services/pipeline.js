@@ -490,14 +490,13 @@ const Pipeline = {
     const { deRound, lo, hi } = this._deSlotParams(slot);
     if (!deRound) return null;
 
-    return db.prepare(`
+    const bout = db.prepare(`
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
         lc.first_name AS left_first,  lc.last_name  AS left_last,
         lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
         rc.first_name AS right_first, rc.last_name  AS right_last,
         rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-        ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
         ph.phase_order,
         co.name AS competition_name, co.weapon
       FROM bouts b
@@ -510,9 +509,6 @@ const Pipeline = {
       LEFT JOIN competitors rc  ON rc.id  = b.right_id
       LEFT JOIN people      rpl ON rpl.id = rc.person_id
       LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
-      LEFT JOIN phases      ph2 ON ph2.id = b.phase_id
-      LEFT JOIN referees    ref ON ref.id  = ph2.competition_id  -- placeholder; DE ref TBD
-      LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
       WHERE b.phase_id = ? AND b.de_round = ?
         AND o.round_index BETWEEN ? AND ?
         AND b.status != 'finished'
@@ -523,6 +519,7 @@ const Pipeline = {
       ORDER BY o.round_index
       LIMIT 1
     `).get(slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
+    return this._attachReferee(bout, slot);
   },
 
   // Return the next `limit` pending bouts for a pool slot (for dynamic reorder lookahead).
@@ -600,7 +597,7 @@ const Pipeline = {
     const { deRound, lo, hi } = this._deSlotParams(slot);
     if (!deRound) return null;
 
-    return db.prepare(`
+    const bout = db.prepare(`
       WITH ordered AS (${DE_BOUT_ORDER})
       SELECT b.*, b.id AS bout_id, o.round_index,
         lc.first_name AS left_first,  lc.last_name  AS left_last,
@@ -625,12 +622,24 @@ const Pipeline = {
       ORDER BY o.round_index DESC
       LIMIT 1
     `).get(slot.phase_id, deRound, lo, hi, beforeBoutId);
+    return this._attachReferee(bout, slot);
   },
 
   // ── Internal helpers ─────────────────────────────────────────────────────
 
   // Public alias used by opp2Composer to build bout queries from a DE slot.
   resolveDeSlot(slot) { return this._deSlotParams(slot); },
+
+  // Attach referee name fields to a bout result using slot.referee_id.
+  _attachReferee(bout, slot) {
+    if (!bout || !slot.referee_id) return bout;
+    const ref = db.prepare(
+      `SELECT p.first_name AS ref_first, p.last_name AS ref_last
+       FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?`
+    ).get(slot.referee_id);
+    if (ref) { bout.ref_first = ref.ref_first; bout.ref_last = ref.ref_last; }
+    return bout;
+  },
 
   // Resolve a DE slot's bracket parameters into the values the SQL queries need.
   _deSlotParams(slot) {
