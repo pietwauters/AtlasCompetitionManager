@@ -302,7 +302,7 @@
               <label class="full">Type
                 <select x-model="addForm.type" @change="onTypeChange()">
                   <option value="pool">Pool</option>
-                  <option value="de_range">DE range</option>
+                  <option value="de">DE range</option>
                   <option value="team_match">Team match</option>
                 </select>
               </label>
@@ -353,7 +353,7 @@
               </template>
 
               <!-- DE range picker -->
-              <template x-if="addForm.type === 'de_range'">
+              <template x-if="addForm.type === 'de'">
                 <div class="full">
                   <label style="margin-bottom:.3rem">DE phase
                     <select x-model="addForm.phase_id" @change="loadDeRounds(addForm.phase_id)">
@@ -1001,10 +1001,10 @@ function app() {
       const body = {
         type:             this.addForm.type,
         pool_id:          this.addForm.type === 'pool'       ? (this.addForm.pool_id       || null) : null,
-        phase_id:         this.addForm.type === 'de_range'   ? (this.addForm.phase_id      || null) : null,
-        de_round:         this.addForm.type === 'de_range'   ? (this.addForm.de_round      || null) : null,
-        bout_start:       this.addForm.type === 'de_range'   ? (this.addForm.bout_start    || null) : null,
-        bout_end:         this.addForm.type === 'de_range'   ? (this.addForm.bout_end      || null) : null,
+        phase_id:         this.addForm.type === 'de'   ? (this.addForm.phase_id      || null) : null,
+        de_round:         this.addForm.type === 'de'   ? (this.addForm.de_round      || null) : null,
+        bout_start:       this.addForm.type === 'de'   ? (this.addForm.bout_start    || null) : null,
+        bout_end:         this.addForm.type === 'de'   ? (this.addForm.bout_end      || null) : null,
         team_match_id:    this.addForm.type === 'team_match' ? (this.addForm.team_match_id || null) : null,
         scheduled_start:  this.addForm.scheduled_start  || null,
         minutes_per_bout: this.addForm.minutes_per_bout || null,
