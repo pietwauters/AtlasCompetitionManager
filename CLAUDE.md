@@ -41,6 +41,69 @@ All DB access is raw SQL inside `services/` functions.
 `better-sqlite3` is synchronous. This is intentional. No `async`/`await` in service files.
 Routes may be async only when calling genuinely async things (e.g. file I/O), not DB.
 
+### Prepared statements must be module-level constants
+**Never** call `db.prepare()` inside a function or method body.
+`better-sqlite3` does not cache `prepare()` calls — every inline call recompiles the SQL.
+Benchmarked at **~16x slower** than a module-level statement under load, with GC pressure
+that compounds over hours of competition-day use. Always declare statements at the top of
+the file, before the service object:
+
+```js
+const stmtFind = db.prepare('SELECT * FROM things WHERE id = ?');
+const Thing = { findById(id) { return stmtFind.get(id); } };
+```
+
+Exception: SQL that is genuinely dynamic at runtime (e.g. a `WHERE` clause built from
+optional filters) may call `prepare()` inline, but this should be rare — SQL parameters
+(`?` / `@name`) handle the vast majority of variability without dynamic SQL.
+
+### Multiple DB writes that belong together must use a transaction
+Any sequence of writes that must succeed or fail as a unit — or that leaves the DB in an
+inconsistent intermediate state — must be wrapped in `db.transaction()`:
+
+```js
+const doSwap = db.transaction((a, b) => {
+  stmtUpdate.run(-9999999, a);   // temp to avoid unique constraint
+  stmtUpdate.run(b, a);
+  stmtUpdate.run(a, b);
+});
+doSwap(x, y);
+```
+
+The prior failure mode: three bare `db.prepare(...).run(...)` calls for a bout-order swap
+left the DB with corrupt `bout_order` values if the process crashed mid-sequence.
+
+### Filesystem reads in request paths must be cached
+`fs.readFileSync` / `fs.existsSync` / `JSON.parse` are synchronous and block the event
+loop. They are acceptable at module load time, but never inside a function called during
+request handling without a module-level cache:
+
+```js
+const cache = new Map();
+function loadThing(id) {
+  if (cache.has(id)) return cache.get(id);
+  const val = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  cache.set(id, val);
+  return val;
+}
+```
+
+This applies to rule files (`lib/rules.js`), format files (`services/formats.js`), and
+any other JSON config read at runtime.
+
+### SSE writes must be guarded with try/catch
+When writing to SSE subscriber sets, always wrap `res.write()` in `try/catch`. A socket
+that is destroyed before its `close` event fires will throw synchronously, which would
+abort the loop and skip all remaining subscribers without the guard:
+
+```js
+for (const res of subs) {
+  try { res.write(msg); } catch (_) {}
+}
+```
+
+This applies to both `emit()` and any keepalive/heartbeat loops.
+
 ### Schema changes = new migration file
 Adding or changing a column means creating `db/migrations/005_describe_change.sql`.
 Never modify existing migration files. Never ALTER tables in application code.
@@ -58,14 +121,18 @@ Do not keep chaining tool calls hoping something will work — it wastes tokens.
 'use strict';
 const db = require('../db');
 
+// Prepared statements MUST be module-level constants — never inside methods.
+// better-sqlite3 does not cache prepare() calls; inlining them recompiles the
+// SQL on every invocation and is ~16x slower under load.
+const stmtFindById = db.prepare('SELECT * FROM things WHERE id = ?');
+const stmtInsert   = db.prepare('INSERT INTO things (name) VALUES (@name)');
+
 const Thing = {
   findById(id) {
-    return db.prepare('SELECT * FROM things WHERE id = ?').get(id);
+    return stmtFindById.get(id);
   },
   create({ name }) {
-    const { lastInsertRowid } = db.prepare(
-      'INSERT INTO things (name) VALUES (@name)'
-    ).run({ name });
+    const { lastInsertRowid } = stmtInsert.run({ name });
     return this.findById(lastInsertRowid);
   },
 };

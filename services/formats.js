@@ -6,20 +6,27 @@ const db   = require('../db');
 
 const FORMATS_DIR = path.join(__dirname, '..', 'formats');
 
+const formatCache    = new Map();
+let   formatListCache = null;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function loadFormat(id) {
   if (!id) return null;
+  if (formatCache.has(id)) return formatCache.get(id);
   const file = path.join(FORMATS_DIR, path.basename(id) + '.json');
   if (!fs.existsSync(file)) throw Object.assign(new Error('Format not found: ' + id), { status: 404 });
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  const fmt = JSON.parse(fs.readFileSync(file, 'utf8'));
+  formatCache.set(id, fmt);
+  return fmt;
 }
 
 function listFormats() {
+  if (formatListCache) return formatListCache;
   if (!fs.existsSync(FORMATS_DIR)) return [];
-  return fs.readdirSync(FORMATS_DIR)
+  formatListCache = fs.readdirSync(FORMATS_DIR)
     .filter(f => f.endsWith('.json'))
     .map(f => {
       try {
@@ -34,6 +41,7 @@ function listFormats() {
     })
     .filter(Boolean)
     .sort((a, b) => a.description.localeCompare(b.description));
+  return formatListCache;
 }
 
 function getStage(format, stageId) {

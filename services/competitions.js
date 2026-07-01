@@ -1,6 +1,32 @@
 'use strict';
 const db = require('../db');
 
+const stmtLivePhaseRows = db.prepare(`
+  SELECT c.id, c.name, c.weapon, c.gender,
+         p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
+  FROM competitions c
+  JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
+  WHERE c.status != 'archived'
+  ORDER BY c.name, p.phase_order DESC
+`);
+const stmtPoolProgress = db.prepare(`
+  SELECT COUNT(*) AS total,
+         SUM(CASE WHEN b.status='finished' THEN 1 ELSE 0 END) AS done
+  FROM bouts b JOIN pools po ON po.id = b.pool_id WHERE po.phase_id = ?
+`);
+const stmtDEProgressTotals = db.prepare(`
+  SELECT COUNT(*) AS total,
+         SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) AS done,
+         MAX(de_round) AS max_round
+  FROM bouts WHERE phase_id=? AND de_round IS NOT NULL
+    AND left_id IS NOT NULL AND right_id IS NOT NULL
+`);
+const stmtDEProgressCurrentRound = db.prepare(`
+  SELECT MIN(de_round) AS r FROM bouts
+  WHERE phase_id=? AND de_round IS NOT NULL AND status!='finished'
+    AND left_id IS NOT NULL AND right_id IS NOT NULL
+`);
+
 function withAgeCategories(comp) {
   if (!comp) return null;
   comp.age_categories = db.prepare(`
@@ -121,37 +147,14 @@ const Competition = {
 
   // Returns competitions that have an active phase, with progress.
   withLivePhases() {
-    const rows = db.prepare(`
-      SELECT c.id, c.name, c.weapon, c.gender,
-             p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
-      FROM competitions c
-      JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
-      WHERE c.status != 'archived'
-      ORDER BY c.name, p.phase_order DESC
-    `).all();
-
-    return rows.map(row => {
+    return stmtLivePhaseRows.all().map(row => {
       let progress = null;
       if (row.phase_type === 'pool') {
-        const s = db.prepare(`
-          SELECT COUNT(*) AS total,
-                 SUM(CASE WHEN b.status='finished' THEN 1 ELSE 0 END) AS done
-          FROM bouts b JOIN pools po ON po.id = b.pool_id WHERE po.phase_id = ?
-        `).get(row.phase_id);
+        const s = stmtPoolProgress.get(row.phase_id);
         progress = { total: s.total || 0, done: s.done || 0 };
       } else if (row.phase_type === 'de') {
-        const s = db.prepare(`
-          SELECT COUNT(*) AS total,
-                 SUM(CASE WHEN status='finished' THEN 1 ELSE 0 END) AS done,
-                 MAX(de_round) AS max_round
-          FROM bouts WHERE phase_id=? AND de_round IS NOT NULL
-            AND left_id IS NOT NULL AND right_id IS NOT NULL
-        `).get(row.phase_id);
-        const cur = db.prepare(`
-          SELECT MIN(de_round) AS r FROM bouts
-          WHERE phase_id=? AND de_round IS NOT NULL AND status!='finished'
-            AND left_id IS NOT NULL AND right_id IS NOT NULL
-        `).get(row.phase_id);
+        const s   = stmtDEProgressTotals.get(row.phase_id);
+        const cur = stmtDEProgressCurrentRound.get(row.phase_id);
         progress = { total: s.total||0, done: s.done||0,
                      max_round: s.max_round, current_round: cur?.r||null };
       }

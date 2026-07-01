@@ -1,6 +1,24 @@
 'use strict';
 const db = require('../db');
 
+// Hot-path statements compiled once at module load.
+const stmtSlotById    = db.prepare('SELECT * FROM pipeline_slots WHERE id = ?');
+const stmtActiveSlot  = db.prepare(`
+  SELECT * FROM pipeline_slots
+  WHERE strip_id = ? AND status IN ('active', 'pending')
+  ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, slot_order
+  LIMIT 1
+`);
+const stmtMarkActive     = db.prepare("UPDATE pipeline_slots SET status='active'  WHERE id=?");
+const stmtMarkDone       = db.prepare("UPDATE pipeline_slots SET status='done'    WHERE id=?");
+const stmtSlotStripId    = db.prepare('SELECT strip_id FROM pipeline_slots WHERE id=?');
+const stmtActiveCount    = db.prepare("SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id=? AND status IN ('pending','active')");
+const stmtSetStripIdle   = db.prepare("UPDATE strips SET status='idle' WHERE id=?");
+const stmtPendingPool    = db.prepare("SELECT COUNT(*) AS n FROM bouts  WHERE pool_id=?        AND status!='finished'");
+const stmtPendingTeam    = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=?  AND status!='finished'");
+const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
+const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
+
 // Bouts in a DE round ordered by tableau position.
 // round_index is 1-based within the round, matching partition ranges.
 const DE_BOUT_ORDER = `
@@ -53,7 +71,7 @@ const Pipeline = {
   // ── Queries ───────────────────────────────────────────────────────────────
 
   findById(id) {
-    return db.prepare('SELECT * FROM pipeline_slots WHERE id = ?').get(id);
+    return stmtSlotById.get(id);
   },
 
   findByPool(poolId) {
@@ -352,37 +370,27 @@ const Pipeline = {
   // ── Pipeline navigation (used by OPP2 client) ────────────────────────────
 
   activeSlot(stripId) {
-    return db.prepare(`
-      SELECT * FROM pipeline_slots
-      WHERE strip_id = ?
-        AND status IN ('active', 'pending')
-      ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, slot_order
-      LIMIT 1
-    `).get(stripId) || null;
+    return stmtActiveSlot.get(stripId) || null;
   },
 
   markActive(slotId) {
-    db.prepare("UPDATE pipeline_slots SET status='active' WHERE id=?").run(slotId);
+    stmtMarkActive.run(slotId);
   },
 
   markDone(slotId) {
-    db.prepare("UPDATE pipeline_slots SET status='done' WHERE id=?").run(slotId);
-    const slot = db.prepare('SELECT strip_id FROM pipeline_slots WHERE id=?').get(slotId);
+    stmtMarkDone.run(slotId);
+    const slot = stmtSlotStripId.get(slotId);
     if (slot) {
-      const active = db.prepare(
-        "SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id=? AND status IN ('pending','active')"
-      ).get(slot.strip_id).n;
-      if (active === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
+      const active = stmtActiveCount.get(slot.strip_id).n;
+      if (active === 0) stmtSetStripIdle.run(slot.strip_id);
     }
   },
 
   recoverStaleSlot(stripId) {
-    const slots = db.prepare(
-      "SELECT * FROM pipeline_slots WHERE strip_id = ? AND status = 'done' ORDER BY slot_order"
-    ).all(stripId);
+    const slots = stmtStaleDoneSlots.all(stripId);
     for (const slot of slots) {
       if (this.pendingBoutCount(slot) > 0) {
-        db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(slot.id);
+        stmtRecoverSlot.run(slot.id);
         return this.findById(slot.id);
       }
     }
@@ -391,15 +399,11 @@ const Pipeline = {
 
   pendingBoutCount(slot) {
     if (slot.type === 'pool') {
-      return db.prepare(
-        "SELECT COUNT(*) AS n FROM bouts WHERE pool_id=? AND status!='finished'"
-      ).get(slot.pool_id).n;
+      return stmtPendingPool.get(slot.pool_id).n;
     }
     if (slot.type === 'team_match') {
       if (!slot.team_match_id) return 0;
-      return db.prepare(
-        "SELECT COUNT(*) AS n FROM relays WHERE team_match_id=? AND status!='finished'"
-      ).get(slot.team_match_id).n;
+      return stmtPendingTeam.get(slot.team_match_id).n;
     }
     const { deRound, lo, hi } = this._deSlotParams(slot);
     if (!deRound) return 0;
