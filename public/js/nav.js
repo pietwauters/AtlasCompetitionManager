@@ -23,7 +23,7 @@ function navApp() {
     _initBrandLogo() {
       const brand = document.querySelector('header > a:first-child');
       if (!brand || !brand.querySelector('strong')) return;
-      brand.innerHTML = '<img src="/img/atlas-logo.png" alt="Atlas" class="nav-logo">';
+      brand.innerHTML = '<img src="/img/atlas-logo.svg" alt="Atlas" class="nav-logo">';
       brand.classList.add('nav-brand');
     },
 
