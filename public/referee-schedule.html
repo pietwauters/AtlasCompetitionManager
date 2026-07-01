@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Referee Schedule</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
+  <style>
+    .sched-header {
+      padding: .45rem 1rem;
+      font-size: .78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      background: var(--clr-th-bg);
+      border-bottom: 2px solid var(--clr-border);
+      color: var(--clr-text-muted);
+    }
+    .sched-header.unassigned-hdr { background: #fde8e8; color: #922b21; }
+    tr.row-active td { background: #edfaf1; }
+    tr.row-done  td { color: var(--clr-text-muted); }
+  </style>
+</head>
+<body>
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <div class="nav-right">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/referee-schedule.html" class="active">Referees</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main>
+
+<div x-data="refSchedule()" x-init="init()">
+
+  <div class="toolbar">
+    <div style="display:flex;gap:.25rem">
+      <button class="btn btn-sm" :class="view==='piste'   ?'btn-primary':''" @click="view='piste'">By piste</button>
+      <button class="btn btn-sm" :class="view==='referee' ?'btn-primary':''" @click="view='referee'">By referee</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem;cursor:pointer">
+      <input type="checkbox" x-model="showDone"> Show completed
+    </label>
+    <button class="btn btn-sm" @click="load()">↻ Refresh</button>
+    <span x-show="loading" class="loading">Loading…</span>
+  </div>
+
+  <!-- ── By piste ─────────────────────────────────────────────────────────── -->
+  <template x-if="view==='piste'">
+    <div>
+      <template x-for="strip in pisteRows" :key="strip.id">
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
+          <div class="sched-header" x-text="stripLabel(strip)"></div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:5.5rem">Start</th>
+                <th>Assignment</th>
+                <th style="width:5.5rem">End</th>
+                <th>Referee</th>
+                <th style="width:5.5rem">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="slot in visibleSlots(strip.slots)" :key="slot.id">
+                <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
+                  <td x-text="slot.scheduled_start || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
+                  <td x-text="slot.predicted_end   || '—'"></td>
+                  <td>
+                    <span x-show=" slot.referee_id" x-text="refName(slot)"></span>
+                    <span x-show="!slot.referee_id" class="badge badge-archived">Unassigned</span>
+                  </td>
+                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+      <p x-show="pisteRows.length===0" class="empty">No active pipeline slots.</p>
+    </div>
+  </template>
+
+  <!-- ── By referee ───────────────────────────────────────────────────────── -->
+  <template x-if="view==='referee'">
+    <div>
+      <template x-for="group in refGroups" :key="group.refId">
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
+          <div class="sched-header" x-text="group.name"></div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:7rem">Piste</th>
+                <th style="width:5.5rem">Start</th>
+                <th>Assignment</th>
+                <th style="width:5.5rem">End</th>
+                <th style="width:5.5rem">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="slot in group.slots" :key="slot.id">
+                <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
+                  <td x-text="stripLabel(slot)"></td>
+                  <td x-text="slot.scheduled_start || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
+                  <td x-text="slot.predicted_end   || '—'"></td>
+                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
+      <template x-if="unassigned.length > 0">
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
+          <div class="sched-header unassigned-hdr">Unassigned slots</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:7rem">Piste</th>
+                <th style="width:5.5rem">Start</th>
+                <th>Assignment</th>
+                <th style="width:5.5rem">End</th>
+                <th style="width:5.5rem">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="slot in unassigned" :key="slot.id">
+                <tr>
+                  <td x-text="stripLabel(slot)"></td>
+                  <td x-text="slot.scheduled_start || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
+                  <td x-text="slot.predicted_end   || '—'"></td>
+                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
+      <p x-show="refGroups.length===0 && unassigned.length===0" class="empty">No referee assignments found.</p>
+    </div>
+  </template>
+
+</div>
+</main>
+
+<script src="/js/alpinejs.min.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+'use strict';
+function refSchedule() {
+  return {
+    strips:   [],
+    view:     'piste',
+    showDone: false,
+    loading:  false,
+
+    async init() {
+      await this.load();
+      setInterval(() => this.load(), 30000);
+    },
+
+    async load() {
+      this.loading = true;
+      try {
+        this.strips = await fetch('/api/opp2/pipeline').then(r => r.json());
+      } catch { /* network error, keep stale data */ }
+      finally   { this.loading = false; }
+    },
+
+    stripLabel(s) {
+      const num  = s.strip_number ?? '';
+      const name = s.name || s.strip_name || '';
+      return name ? `Piste ${num} — ${name}` : `Piste ${num}`;
+    },
+
+    slotLabel(s) {
+      if (s.type === 'pool')
+        return `${s.competition_name} — Pool ${s.pool_number}`;
+      if (s.type === 'de') {
+        const range = (s.bout_start && s.bout_end) ? ` bouts ${s.bout_start}–${s.bout_end}` : '';
+        return `${s.competition_name} — DE Rnd ${s.de_round}${range}`;
+      }
+      if (s.type === 'team_match')
+        return `${s.left_team_name || '?'} vs ${s.right_team_name || '?'}`;
+      return s.type;
+    },
+
+    refName(s) {
+      return [s.ref_last, s.ref_first].filter(Boolean).join(', ');
+    },
+
+    badgeCls(status) {
+      if (status === 'active') return 'active';
+      if (status === 'done')   return 'finished';
+      return 'pending';
+    },
+
+    visibleSlots(slots) {
+      return (slots || []).filter(s => this.showDone || s.status !== 'done');
+    },
+
+    get pisteRows() {
+      return this.strips.filter(s => this.visibleSlots(s.slots).length > 0);
+    },
+
+    get refGroups() {
+      const map = new Map();
+      for (const strip of this.strips) {
+        for (const slot of this.visibleSlots(strip.slots)) {
+          if (!slot.referee_id) continue;
+          if (!map.has(slot.referee_id)) {
+            map.set(slot.referee_id, {
+              refId: slot.referee_id,
+              name:  this.refName(slot) || `Referee ${slot.referee_id}`,
+              slots: [],
+            });
+          }
+          map.get(slot.referee_id).slots.push({
+            ...slot,
+            strip_name:   strip.name,
+            strip_number: strip.strip_number,
+          });
+        }
+      }
+      for (const g of map.values()) {
+        g.slots.sort((a, b) =>
+          (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
+      }
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    get unassigned() {
+      const result = [];
+      for (const strip of this.strips) {
+        for (const slot of this.visibleSlots(strip.slots)) {
+          if (!slot.referee_id)
+            result.push({ ...slot, strip_name: strip.name, strip_number: strip.strip_number });
+        }
+      }
+      return result.sort((a, b) =>
+        (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
+    },
+  };
+}
+</script>
+</body>
+</html>

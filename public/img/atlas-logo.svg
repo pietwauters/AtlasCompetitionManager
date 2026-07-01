@@ -1,36 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 111">
-
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 155.54779 100.41841"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="atlas-logo.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   width="155.54779"
+   height="100.41841"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5" />
+  <sodipodi:namedview
+     id="namedview5"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="7.068"
+     inkscape:cx="32.894737"
+     inkscape:cy="50.580079"
+     inkscape:window-width="1920"
+     inkscape:window-height="1043"
+     inkscape:window-x="1600"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg5" />
   <!-- Sphere -->
-  <circle cx="202" cy="48" r="43" fill="#1a2c5e"/>
+  <circle
+     cx="110.07096"
+     cy="43"
+     r="43"
+     fill="#1a2c5e"
+     id="circle1" />
   <!-- Highlight: small rotated ellipse, upper-left of sphere -->
-  <ellipse cx="187" cy="31" rx="12" ry="8" fill="white" opacity="0.8"
-           transform="rotate(-15 187 31)"/>
-
+  <ellipse
+     cx="109.76373"
+     cy="-56.289726"
+     rx="18.538525"
+     ry="11.502546"
+     fill="#ffffff"
+     opacity="0.8"
+     transform="matrix(0.80195959,0.59737828,-0.65047037,0.75953163,0,0)"
+     id="ellipse1"
+     style="stroke-width:1.49039" />
   <!-- Fencer -->
   <!-- Head -->
-  <circle cx="38" cy="19" r="6" fill="#1a2c5e"/>
   <!-- Torso: shoulder to hip, leaning forward -->
-  <line x1="42" y1="25" x2="60" y2="52"
-        stroke="#1a2c5e" stroke-width="5" stroke-linecap="round"/>
   <!-- Sword arm: shoulder to grip -->
-  <line x1="50" y1="33" x2="88" y2="35"
-        stroke="#1a2c5e" stroke-width="4" stroke-linecap="round"/>
   <!-- Foil guard (disc at grip) -->
-  <circle cx="91" cy="35" r="3.5" fill="#1a2c5e"/>
   <!-- Foil blade: guard to sphere surface -->
-  <line x1="94" y1="35" x2="159" y2="45"
-        stroke="#1a2c5e" stroke-width="1.5" stroke-linecap="round"/>
   <!-- Front leg: lunge forward -->
-  <polyline points="60,52 78,64 86,80"
-            stroke="#1a2c5e" stroke-width="5" stroke-linecap="round"
-            stroke-linejoin="round" fill="none"/>
   <!-- Back leg: extended rearward -->
-  <polyline points="60,52 47,63 34,78"
-            stroke="#1a2c5e" stroke-width="5" stroke-linecap="round"
-            stroke-linejoin="round" fill="none"/>
-
   <!-- Decorative arc below fencer -->
-  <path d="M 18 88 Q 90 103 165 83"
-        stroke="#1a2c5e" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-
+  <path
+     d="M 26.454211,37.250468 C 55.457731,68.466179 103.10593,97.2749 154.7978,99.66841 M 140.58331,98.27962 C 98.225927,92.066071 50.636495,69.373651 12.381203,30.202363 l 13.931522,6.76514"
+     stroke="#1a2c5e"
+     stroke-width="1.5"
+     fill="none"
+     stroke-linecap="round"
+     id="path5"
+     sodipodi:nodetypes="ccccc" />
+  <path
+     style="fill:#17375e;stroke-width:1.71447"
+     id="path3"
+     sodipodi:type="arc"
+     sodipodi:cx="-19.012857"
+     sodipodi:cy="60.743515"
+     sodipodi:rx="13.723927"
+     sodipodi:ry="10.752688"
+     sodipodi:start="6.2759396"
+     sodipodi:end="3.1349126"
+     sodipodi:arc-type="slice"
+     d="m -5.2892911,60.665605 a 13.723927,10.752688 0 0 1 -6.7778989,9.351838 13.723927,10.752688 0 0 1 -13.725834,0.07488 13.723927,10.752688 0 0 1 -6.943454,-9.276981 l 13.723621,-0.07183 z"
+     transform="rotate(-54.355803)" />
 </svg>
