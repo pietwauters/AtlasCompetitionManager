@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Login</title>
-  <link rel="icon" type="image/png" href="/img/atlas-logo.png">
+  <link rel="icon" type="image/svg+xml" href="/img/atlas-favicon.svg">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -25,7 +25,8 @@
       max-width: 360px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
-    .login-logo { height: 3.5rem; display: block; margin-bottom: 0.75rem; filter: brightness(0) invert(1); }
+    .login-logo-wrap { background: #fff; border-radius: 6px; padding: 6px 14px; display: inline-block; margin-bottom: 1.25rem; }
+    .login-logo { height: 3rem; display: block; }
     .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
     label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.3rem; margin-top: 1.2rem; }
     input {
@@ -75,7 +76,9 @@
 </head>
 <body>
   <div class="card">
-    <img src="/img/atlas-logo.png" alt="Atlas" class="login-logo">
+    <div class="login-logo-wrap">
+      <img src="/img/atlas-logo.png" alt="Atlas" class="login-logo">
+    </div>
     <p class="subtitle">Competition Manager — Sign in</p>
 
     <label for="token">Username / badge token</label>

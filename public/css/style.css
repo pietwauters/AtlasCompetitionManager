@@ -193,8 +193,8 @@ header a {
   font-size: 0.9rem;
 }
 
-.nav-brand { line-height: 0; }
-.nav-logo  { height: 1.8rem; display: block; filter: brightness(0) invert(1); }
+.nav-brand { line-height: 0; background: #fff; border-radius: 4px; padding: 3px 8px; }
+.nav-logo  { height: 1.6rem; display: block; }
 
 header a.active {
   color: #fff;

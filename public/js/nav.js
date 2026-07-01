@@ -16,7 +16,7 @@ function navApp() {
     _initFavicon() {
       if (document.querySelector('link[rel="icon"]')) return;
       const link = document.createElement('link');
-      link.rel = 'icon'; link.type = 'image/png'; link.href = '/img/atlas-logo.png';
+      link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = '/img/atlas-favicon.svg';
       document.head.appendChild(link);
     },
 
