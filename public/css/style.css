@@ -193,6 +193,9 @@ header a {
   font-size: 0.9rem;
 }
 
+.nav-brand { line-height: 0; }
+.nav-logo  { height: 1.8rem; display: block; filter: brightness(0) invert(1); }
+
 header a.active {
   color: #fff;
   font-weight: 600;

@@ -4,11 +4,27 @@ function navApp() {
     activeComps: [],
 
     async initNav() {
+      this._initFavicon();
+      this._initBrandLogo();
       this._initTheme();
       this._injectFullscreen();
       this._injectManualLink();
       await Promise.all([ this.loadActiveComps(), this._injectUserWidget() ]);
       setInterval(() => this.loadActiveComps(), 20000);
+    },
+
+    _initFavicon() {
+      if (document.querySelector('link[rel="icon"]')) return;
+      const link = document.createElement('link');
+      link.rel = 'icon'; link.type = 'image/png'; link.href = '/img/atlas-logo.png';
+      document.head.appendChild(link);
+    },
+
+    _initBrandLogo() {
+      const brand = document.querySelector('header > a:first-child');
+      if (!brand || !brand.querySelector('strong')) return;
+      brand.innerHTML = '<img src="/img/atlas-logo.png" alt="Atlas" class="nav-logo">';
+      brand.classList.add('nav-brand');
     },
 
     _initTheme() {
