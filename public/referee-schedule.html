@@ -18,8 +18,11 @@
       color: var(--clr-text-muted);
     }
     .sched-header.unassigned-hdr { background: #fde8e8; color: #922b21; }
+    .sched-header.ref-hdr { background: var(--clr-brand); color: #fff; }
     tr.row-active td { background: #edfaf1; }
     tr.row-done  td { color: var(--clr-text-muted); }
+    .ref-name { font-weight: 700; color: var(--clr-brand); }
+    .piste-col { white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -44,7 +47,7 @@
       <button class="btn btn-sm" :class="view==='referee' ?'btn-primary':''" @click="view='referee'">By referee</button>
     </div>
     <label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem;cursor:pointer">
-      <input type="checkbox" x-model="showDone"> Show completed
+      <input type="checkbox" :checked="showDone" @change="toggleShowDone()"> Show completed
     </label>
     <button class="btn btn-sm" @click="load()">↻ Refresh</button>
     <span x-show="loading" class="loading">Loading…</span>
@@ -55,14 +58,15 @@
     <div>
       <template x-for="strip in pisteRows" :key="strip.id">
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
-          <div class="sched-header" x-text="stripLabel(strip)"></div>
+          <div class="sched-header ref-hdr" x-text="stripLabel(strip)"></div>
           <table>
             <thead>
               <tr>
                 <th style="width:5.5rem">Start</th>
-                <th>Assignment</th>
                 <th style="width:5.5rem">End</th>
+                <th>Assignment</th>
                 <th>Referee</th>
+                <th>Other officials</th>
                 <th style="width:5.5rem">Status</th>
               </tr>
             </thead>
@@ -70,11 +74,17 @@
               <template x-for="slot in visibleSlots(strip.slots)" :key="slot.id">
                 <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
                   <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
                   <td x-text="slot.predicted_end   || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
                   <td>
-                    <span x-show=" slot.referee_id" x-text="refName(slot)"></span>
+                    <span x-show=" slot.referee_id" class="ref-name" x-text="refName(slot)"></span>
                     <span x-show="!slot.referee_id" class="badge badge-archived">Unassigned</span>
+                  </td>
+                  <td>
+                    <template x-for="o in otherOfficials(slot)" :key="o.role">
+                      <span style="font-size:.8rem;margin-right:.6rem"
+                            x-text="roleLabel(o.role) + ': ' + [o.last_name, o.first_name].filter(Boolean).join(', ')"></span>
+                    </template>
                   </td>
                   <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
@@ -92,24 +102,26 @@
     <div>
       <template x-for="group in refGroups" :key="group.refId">
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
-          <div class="sched-header" x-text="group.name"></div>
+          <div class="sched-header ref-hdr" x-text="group.name"></div>
           <table>
             <thead>
               <tr>
                 <th style="width:7rem">Piste</th>
                 <th style="width:5.5rem">Start</th>
-                <th>Assignment</th>
                 <th style="width:5.5rem">End</th>
+                <th>Assignment</th>
+                <th style="width:8rem">Role</th>
                 <th style="width:5.5rem">Status</th>
               </tr>
             </thead>
             <tbody>
-              <template x-for="slot in group.slots" :key="slot.id">
+              <template x-for="slot in group.slots" :key="slot.id + '_' + slot.__role">
                 <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
-                  <td x-text="stripLabel(slot)"></td>
+                  <td class="piste-col" x-text="stripLabel(slot)"></td>
                   <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
                   <td x-text="slot.predicted_end   || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
+                  <td x-text="roleLabel(slot.__role)"></td>
                   <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
               </template>
@@ -126,18 +138,18 @@
               <tr>
                 <th style="width:7rem">Piste</th>
                 <th style="width:5.5rem">Start</th>
-                <th>Assignment</th>
                 <th style="width:5.5rem">End</th>
+                <th>Assignment</th>
                 <th style="width:5.5rem">Status</th>
               </tr>
             </thead>
             <tbody>
               <template x-for="slot in unassigned" :key="slot.id">
                 <tr>
-                  <td x-text="stripLabel(slot)"></td>
+                  <td class="piste-col" x-text="stripLabel(slot)"></td>
                   <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
                   <td x-text="slot.predicted_end   || '—'"></td>
+                  <td x-text="slotLabel(slot)"></td>
                   <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
               </template>
@@ -153,16 +165,18 @@
 </div>
 </main>
 
-<script src="/js/alpinejs.min.js"></script>
 <script src="/js/nav.js"></script>
 <script>
 'use strict';
 function refSchedule() {
   return {
-    strips:   [],
-    view:     'piste',
-    showDone: false,
-    loading:  false,
+    strips:     [],
+    pisteRows:  [],
+    refGroups:  [],
+    unassigned: [],
+    view:       'piste',
+    showDone:   false,
+    loading:    false,
 
     async init() {
       await this.load();
@@ -173,8 +187,66 @@ function refSchedule() {
       this.loading = true;
       try {
         this.strips = await fetch('/api/opp2/pipeline').then(r => r.json());
-      } catch { /* network error, keep stale data */ }
+        this._recompute();
+      } catch (e) { console.error('referee-schedule load error', e); }
       finally   { this.loading = false; }
+    },
+
+    _recompute() {
+      const visible = (slots) =>
+        (slots || []).filter(s => this.showDone || s.status !== 'done');
+
+      // By-piste: strips that have at least one visible slot
+      this.pisteRows = this.strips.filter(s => visible(s.slots).length > 0);
+
+      // By-referee: group visible slots by every assigned official (referee,
+      // referee2, video assistant, assessors), tagging each with their role
+      // on that slot so a video assistant sees their own schedule too.
+      const map = new Map();
+      for (const strip of this.strips) {
+        for (const slot of visible(strip.slots)) {
+          for (const official of (slot.officials || [])) {
+            if (!map.has(official.referee_id)) {
+              map.set(official.referee_id, {
+                refId: official.referee_id,
+                name:  [official.last_name, official.first_name].filter(Boolean).join(', ') || `Referee ${official.referee_id}`,
+                slots: [],
+              });
+            }
+            map.get(official.referee_id).slots.push({
+              ...slot,
+              strip_name:   strip.name,
+              strip_number: strip.strip_number,
+              __role:       official.role,
+            });
+          }
+        }
+      }
+      for (const g of map.values()) {
+        g.slots.sort((a, b) =>
+          (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
+      }
+      this.refGroups = [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Unassigned visible slots across all strips
+      const unass = [];
+      for (const strip of this.strips) {
+        for (const slot of visible(strip.slots)) {
+          if (!slot.referee_id)
+            unass.push({ ...slot, strip_name: strip.name, strip_number: strip.strip_number });
+        }
+      }
+      this.unassigned = unass.sort((a, b) =>
+        (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
+    },
+
+    toggleShowDone() {
+      this.showDone = !this.showDone;
+      this._recompute();
+    },
+
+    visibleSlots(slots) {
+      return (slots || []).filter(s => this.showDone || s.status !== 'done');
     },
 
     stripLabel(s) {
@@ -185,18 +257,45 @@ function refSchedule() {
 
     slotLabel(s) {
       if (s.type === 'pool')
-        return `${s.competition_name} — Pool ${s.pool_number}`;
+        return `${s.competition_name || '?'} — Pool ${s.pool_number || '?'}`;
       if (s.type === 'de') {
-        const range = (s.bout_start && s.bout_end) ? ` bouts ${s.bout_start}–${s.bout_end}` : '';
-        return `${s.competition_name} — DE Rnd ${s.de_round}${range}`;
+        const name = s.competition_name || '?';
+        const t = s.tableau || '?';
+        if (!s.partition || s.partition === 'full') return `${name} — DE T${t}`;
+        const [lo, hi] = this.boutRangeForPartition(s.partition, s.tableau);
+        return lo === hi
+          ? `${name} — DE T${t} bout ${lo}`
+          : `${name} — DE T${t} bouts ${lo}–${hi}`;
       }
       if (s.type === 'team_match')
-        return `${s.left_team_name || '?'} vs ${s.right_team_name || '?'}`;
-      return s.type;
+        return `${s.competition_name || '?'} — ${s.left_team_name || '?'} vs ${s.right_team_name || '?'}`;
+      return s.type || '—';
+    },
+
+    boutRangeForPartition(partition, tableau) {
+      const n = tableau / 2;
+      if (!partition || partition === 'full') return [1, n];
+      let lo = 1, hi = n;
+      for (const ch of partition) {
+        const mid = Math.floor((lo + hi) / 2);
+        if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
+      }
+      return [lo, hi];
     },
 
     refName(s) {
       return [s.ref_last, s.ref_first].filter(Boolean).join(', ');
+    },
+
+    roleLabel(role) {
+      return {
+        referee: 'Referee', referee2: 'Referee 2', video_assistant: 'Video Assistant',
+        assessor1: 'Assessor 1', assessor2: 'Assessor 2',
+      }[role] || role;
+    },
+
+    otherOfficials(slot) {
+      return (slot.officials || []).filter(o => o.role !== 'referee');
     },
 
     badgeCls(status) {
@@ -204,54 +303,9 @@ function refSchedule() {
       if (status === 'done')   return 'finished';
       return 'pending';
     },
-
-    visibleSlots(slots) {
-      return (slots || []).filter(s => this.showDone || s.status !== 'done');
-    },
-
-    get pisteRows() {
-      return this.strips.filter(s => this.visibleSlots(s.slots).length > 0);
-    },
-
-    get refGroups() {
-      const map = new Map();
-      for (const strip of this.strips) {
-        for (const slot of this.visibleSlots(strip.slots)) {
-          if (!slot.referee_id) continue;
-          if (!map.has(slot.referee_id)) {
-            map.set(slot.referee_id, {
-              refId: slot.referee_id,
-              name:  this.refName(slot) || `Referee ${slot.referee_id}`,
-              slots: [],
-            });
-          }
-          map.get(slot.referee_id).slots.push({
-            ...slot,
-            strip_name:   strip.name,
-            strip_number: strip.strip_number,
-          });
-        }
-      }
-      for (const g of map.values()) {
-        g.slots.sort((a, b) =>
-          (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
-      }
-      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    },
-
-    get unassigned() {
-      const result = [];
-      for (const strip of this.strips) {
-        for (const slot of this.visibleSlots(strip.slots)) {
-          if (!slot.referee_id)
-            result.push({ ...slot, strip_name: strip.name, strip_number: strip.strip_number });
-        }
-      }
-      return result.sort((a, b) =>
-        (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99'));
-    },
   };
 }
 </script>
+<script src="/js/alpinejs.min.js"></script>
 </body>
 </html>

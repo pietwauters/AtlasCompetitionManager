@@ -18,6 +18,23 @@ const stmtPendingPool    = db.prepare("SELECT COUNT(*) AS n FROM bouts  WHERE po
 const stmtPendingTeam    = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=?  AND status!='finished'");
 const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
 const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
+const stmtRefereeName    = db.prepare(`
+  SELECT p.first_name AS ref_first, p.last_name AS ref_last
+  FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?
+`);
+const stmtSetOfficial    = db.prepare(`
+  INSERT INTO pipeline_slot_officials (slot_id, role, referee_id)
+  VALUES (@slot_id, @role, @referee_id)
+  ON CONFLICT (slot_id, role) DO UPDATE SET referee_id = excluded.referee_id
+`);
+const stmtClearOfficial  = db.prepare('DELETE FROM pipeline_slot_officials WHERE slot_id = ? AND role = ?');
+const stmtOfficialsForSlot = db.prepare(`
+  SELECT so.role, p.first_name, p.last_name
+  FROM pipeline_slot_officials so
+  JOIN referees r ON r.id = so.referee_id
+  JOIN people   p ON p.id = r.person_id
+  WHERE so.slot_id = ?
+`);
 
 // Bouts in a DE round ordered by tableau position.
 // round_index is 1-based within the round, matching partition ranges.
@@ -74,6 +91,28 @@ const Pipeline = {
     return stmtSlotById.get(id);
   },
 
+  refereeName(refereeId) {
+    if (!refereeId) return null;
+    const ref = stmtRefereeName.get(refereeId);
+    return ref ? { first_name: ref.ref_first || '', last_name: ref.ref_last || '' } : null;
+  },
+
+  // { referee2, video_assistant, assessor1, assessor2 }, each null or {first_name, last_name}.
+  getOfficials(slotId) {
+    const rows = stmtOfficialsForSlot.all(slotId);
+    const result = { referee2: null, video_assistant: null, assessor1: null, assessor2: null };
+    for (const r of rows) {
+      result[r.role] = { first_name: r.first_name || '', last_name: r.last_name || '' };
+    }
+    return result;
+  },
+
+  // role must be one of 'referee2' | 'video_assistant' | 'assessor1' | 'assessor2'.
+  setOfficial(slotId, role, refereeId) {
+    if (!refereeId) { stmtClearOfficial.run(Number(slotId), role); return; }
+    stmtSetOfficial.run({ slot_id: Number(slotId), role, referee_id: Number(refereeId) });
+  },
+
   findByPool(poolId) {
     return db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(poolId) || null;
   },
@@ -102,6 +141,10 @@ const Pipeline = {
         tm_slot.left_team_id, tm_left.name AS left_team_name,
         tm_slot.right_team_id, tm_right.name AS right_team_name,
         rp.first_name AS ref_first, rp.last_name AS ref_last,
+        so_ref2.referee_id AS referee2_id,         rp_ref2.first_name AS referee2_first,         rp_ref2.last_name AS referee2_last,
+        so_va.referee_id   AS video_assistant_id,  rp_va.first_name   AS video_assistant_first,  rp_va.last_name   AS video_assistant_last,
+        so_a1.referee_id   AS assessor1_id,        rp_a1.first_name   AS assessor1_first,        rp_a1.last_name   AS assessor1_last,
+        so_a2.referee_id   AS assessor2_id,        rp_a2.first_name   AS assessor2_first,        rp_a2.last_name   AS assessor2_last,
         CASE WHEN ps.type = 'pool'
           THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
           WHEN ps.type = 'team_match'
@@ -126,11 +169,23 @@ const Pipeline = {
       LEFT JOIN competitions co ON co.id  = ph.competition_id
       LEFT JOIN referees     r  ON r.id   = ps.referee_id
       LEFT JOIN people       rp ON rp.id  = r.person_id
+      LEFT JOIN pipeline_slot_officials so_ref2 ON so_ref2.slot_id = ps.id AND so_ref2.role = 'referee2'
+      LEFT JOIN referees     ref2 ON ref2.id = so_ref2.referee_id
+      LEFT JOIN people       rp_ref2 ON rp_ref2.id = ref2.person_id
+      LEFT JOIN pipeline_slot_officials so_va ON so_va.slot_id = ps.id AND so_va.role = 'video_assistant'
+      LEFT JOIN referees     refva ON refva.id = so_va.referee_id
+      LEFT JOIN people       rp_va ON rp_va.id = refva.person_id
+      LEFT JOIN pipeline_slot_officials so_a1 ON so_a1.slot_id = ps.id AND so_a1.role = 'assessor1'
+      LEFT JOIN referees     refa1 ON refa1.id = so_a1.referee_id
+      LEFT JOIN people       rp_a1 ON rp_a1.id = refa1.person_id
+      LEFT JOIN pipeline_slot_officials so_a2 ON so_a2.slot_id = ps.id AND so_a2.role = 'assessor2'
+      LEFT JOIN referees     refa2 ON refa2.id = so_a2.referee_id
+      LEFT JOIN people       rp_a2 ON rp_a2.id = refa2.person_id
       WHERE ps.strip_id = ?
       ORDER BY ps.slot_order
     `).all(stripId);
 
-    return slots.map(s => this._withPredictedEnd(this._fillDeBoutCount(s)));
+    return slots.map(s => this._attachOfficials(this._withPredictedEnd(this._fillDeBoutCount(s))));
   },
 
   findAllForReferee(refereeId) {
@@ -141,6 +196,7 @@ const Pipeline = {
         co.name AS competition_name, co.weapon,
         tm_slot.left_team_id, tm_left.name AS left_team_name,
         tm_slot.right_team_id, tm_right.name AS right_team_name,
+        GROUP_CONCAT(so.role) AS other_roles,
         CASE WHEN ps.type = 'pool'
           THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
           WHEN ps.type = 'team_match'
@@ -164,11 +220,18 @@ const Pipeline = {
       LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
       LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
       LEFT JOIN competitions co ON co.id  = ph.competition_id
-      WHERE ps.referee_id = ?
+      LEFT JOIN pipeline_slot_officials so ON so.slot_id = ps.id AND so.referee_id = @refId
+      WHERE ps.referee_id = @refId OR so.referee_id IS NOT NULL
+      GROUP BY ps.id
       ORDER BY ps.strip_id, ps.slot_order
-    `).all(refereeId);
+    `).all({ refId: Number(refereeId) });
 
-    return slots.map(s => this._withPredictedEnd(this._fillDeBoutCount(s)));
+    return slots.map(s => {
+      const roles = [];
+      if (s.referee_id == refereeId) roles.push('referee');
+      if (s.other_roles) roles.push(...s.other_roles.split(','));
+      return { ...this._withPredictedEnd(this._fillDeBoutCount(s)), roles };
+    });
   },
 
   // All strips with their pipelines, used by the admin page.
@@ -273,20 +336,34 @@ const Pipeline = {
     const current = this.findById(id);
     if (!current) return null;
     const m = { ...current, ...data };
-    db.prepare(`
-      UPDATE pipeline_slots
-      SET scheduled_start  = @scheduled_start,
-          minutes_per_bout = @minutes_per_bout,
-          referee_id       = @referee_id,
-          status           = @status
-      WHERE id = @id
-    `).run({
-      id: Number(id),
-      scheduled_start:  m.scheduled_start  ?? null,
-      minutes_per_bout: m.minutes_per_bout ?? null,
-      referee_id:       m.referee_id       ?? null,
-      status:           m.status,
-    });
+    const OFFICIAL_ROLES = {
+      referee2_id:         'referee2',
+      video_assistant_id:  'video_assistant',
+      assessor1_id:        'assessor1',
+      assessor2_id:        'assessor2',
+    };
+
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE pipeline_slots
+        SET scheduled_start  = @scheduled_start,
+            minutes_per_bout = @minutes_per_bout,
+            referee_id       = @referee_id,
+            status           = @status
+        WHERE id = @id
+      `).run({
+        id: Number(id),
+        scheduled_start:  m.scheduled_start  ?? null,
+        minutes_per_bout: m.minutes_per_bout ?? null,
+        referee_id:       m.referee_id       ?? null,
+        status:           m.status,
+      });
+
+      for (const [field, role] of Object.entries(OFFICIAL_ROLES)) {
+        if (field in data) this.setOfficial(id, role, data[field]);
+      }
+    })();
+
     return this.findById(id);
   },
 
@@ -658,6 +735,24 @@ const Pipeline = {
     if (slot.type !== 'de' || slot.bout_count != null || !slot.tableau) return slot;
     const [lo, hi] = partitionToRange(slot.partition, slot.tableau);
     return { ...slot, bout_count: hi - lo + 1 };
+  },
+
+  // Build slot.officials from the findByStrip join columns: one entry per
+  // assigned role, including the primary referee, for a single flat list
+  // frontends can iterate instead of five separate fields.
+  _attachOfficials(slot) {
+    const officials = [];
+    if (slot.referee_id)
+      officials.push({ role: 'referee', referee_id: slot.referee_id, first_name: slot.ref_first || '', last_name: slot.ref_last || '' });
+    if (slot.referee2_id)
+      officials.push({ role: 'referee2', referee_id: slot.referee2_id, first_name: slot.referee2_first || '', last_name: slot.referee2_last || '' });
+    if (slot.video_assistant_id)
+      officials.push({ role: 'video_assistant', referee_id: slot.video_assistant_id, first_name: slot.video_assistant_first || '', last_name: slot.video_assistant_last || '' });
+    if (slot.assessor1_id)
+      officials.push({ role: 'assessor1', referee_id: slot.assessor1_id, first_name: slot.assessor1_first || '', last_name: slot.assessor1_last || '' });
+    if (slot.assessor2_id)
+      officials.push({ role: 'assessor2', referee_id: slot.assessor2_id, first_name: slot.assessor2_first || '', last_name: slot.assessor2_last || '' });
+    return { ...slot, officials };
   },
 
   // ── Team match relay helpers ─────────────────────────────────────────────

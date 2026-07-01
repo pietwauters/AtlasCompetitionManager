@@ -90,7 +90,8 @@ router.post('/pipeline/strip/:stripId', (req, res) => {
   }
 });
 
-// Update a slot (scheduled_start, minutes_per_bout, referee_id, status)
+// Update a slot (scheduled_start, minutes_per_bout, referee_id, status,
+// and optionally referee2_id, video_assistant_id, assessor1_id, assessor2_id)
 router.patch('/pipeline/slots/:id', (req, res) => {
   const slot = Pipeline.updateSlot(req.params.id, req.body);
   if (!slot) return res.status(404).json({ error: 'Slot not found' });

@@ -247,6 +247,10 @@
     <span class="status-dot"></span>
     <span x-text="!connected ? (pisteId ? 'Not connected' : 'Add ?piste=NAME to URL') : (apparatusOnline ? 'Piste ' + pisteId + ' — Apparatus online' : 'Piste ' + pisteId + ' — Apparatus offline')"></span>
     <span x-show="slotLabel" class="slot-label" x-text="slotLabel"></span>
+    <span x-show="refereeDisplayName" class="slot-label" x-text="'Referee: ' + refereeDisplayName"></span>
+    <span x-show="officialDisplayName(referee2)" class="slot-label" x-text="'Ref 2: ' + officialDisplayName(referee2)"></span>
+    <span x-show="officialDisplayName(videoAssistant)" class="slot-label" x-text="'VA: ' + officialDisplayName(videoAssistant)"></span>
+    <span x-show="assessorsDisplayName" class="slot-label" x-text="'Assessors: ' + assessorsDisplayName"></span>
     <template x-if="auth && !auth.authenticated">
       <a :href="'/login.html?next=' + encodeURIComponent(location.pathname + location.search)"
          style="margin-left:auto;font-size:.78rem;opacity:.8;color:inherit;font-weight:600">Sign in</a>
@@ -451,6 +455,7 @@ function app() {
     darkTheme:   true,
 
     slotId: null, phaseType: null, slotLabel: '', activeBoutId: null,
+    referee: null, referee2: null, videoAssistant: null, assessor1: null, assessor2: null,
     participants: [], bouts: [], matrixOpen: true,
 
     weapon: 'F', score: null, lastScore: null, baselineSeq: null,
@@ -530,6 +535,11 @@ function app() {
       const newSlotId = payload.slot_id;
       if (!newSlotId) return;
       const prevActive = this.activeBoutId, slotChanged = newSlotId !== this.slotId;
+      this.referee = payload.referee || null;
+      this.referee2 = payload.referee2 || null;
+      this.videoAssistant = payload.video_assistant || null;
+      this.assessor1 = payload.assessor1 || null;
+      this.assessor2 = payload.assessor2 || null;
 
       if (slotChanged) {
         this.slotId = newSlotId; this.phaseType = payload.phase_type || null;
@@ -609,6 +619,22 @@ function app() {
       if (!f) return 'TBD';
       if (f.last_name) return f.last_name + (f.first_name ? ', ' + f.first_name : '');
       return f.name || 'TBD';
+    },
+
+    get refereeDisplayName() {
+      return this.officialDisplayName(this.referee);
+    },
+
+    officialDisplayName(o) {
+      if (!o) return '';
+      return [o.last_name, o.first_name].filter(Boolean).join(', ');
+    },
+
+    get assessorsDisplayName() {
+      return [this.assessor1, this.assessor2]
+        .map(o => this.officialDisplayName(o))
+        .filter(Boolean)
+        .join(', ');
     },
 
     boutHeaderScore(bout) {

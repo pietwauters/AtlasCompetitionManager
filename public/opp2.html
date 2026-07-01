@@ -275,6 +275,48 @@
                           </select>
                         </label>
                       </div>
+                      <div class="row">
+                        <label>Referee 2
+                          <select @change="updateSlot(slot.id, {referee2_id: $event.target.value || null})">
+                            <option value="">— None —</option>
+                            <template x-for="r in referees" :key="r.referee_id">
+                              <option :value="r.referee_id"
+                                :selected="slot.referee2_id == r.referee_id"
+                                x-text="r.last_name + ', ' + r.first_name"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label>Video assistant
+                          <select @change="updateSlot(slot.id, {video_assistant_id: $event.target.value || null})">
+                            <option value="">— None —</option>
+                            <template x-for="r in referees" :key="r.referee_id">
+                              <option :value="r.referee_id"
+                                :selected="slot.video_assistant_id == r.referee_id"
+                                x-text="r.last_name + ', ' + r.first_name"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label>Assessor 1
+                          <select @change="updateSlot(slot.id, {assessor1_id: $event.target.value || null})">
+                            <option value="">— None —</option>
+                            <template x-for="r in referees" :key="r.referee_id">
+                              <option :value="r.referee_id"
+                                :selected="slot.assessor1_id == r.referee_id"
+                                x-text="r.last_name + ', ' + r.first_name"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label>Assessor 2
+                          <select @change="updateSlot(slot.id, {assessor2_id: $event.target.value || null})">
+                            <option value="">— None —</option>
+                            <template x-for="r in referees" :key="r.referee_id">
+                              <option :value="r.referee_id"
+                                :selected="slot.assessor2_id == r.referee_id"
+                                x-text="r.last_name + ', ' + r.first_name"></option>
+                            </template>
+                          </select>
+                        </label>
+                      </div>
                       <div class="slot-actions">
                         <button @click="moveSlot(slot.id, 'up')" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
                         <button @click="moveSlot(slot.id, 'down')" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
@@ -687,12 +729,13 @@
     </div>
     <template x-if="refSchedule.length">
       <table class="ref-table">
-        <thead><tr><th>Strip</th><th>Assignment</th><th>Start</th><th>End (predicted)</th><th>Status</th></tr></thead>
+        <thead><tr><th>Strip</th><th>Assignment</th><th>Role</th><th>Start</th><th>End (predicted)</th><th>Status</th></tr></thead>
         <tbody>
           <template x-for="s in refSchedule" :key="s.id">
             <tr>
               <td x-text="s.strip_name || ('Piste ' + s.strip_number)"></td>
               <td x-text="slotLabel(s)"></td>
+              <td x-text="(s.roles || []).map(r => roleLabel(r)).join(', ')"></td>
               <td x-text="s.scheduled_start || '—'"></td>
               <td x-text="s.predicted_end || '—'"></td>
               <td><span class="badge" :class="'badge-' + s.status" x-text="s.status"></span></td>
@@ -702,6 +745,54 @@
       </table>
     </template>
     <div x-show="selectedReferee && !refSchedule.length" style="color:#888;font-size:.9rem">No slots assigned to this referee.</div>
+  </div>
+
+  <!-- ── Referee schedule (Gantt) ─────────────────────────────────────────── -->
+  <div class="card" x-show="refGanttData.hasData">
+    <h2 style="margin-top:0">Referee schedule (Gantt)</h2>
+    <div style="overflow-x:auto">
+      <div style="min-width:500px;display:flex">
+        <div style="width:110px;flex-shrink:0">
+          <div style="height:26px"></div>
+          <template x-for="row in refGanttData.rows" :key="row.name+'_l'">
+            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid #f0f0f0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                 x-text="row.name"></div>
+          </template>
+        </div>
+        <div style="flex:1;position:relative;min-width:0">
+          <div style="height:26px;position:relative;border-bottom:2px solid #ddd">
+            <template x-for="tick in refGanttData.ticks" :key="'lbl'+tick.left">
+              <div x-show="tick.isHour"
+                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:#666;white-space:nowrap;pointer-events:none"
+                   :style="{ left: tick.left+'%' }" x-text="tick.label"></div>
+            </template>
+          </div>
+          <template x-for="tick in refGanttData.ticks" :key="'grid'+tick.left">
+            <div style="position:absolute;top:26px;bottom:0;pointer-events:none"
+                 :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? '#ddd' : '#f0f0f0' }"></div>
+          </template>
+          <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
+               :style="{ left: refGanttData.nowLeft+'%' }"></div>
+          <template x-for="row in refGanttData.rows" :key="row.name">
+            <div style="height:34px;position:relative;border-bottom:1px solid #f0f0f0">
+              <template x-for="bar in row.bars" :key="bar.id">
+                <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
+                     :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
+                     :title="bar.label + (bar.start ? ' (' + bar.start + ' → ' + (bar.end||'?') + ')' : '')">
+                  <span x-text="bar.label"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
+        <span style="margin-left:auto;color:#aaa">Only referee-assigned slots with a scheduled start time are shown.</span>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -881,6 +972,48 @@ function app() {
                      start: s.scheduled_start, end: s.predicted_end };
           }),
         }));
+      const now = new Date();
+      const nowLeft = Math.max(0, Math.min(100, (now.getHours() * 60 + now.getMinutes() - axisStart) / total * 100));
+      return { hasData: true, rows, ticks, nowLeft };
+    },
+
+    get refGanttData() {
+      void this._tick;
+      void this.ganttVersion;
+      const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const fmtMin = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+      const colorOf = s => s.status === 'done' ? '#999' : s.status === 'active' ? '#1e8449' : '#1a6bab';
+      const scheduled = this.strips.flatMap(strip =>
+        strip.slots.filter(s => s.scheduled_start && s.officials?.length).map(s => ({ strip, slot: s }))
+      );
+      if (!scheduled.length) return { hasData: false, rows: [], ticks: [], nowLeft: null };
+      const starts = scheduled.map(({ slot: s }) => toMin(s.scheduled_start));
+      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(s.predicted_end));
+      const axisStart = Math.floor(Math.min(...starts) / 30) * 30;
+      const axisEnd   = Math.ceil((ends.length ? Math.max(...ends) : Math.max(...starts) + 60) / 30) * 30;
+      const total = axisEnd - axisStart;
+      const ticks = [];
+      for (let t = axisStart; t <= axisEnd; t += 30)
+        ticks.push({ label: fmtMin(t), left: (t - axisStart) / total * 100, isHour: t % 60 === 0 });
+      const refMap = new Map();
+      for (const { strip, slot } of scheduled) {
+        for (const official of slot.officials) {
+          if (!refMap.has(official.referee_id)) {
+            const name = [official.last_name, official.first_name].filter(Boolean).join(', ') || `Referee ${official.referee_id}`;
+            refMap.set(official.referee_id, { name, bars: [] });
+          }
+          const s0 = toMin(slot.scheduled_start);
+          const s1 = slot.predicted_end ? toMin(slot.predicted_end) : s0 + 30;
+          const roleSuffix = official.role === 'referee' ? '' : ` (${this.roleLabel(official.role)})`;
+          refMap.get(official.referee_id).bars.push({
+            id: slot.id + '_' + official.role, left: (s0 - axisStart) / total * 100,
+            width: Math.max((s1 - s0) / total * 100, 0.5),
+            color: colorOf(slot), label: (strip.name || 'Piste ' + strip.strip_number) + ' — ' + this.slotLabel(slot) + roleSuffix,
+            start: slot.scheduled_start, end: slot.predicted_end,
+          });
+        }
+      }
+      const rows = [...refMap.values()].sort((a, b) => a.name.localeCompare(b.name));
       const now = new Date();
       const nowLeft = Math.max(0, Math.min(100, (now.getHours() * 60 + now.getMinutes() - axisStart) / total * 100));
       return { hasData: true, rows, ticks, nowLeft };
@@ -1217,6 +1350,13 @@ function app() {
       if (slot.type === 'team_match')
         return `${slot.competition_name || '?'} — ${slot.left_team_name || '?'} vs ${slot.right_team_name || '?'}`;
       return slot.type || '—';
+    },
+
+    roleLabel(role) {
+      return {
+        referee: 'Referee', referee2: 'Referee 2', video_assistant: 'Video Assistant',
+        assessor1: 'Assessor 1', assessor2: 'Assessor 2',
+      }[role] || role;
     },
 
     addMinutes(hhmm, mins) {
