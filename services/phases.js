@@ -153,11 +153,11 @@ const Phase = {
           INSERT INTO pools (phase_id, pool_number, status) VALUES (?, ?, 'active')
         `).run(phaseId, pool.poolNumber);
 
-        for (const fencer of pool.fencers) {
+        pool.fencers.forEach((fencer, i) => {
           db.prepare(
-            'INSERT INTO pool_competitors (pool_id, competitor_id) VALUES (?, ?)'
-          ).run(poolId, fencer.competitor_id);
-        }
+            'INSERT INTO pool_competitors (pool_id, competitor_id, pool_slot) VALUES (?, ?, ?)'
+          ).run(poolId, fencer.competitor_id, i + 1);
+        });
 
         pool.bouts.forEach((bout, i) => {
           db.prepare(`
