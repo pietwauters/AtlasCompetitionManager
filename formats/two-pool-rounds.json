@@ -1,0 +1,39 @@
+{
+  "id": "two-pool-rounds",
+  "description": "Two Pool Rounds (combined seeding) then DE",
+  "stages": [
+    {
+      "id": "pools_1",
+      "label": "Pool Round 1",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "noElimination": true
+      }
+    },
+    {
+      "id": "pools_2",
+      "label": "Pool Round 2",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "useRule": true
+      }
+    },
+    {
+      "id": "final",
+      "label": "Final Tableau",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "participants": {
+        "seedingMethod": "combined"
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "grand-prix-fie",
+  "description": "FIE Grand Prix — Preliminary Pools + Preliminary Tableau + Final",
+  "stages": [
+    {
+      "id": "preliminary_pools",
+      "label": "Preliminary Pools",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial",
+        "excludeTopByInitialSeed": 16,
+        "initialExemptCohort": "initial_exempt"
+      },
+      "advancement": {
+        "exemptTop": 16,
+        "exemptCohort": "pool_exempt"
+      }
+    },
+    {
+      "id": "preliminary_de",
+      "label": "Preliminary Tableau",
+      "phaseType": "de",
+      "rule": "de-prelim.json",
+      "participants": {
+        "source": "active_remainder"
+      },
+      "advancement": {
+        "survivorTarget": 32,
+        "survivorCohort": "de_survivors"
+      }
+    },
+    {
+      "id": "final",
+      "label": "Final Tableau",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "participants": {
+        "cohorts": [
+          { "cohort": "initial_exempt", "sortBy": "initial_seed_asc" },
+          { "cohort": "pool_exempt",    "sortBy": "pool_rank_asc", "poolStage": "preliminary_pools" },
+          { "cohort": "de_survivors",   "sortBy": "pool_rank_asc", "poolStage": "preliminary_pools" }
+        ]
+      }
+    }
+  ]
+}

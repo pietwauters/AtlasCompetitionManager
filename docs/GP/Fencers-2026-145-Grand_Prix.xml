@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE BaseCompetitionIndividuelle>
+<BaseCompetitionIndividuelle xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Championnat="FIE" ID="145" Arme="F" Sexe="M" Domaine="I" Federation="CHN" Categorie="S" TitreLong="Grand Prix" Annee="2025/2026" Date="15.05.2026" DateFichierXML="23.06.2026 11:55">
+  <Tireurs>
+    <Tireur ID="32413" Nom="CHENG" Prenom="Tristan Xing Han" Sexe="M" Lateralite="D" Nation="MAS" Licence="17051999000" Statut="N" DateNaissance="17.05.1999" Classement="221" Points="4.500"></Tireur>
+    <Tireur ID="13992" Nom="GREEN" Prenom="Martin" Sexe="M" Lateralite="D" Nation="AUS" Licence="29091981002" Statut="N" DateNaissance="29.09.1981" Classement="950" Points="0.000"></Tireur>
+    <Tireur ID="25524" Nom="DZODZOS" Prenom="Michael" Sexe="M" Lateralite="G" Nation="AUS" Licence="14101993002" Statut="N" DateNaissance="14.10.1993" Classement="943" Points="0.000"></Tireur>
+    <Tireur ID="51932" Nom="GILCHRIST" Prenom="Matthew" Sexe="M" Lateralite="D" Nation="AUS" Licence="31071998006" Statut="N" DateNaissance="31.07.1998" Classement="609" Points="0.000"></Tireur>
+    <Tireur ID="54783" Nom="THIAN" Prenom="Aron" Sexe="M" Lateralite="G" Nation="AUS" Licence="11072002004" Statut="N" DateNaissance="11.07.2002" Classement="252" Points="3.375"></Tireur>
+    <Tireur ID="57193" Nom="HO" Prenom="Jia Le Sean" Sexe="M" Lateralite="D" Nation="SGP" Licence="02122006000" Statut="N" DateNaissance="02.12.2006" Classement="342" Points="1.125"></Tireur>
+    <Tireur ID="54223" Nom="LOO" Prenom="Keyon" Sexe="M" Lateralite="G" Nation="SGP" Licence="23012006002" Statut="N" DateNaissance="23.01.2006" Classement="256" Points="3.250"></Tireur>
+    <Tireur ID="60387" Nom="NEO" Prenom="Tze Yang" Sexe="M" Lateralite="D" Nation="SGP" Licence="14062007004" Statut="N" DateNaissance="14.06.2007" Classement="366" Points="0.875"></Tireur>
+    <Tireur ID="50909" Nom="ROBSON" Prenom="Samuel Elijah" Sexe="M" Lateralite="D" Nation="SGP" Licence="06032006000" Statut="N" DateNaissance="06.03.2006" Classement="224" Points="4.375"></Tireur>
+    <Tireur ID="54162" Nom="SOH" Prenom="Julian" Sexe="M" Lateralite="D" Nation="SGP" Licence="16122006001" Statut="N" DateNaissance="16.12.2006" Classement="185" Points="6.750"></Tireur>
+    <Tireur ID="51360" Nom="TAN" Prenom="Raphael Juan Kang" Sexe="M" Lateralite="G" Nation="SGP" Licence="15112005000" Statut="N" DateNaissance="15.11.2005" Classement="104" Points="14.750"></Tireur>
+    <Tireur ID="60363" Nom="TAN" Prenom="Ye Kai" Sexe="M" Lateralite="D" Nation="SGP" Licence="13112004004" Statut="N" DateNaissance="13.11.2004" Classement="409" Points="0.500"></Tireur>
+    <Tireur ID="27352" Nom="ZHANG" Prenom="Zhenggang" Sexe="M" Lateralite="D" Nation="SGP" Licence="30071989002" Statut="N" DateNaissance="30.07.1989" Classement="599" Points="0.000"></Tireur>
+    <Tireur ID="63534" Nom="LIM" Prenom="Shawn" Sexe="M" Lateralite="G" Nation="SGP" Licence="08082003009" Statut="N" DateNaissance="08.08.2003" Classement="634" Points="0.000"></Tireur>
+    <Tireur ID="35143" Nom="DE GREEF" Prenom="Stef" Sexe="M" Lateralite="G" Nation="BEL" Licence="10011998001" Statut="N" DateNaissance="10.01.1998" Classement="63" Points="25.000"></Tireur>
+    <Tireur ID="52375" Nom="GEUDVERT" Prenom="Oscar" Sexe="M" Lateralite="G" Nation="BEL" Licence="13112004002" Statut="N" DateNaissance="13.11.2004" Classement="132" Points="10.875"></Tireur>
+    <Tireur ID="46816" Nom="NIJS" Prenom="Mathieu" Sexe="M" Lateralite="G" Nation="BEL" Licence="04022002005" Statut="N" DateNaissance="04.02.2002" Classement="100" Points="15.500"></Tireur>
+    <Tireur ID="37860" Nom="VAN CAMPENHOUT" Prenom="Stef" Sexe="M" Lateralite="G" Nation="BEL" Licence="28051998006" Statut="N" DateNaissance="28.05.1998" Classement="75" Points="22.500"></Tireur>
+    <Tireur ID="42924" Nom="MACEDO" Prenom="Luis" Sexe="M" Lateralite="G" Nation="ANG" Licence="23112000001" Statut="N" DateNaissance="23.11.2000" Classement="64" Points="24.750"></Tireur>
+    <Tireur ID="34833" Nom="BIRD" Prenom="Harry" Sexe="M" Lateralite="D" Nation="GBR" Licence="04021998002" Statut="N" DateNaissance="04.02.1998" Classement="129" Points="11.000"></Tireur>
+    <Tireur ID="47981" Nom="COOK" Prenom="Jaimie" Sexe="M" Lateralite="D" Nation="GBR" Licence="15012005000" Statut="N" DateNaissance="15.01.2005" Classement="32" Points="47.000"></Tireur>
+    <Tireur ID="47687" Nom="DONAGHUE" Prenom="Joe" Sexe="M" Lateralite="G" Nation="GBR" Licence="11032003001" Statut="N" DateNaissance="11.03.2003" Classement="145" Points="9.000"></Tireur>
+    <Tireur ID="48763" Nom="GUENNOU" Prenom="Louis" Sexe="M" Lateralite="D" Nation="GBR" Licence="23102001004" Statut="N" DateNaissance="23.10.2001" Classement="253" Points="3.250"></Tireur>
+    <Tireur ID="50989" Nom="HURST" Prenom="Jake" Sexe="M" Lateralite="D" Nation="GBR" Licence="02052002000" Statut="N" DateNaissance="02.05.2002" Classement="172" Points="7.375"></Tireur>
+    <Tireur ID="46095" Nom="LONSDALE" Prenom="William" Sexe="M" Lateralite="G" Nation="GBR" Licence="24112002003" Statut="N" DateNaissance="24.11.2002" Classement="248" Points="3.500"></Tireur>
+    <Tireur ID="31990" Nom="MINOTT" Prenom="Kamal" Sexe="M" Lateralite="D" Nation="GBR" Licence="25101997000" Statut="N" DateNaissance="25.10.1997" Classement="87" Points="18.625"></Tireur>
+    <Tireur ID="56511" Nom="MASCIOLI" Prenom="Alberto" Sexe="M" Lateralite="D" Nation="GBR" Licence="26042003005" Statut="N" DateNaissance="26.04.2003" Classement="311" Points="1.750"></Tireur>
+    <Tireur ID="44862" Nom="RHYS POLLITT" Prenom="Rafael" Sexe="M" Lateralite="G" Nation="GBR" Licence="25022003000" Statut="N" DateNaissance="25.02.2003" Classement="278" Points="2.875"></Tireur>
+    <Tireur ID="53475" Nom="PENMAN" Prenom="Callum" Sexe="M" Lateralite="D" Nation="GBR" Licence="30012006000" Statut="N" DateNaissance="30.01.2006" Classement="245" Points="3.625"></Tireur>
+    <Tireur ID="54324" Nom="SOSNOV" Prenom="David" Sexe="M" Lateralite="G" Nation="GBR" Licence="20052006000" Statut="N" DateNaissance="20.05.2006" Classement="42" Points="36.500"></Tireur>
+    <Tireur ID="49662" Nom="WILLIAMS" Prenom="David" Sexe="M" Lateralite="G" Nation="GBR" Licence="08012002004" Statut="N" DateNaissance="08.01.2002" Classement="148" Points="8.750"></Tireur>
+    <Tireur ID="32419" Nom="YOONG" Prenom="Hans Wei Shen" Sexe="M" Lateralite="D" Nation="MAS" Licence="20102000000" Statut="N" DateNaissance="20.10.2000" Classement="897" Points="0.000"></Tireur>
+    <Tireur ID="48395" Nom="BOSNIC" Prenom="Hugo" Sexe="M" Lateralite="D" Nation="AUS" Licence="17122003001" Statut="N" DateNaissance="17.12.2003" Classement="233" Points="4.125"></Tireur>
+    <Tireur ID="43300" Nom="CHEN" Prenom="Chih Chieh" Sexe="M" Lateralite="D" Nation="TPE" Licence="03042001001" Statut="N" DateNaissance="03.04.2001" Classement="29" Points="48.000"></Tireur>
+    <Tireur ID="50703" Nom="WAKIM" Prenom="Philippe" Sexe="M" Lateralite="D" Nation="LBN" Licence="06032000004" Statut="N" DateNaissance="06.03.2000" Classement="473" Points="0.250"></Tireur>
+    <Tireur ID="62431" Nom="LO" Prenom="Sze-On Jackle" Sexe="M" Lateralite="D" Nation="TPE" Licence="14012007004" Statut="N" DateNaissance="14.01.2007" Classement="926" Points="0.000"></Tireur>
+    <Tireur ID="47241" Nom="YUEH" Prenom="Che-Hao" Sexe="M" Lateralite="D" Nation="TPE" Licence="13012002002" Statut="N" DateNaissance="13.01.2002" Classement="307" Points="1.875"></Tireur>
+    <Tireur ID="53337" Nom="ASK" Prenom="Henri" Sexe="M" Lateralite="D" Nation="SWE" Licence="01072003002" Statut="N" DateNaissance="01.07.2003" Classement="160" Points="8.000"></Tireur>
+    <Tireur ID="65620" Nom="BECHET" Prenom="Pierre" Sexe="M" Lateralite="D" Nation="NZL" Licence="20071999004" Statut="N" DateNaissance="20.07.1999" Classement="618" Points="0.000"></Tireur>
+    <Tireur ID="49020" Nom="KUO" Prenom="Chun-You" Sexe="M" Lateralite="D" Nation="TPE" Licence="07092001005" Statut="N" DateNaissance="07.09.2001" Classement="144" Points="9.250"></Tireur>
+    <Tireur ID="21765" Nom="CHOUPENITCH" Prenom="Alexander" Sexe="M" Lateralite="D" Nation="CZE" Licence="02051994000" Statut="N" DateNaissance="02.05.1994" Classement="4" Points="164.000"></Tireur>
+    <Tireur ID="36836" Nom="DE ALMEIDA" Prenom="Dominic" Sexe="M" Lateralite="D" Nation="BRA" Licence="13021999001" Statut="N" DateNaissance="13.02.1999" Classement="81" Points="20.875"></Tireur>
+    <Tireur ID="57790" Nom="HADNA" Prenom="Supanut" Sexe="M" Lateralite="G" Nation="THA" Licence="14062007002" Statut="N" DateNaissance="14.06.2007" Classement="933" Points="0.000"></Tireur>
+    <Tireur ID="49440" Nom="WANGPAISIT" Prenom="Notethakod" Sexe="M" Lateralite="D" Nation="THA" Licence="22082005000" Statut="N" DateNaissance="22.08.2005" Classement="334" Points="1.250"></Tireur>
+    <Tireur ID="57749" Nom="PANYABARAMEE" Prenom="Bhumrapee" Sexe="M" Lateralite="D" Nation="THA" Licence="14062005004" Statut="N" DateNaissance="14.06.2005" Classement="541" Points="0.000"></Tireur>
+    <Tireur ID="13191" Nom="KONTOCHRISTOPOULOS" Prenom="Nikolaos" Sexe="M" Lateralite="D" Nation="GRE" Licence="11111992000" Statut="N" DateNaissance="11.11.1992" Classement="209" Points="5.250"></Tireur>
+    <Tireur ID="57628" Nom="CHANSIRITHORN" Prenom="Chaow-Khun" Sexe="M" Lateralite="D" Nation="THA" Licence="26102007002" Statut="N" DateNaissance="26.10.2007" Classement="255" Points="3.250"></Tireur>
+    <Tireur ID="36217" Nom="DEEJING" Prenom="Ratchanavi" Sexe="M" Lateralite="D" Nation="THA" Licence="27052000000" Statut="N" DateNaissance="27.05.2000" Classement="454" Points="0.250"></Tireur>
+    <Tireur ID="61255" Nom="PENG" Prenom="Yun-Hao" Sexe="M" Lateralite="D" Nation="TPE" Licence="22062004002" Statut="N" DateNaissance="22.06.2004" Classement="504" Points="0.000"></Tireur>
+    <Tireur ID="63348" Nom="CHUNG" Prenom="Kun-Wei" Sexe="M" Lateralite="D" Nation="TPE" Licence="17082010000" Statut="N" DateNaissance="17.08.2010" Classement="864" Points="0.000"></Tireur>
+    <Tireur ID="57260" Nom="HUNG" Prenom="Shao-Jie" Sexe="M" Lateralite="D" Nation="TPE" Licence="03092003003" Statut="N" DateNaissance="03.09.2003" Classement="425" Points="0.375"></Tireur>
+    <Tireur ID="57261" Nom="HSU" Prenom="Sheng-Hung Jasper" Sexe="M" Lateralite="D" Nation="TPE" Licence="13042006001" Statut="N" DateNaissance="13.04.2006" Classement="179" Points="6.875"></Tireur>
+    <Tireur ID="63885" Nom="BUDOVSKYI" Prenom="Borys" Sexe="M" Lateralite="G" Nation="CAN" Licence="25042009002" Statut="N" DateNaissance="25.04.2009" Classement="66" Points="24.625"></Tireur>
+    <Tireur ID="41978" Nom="LI" Prenom="Edward" Sexe="M" Lateralite="D" Nation="CAN" Licence="14022001000" Statut="N" DateNaissance="14.02.2001" Classement="237" Points="4.000"></Tireur>
+    <Tireur ID="64168" Nom="LIU" Prenom="Zixian " Sexe="M" Lateralite="D" Nation="CAN" Licence="30062008000" Statut="N" DateNaissance="30.06.2008" Classement="317" Points="1.625"></Tireur>
+    <Tireur ID="51744" Nom="WONG" Prenom="Adam" Sexe="M" Lateralite="G" Nation="CAN" Licence="03052005001" Statut="N" DateNaissance="03.05.2005" Classement="858" Points="0.000"></Tireur>
+    <Tireur ID="53443" Nom="WONG" Prenom="Adrian" Sexe="M" Lateralite="D" Nation="CAN" Licence="23072008000" Statut="N" DateNaissance="23.07.2008" Classement="82" Points="20.750"></Tireur>
+    <Tireur ID="57256" Nom="YU" Prenom="Jason" Sexe="M" Lateralite="D" Nation="CAN" Licence="20082009000" Statut="N" DateNaissance="20.08.2009" Classement="167" Points="7.750"></Tireur>
+    <Tireur ID="69735" Nom="WEI" Prenom="Qiancheng (Matt)" Sexe="M" Lateralite="D" Nation="CAN" Licence="23072008008" Statut="N" DateNaissance="23.07.2008" Classement="379" Points="0.750"></Tireur>
+    <Tireur ID="64464" Nom="XIE" Prenom="Jiajin" Sexe="M" Lateralite="D" Nation="CAN" Licence="15072008001" Statut="N" DateNaissance="15.07.2008" Classement="913" Points="0.000"></Tireur>
+    <Tireur ID="48869" Nom="GRAJALES MENA" Prenom="Miguel Angel" Sexe="M" Lateralite="D" Nation="COL" Licence="06022001003" Statut="N" DateNaissance="06.02.2001" Classement="67" Points="24.500"></Tireur>
+    <Tireur ID="60324" Nom="TANG" Prenom="Tristan" Sexe="M" Lateralite="D" Nation="SGP" Licence="16012009000" Statut="N" DateNaissance="16.01.2009" Classement="439" Points="0.250"></Tireur>
+    <Tireur ID="32275" Nom="BIANCHI" Prenom="Guillaume" Sexe="M" Lateralite="D" Nation="ITA" Licence="30071997001" Statut="N" DateNaissance="30.07.1997" Classement="3" Points="212.000"></Tireur>
+    <Tireur ID="15860" Nom="FOCONI" Prenom="Alessio" Sexe="M" Lateralite="D" Nation="ITA" Licence="22111989000" Statut="N" DateNaissance="22.11.1989" Classement="34" Points="47.000"></Tireur>
+    <Tireur ID="48986" Nom="LOMBARDI" Prenom="Giulio" Sexe="M" Lateralite="G" Nation="ITA" Licence="22102002002" Statut="N" DateNaissance="22.10.2002" Classement="26" Points="52.000"></Tireur>
+    <Tireur ID="45453" Nom="MACCHI" Prenom="Filippo" Sexe="M" Lateralite="G" Nation="ITA" Licence="19092001002" Statut="N" DateNaissance="19.09.2001" Classement="7" Points="131.000"></Tireur>
+    <Tireur ID="41142" Nom="MARINI" Prenom="Tommaso" Sexe="M" Lateralite="D" Nation="ITA" Licence="17042000003" Statut="N" DateNaissance="17.04.2000" Classement="15" Points="96.000"></Tireur>
+    <Tireur ID="46216" Nom="MARTINI" Prenom="Tommaso" Sexe="M" Lateralite="D" Nation="ITA" Licence="17072002001" Statut="N" DateNaissance="17.07.2002" Classement="17" Points="87.000"></Tireur>
+    <Tireur ID="59231" Nom="XU" Prenom="Jia Bao" Sexe="M" Lateralite="D" Nation="CAN" Licence="07122009000" Statut="N" DateNaissance="07.12.2009" Classement="216" Points="4.750"></Tireur>
+    <Tireur ID="57030" Nom="KUO" Prenom="Chang-Chieh" Sexe="M" Lateralite="D" Nation="TPE" Licence="14032006002" Statut="N" DateNaissance="14.03.2006" Classement="288" Points="2.250"></Tireur>
+    <Tireur ID="50992" Nom="HSIEH" Prenom="Cheng-Yen" Sexe="M" Lateralite="D" Nation="TPE" Licence="25022000007" Statut="N" DateNaissance="25.02.2000" Classement="871" Points="0.000"></Tireur>
+    <Tireur ID="53610" Nom="PERESSINI TORREGROSA" Prenom="Esteban" Sexe="M" Lateralite="D" Nation="ESP" Licence="07022002003" Statut="N" DateNaissance="07.02.2002" Classement="365" Points="1.000"></Tireur>
+    <Tireur ID="25512" Nom="LACASTA" Prenom="Sergio" Sexe="M" Lateralite="D" Nation="ESP" Licence="24111995001" Statut="N" DateNaissance="24.11.1995" Classement="371" Points="0.875"></Tireur>
+    <Tireur ID="49385" Nom="ZABALA" Prenom="Juan" Sexe="M" Lateralite="D" Nation="ESP" Licence="15072003003" Statut="N" DateNaissance="15.07.2003" Classement="113" Points="13.250"></Tireur>
+    <Tireur ID="46064" Nom="DIAZ ESCALONA" Prenom="Mario" Sexe="M" Lateralite="D" Nation="ESP" Licence="27122002001" Statut="N" DateNaissance="27.12.2002" Classement="170" Points="7.500"></Tireur>
+    <Tireur ID="45241" Nom="GUMA" Prenom="Arnau" Sexe="M" Lateralite="D" Nation="ESP" Licence="03042003000" Statut="N" DateNaissance="03.04.2003" Classement="426" Points="0.375"></Tireur>
+    <Tireur ID="48984" Nom="FRANZONI" Prenom="Giuseppe" Sexe="M" Lateralite="D" Nation="ITA" Licence="27092003000" Statut="N" DateNaissance="27.09.2003" Classement="65" Points="24.750"></Tireur>
+    <Tireur ID="61386" Nom="IAQUINTA" Prenom="Emanuele" Sexe="M" Lateralite="D" Nation="ITA" Licence="25042008003" Statut="N" DateNaissance="25.04.2008" Classement="214" Points="4.750"></Tireur>
+    <Tireur ID="53400" Nom="DE CRISTOFARO" Prenom="Mattia" Sexe="M" Lateralite="D" Nation="ITA" Licence="17092006000" Statut="N" DateNaissance="17.09.2006" Classement="277" Points="2.875"></Tireur>
+    <Tireur ID="34446" Nom="FILIPPI" Prenom="Davide" Sexe="M" Lateralite="D" Nation="ITA" Licence="14031998001" Statut="N" DateNaissance="14.03.1998" Classement="58" Points="28.000"></Tireur>
+    <Tireur ID="46198" Nom="DI VEROLI" Prenom="Damiano" Sexe="M" Lateralite="D" Nation="ITA" Licence="27062003001" Statut="N" DateNaissance="27.06.2003" Classement="102" Points="15.000"></Tireur>
+    <Tireur ID="21966" Nom="LLAVADOR" Prenom="Carlos" Sexe="M" Lateralite="G" Nation="ESP" Licence="26041992000" Statut="N" DateNaissance="26.04.1992" Classement="13" Points="100.000"></Tireur>
+    <Tireur ID="51418" Nom="KIEW" Prenom="Zephaniah Ian" Sexe="M" Lateralite="D" Nation="SGP" Licence="13092004000" Statut="N" DateNaissance="13.09.2004" Classement="293" Points="2.125"></Tireur>
+    <Tireur ID="58729" Nom="LAM" Prenom="Pak Kio" Sexe="M" Lateralite="D" Nation="MAC" Licence="22062007003" Statut="N" DateNaissance="22.06.2007" Classement="196" Points="6.000"></Tireur>
+    <Tireur ID="64173" Nom="CHEONG" Prenom="Chong Kio" Sexe="M" Lateralite="D" Nation="MAC" Licence="03022011000" Statut="N" DateNaissance="03.02.2011" Classement="213" Points="5.000"></Tireur>
+    <Tireur ID="65652" Nom="LEONG" Prenom="Chit Seong" Sexe="M" Lateralite="D" Nation="MAC" Licence="24102011000" Statut="N" DateNaissance="24.10.2011" Classement="926" Points="0.000"></Tireur>
+    <Tireur ID="64175" Nom="HO" Prenom="Ian Chak" Sexe="M" Lateralite="D" Nation="MAC" Licence="27092011000" Statut="N" DateNaissance="27.09.2011" Classement="933" Points="0.000"></Tireur>
+    <Tireur ID="28626" Nom="ROSATELLI" Prenom="Damiano" Sexe="M" Lateralite="D" Nation="ITA" Licence="04111995001" Statut="N" DateNaissance="04.11.1995" Classement="76" Points="22.000"></Tireur>
+    <Tireur ID="26867" Nom="REICHETZER" Prenom="Tobias" Sexe="M" Lateralite="G" Nation="AUT" Licence="08101994003" Statut="N" DateNaissance="08.10.1994" Classement="140" Points="9.500"></Tireur>
+    <Tireur ID="69759" Nom="CHOU" Prenom="Shih-Chieh" Sexe="M" Lateralite="G" Nation="TPE" Licence="23042012000" Statut="N" DateNaissance="23.04.2012" Classement="938" Points="0.000"></Tireur>
+    <Tireur ID="65604" Nom="HUNG" Prenom="Peng-Chun" Sexe="M" Lateralite="D" Nation="TPE" Licence="21092007003" Statut="N" DateNaissance="21.09.2007" Classement="887" Points="0.000"></Tireur>
+    <Tireur ID="65997" Nom="RIFKIND" Prenom="Mark Pasakorn" Sexe="M" Lateralite="D" Nation="THA" Licence="17052006008" Statut="N" DateNaissance="17.05.2006" Classement="942" Points="0.000"></Tireur>
+    <Tireur ID="42942" Nom="ALARCON" Prenom="Leopoldo" Sexe="M" Lateralite="G" Nation="CHI" Licence="27082001000" Statut="N" DateNaissance="27.08.2001" Classement="70" Points="23.750"></Tireur>
+    <Tireur ID="48878" Nom="ALARCON" Prenom="David" Sexe="M" Lateralite="D" Nation="CHI" Licence="14102003002" Statut="N" DateNaissance="14.10.2003" Classement="143" Points="9.250"></Tireur>
+    <Tireur ID="35026" Nom="OTAYZA" Prenom="Vicente" Sexe="M" Lateralite="G" Nation="CHI" Licence="03082000000" Statut="N" DateNaissance="03.08.2000" Classement="68" Points="24.000"></Tireur>
+    <Tireur ID="51161" Nom="MURRAY" Prenom="Maximo" Sexe="M" Lateralite="D" Nation="MEX" Licence="06062005000" Statut="N" DateNaissance="06.06.2005" Classement="133" Points="10.750"></Tireur>
+    <Tireur ID="60293" Nom="NORDIN" Prenom="Saif" Sexe="M" Lateralite="D" Nation="MAS" Licence="19072010000" Statut="N" DateNaissance="19.07.2010" Classement="440" Points="0.250"></Tireur>
+    <Tireur ID="49167" Nom="GLASSON" Prenom="Joseph" Sexe="M" Lateralite="D" Nation="AUS" Licence="24012003002" Statut="N" DateNaissance="24.01.2006" Classement="54" Points="29.250"></Tireur>
+    <Tireur ID="49726" Nom="CHENG" Prenom="Tit Nam" Sexe="M" Lateralite="G" Nation="HKG" Licence="07022005000" Statut="N" DateNaissance="07.02.2005" Classement="192" Points="6.250"></Tireur>
+    <Tireur ID="30878" Nom="CHEUNG" Prenom="Ka Long" Sexe="M" Lateralite="G" Nation="HKG" Licence="10061997001" Statut="N" DateNaissance="10.06.1997" Classement="18" Points="83.000"></Tireur>
+    <Tireur ID="60567" Nom="CHOI" Prenom="Chi Lok" Sexe="M" Lateralite="G" Nation="HKG" Licence="26072007004" Statut="N" DateNaissance="26.07.2007" Classement="234" Points="4.125"></Tireur>
+    <Tireur ID="31438" Nom="CHOI" Prenom="Chun Yin Ryan" Sexe="M" Lateralite="G" Nation="HKG" Licence="09101997000" Statut="N" DateNaissance="09.10.1997" Classement="2" Points="221.000"></Tireur>
+    <Tireur ID="61458" Nom="HO" Prenom="Shing Fung Anthony" Sexe="M" Lateralite="G" Nation="HKG" Licence="10022009001" Statut="N" DateNaissance="10.02.2009" Classement="921" Points="0.000"></Tireur>
+    <Tireur ID="61459" Nom="HO" Prenom="Shing Him Harris" Sexe="M" Lateralite="G" Nation="HKG" Licence="10022009002" Statut="N" DateNaissance="10.02.2009" Classement="35" Points="46.000"></Tireur>
+    <Tireur ID="57715" Nom="LAM" Prenom="Ho Long" Sexe="M" Lateralite="D" Nation="HKG" Licence="01042007001" Statut="N" DateNaissance="01.04.2007" Classement="103" Points="15.000"></Tireur>
+    <Tireur ID="35446" Nom="LEE" Prenom="Yat Long" Sexe="M" Lateralite="G" Nation="HKG" Licence="16092000000" Statut="N" DateNaissance="16.09.2000" Classement="231" Points="4.250"></Tireur>
+    <Tireur ID="54242" Nom="LEUNG" Prenom="Chin Yu" Sexe="M" Lateralite="D" Nation="HKG" Licence="30092004000" Statut="N" DateNaissance="30.09.2004" Classement="61" Points="25.500"></Tireur>
+    <Tireur ID="58325" Nom="LAU" Prenom="Kenji Tsun Yin" Sexe="M" Lateralite="G" Nation="HKG" Licence="16092008000" Statut="N" DateNaissance="16.09.2008" Classement="862" Points="0.000"></Tireur>
+    <Tireur ID="37311" Nom="NG" Prenom="Lok Wang Lawrence" Sexe="M" Lateralite="D" Nation="HKG" Licence="14101999001" Statut="N" DateNaissance="14.10.1999" Classement="37" Points="43.000"></Tireur>
+    <Tireur ID="54532" Nom="YUEN" Prenom="Chi Shun Michael" Sexe="M" Lateralite="D" Nation="HKG" Licence="15022006001" Statut="N" DateNaissance="15.02.2006" Classement="259" Points="3.250"></Tireur>
+    <Tireur ID="41892" Nom="MIHALYI" Prenom="Andor Istvan" Sexe="M" Lateralite="D" Nation="HUN" Licence="14122002000" Statut="N" DateNaissance="14.12.2002" Classement="91" Points="17.875"></Tireur>
+    <Tireur ID="49825" Nom="TOTH" Prenom="Gergely" Sexe="M" Lateralite="D" Nation="HUN" Licence="03042002005" Statut="N" DateNaissance="03.04.2002" Classement="44" Points="34.000"></Tireur>
+    <Tireur ID="43449" Nom="SZEMES" Prenom="Gergo" Sexe="M" Lateralite="G" Nation="HUN" Licence="11022003000" Statut="N" DateNaissance="11.02.2003" Classement="9" Points="111.000"></Tireur>
+    <Tireur ID="53425" Nom="BALINT" Prenom="Almos" Sexe="M" Lateralite="D" Nation="HUN" Licence="11102005000" Statut="N" DateNaissance="11.10.2005" Classement="153" Points="8.250"></Tireur>
+    <Tireur ID="51933" Nom="ZSIGMOND" Prenom="Daniel" Sexe="M" Lateralite="G" Nation="HUN" Licence="18102003001" Statut="N" DateNaissance="18.10.2003" Classement="470" Points="0.250"></Tireur>
+    <Tireur ID="32232" Nom="SERVELLO" Prenom="Augusto Antonio" Sexe="M" Lateralite="G" Nation="ARG" Licence="01121999000" Statut="N" DateNaissance="01.12.1999" Classement="48" Points="33.000"></Tireur>
+    <Tireur ID="52953" Nom="TOLBA " Prenom="Abdelrahman " Sexe="M" Lateralite="D" Nation="EGY" Licence="29072007000" Statut="N" DateNaissance="29.07.2007" Classement="12" Points="102.000"></Tireur>
+    <Tireur ID="37194" Nom="HAMZA" Prenom="Mohamed " Sexe="M" Lateralite="G" Nation="EGY" Licence="11092000001" Statut="N" DateNaissance="11.09.2000" Classement="8" Points="123.000"></Tireur>
+    <Tireur ID="40236" Nom="MO" Prenom="Ziwei" Sexe="M" Lateralite="D" Nation="CHN" Licence="30121996002" Statut="N" DateNaissance="30.12.1996" Classement="27" Points="51.875"></Tireur>
+    <Tireur ID="55800" Nom="ZENG" Prenom="Zhaoran" Sexe="M" Lateralite="D" Nation="CHN" Licence="21122004003" Statut="N" DateNaissance="21.12.2004" Classement="22" Points="62.000"></Tireur>
+    <Tireur ID="43549" Nom="XU" Prenom="Jie" Sexe="M" Lateralite="D" Nation="CHN" Licence="06012002000" Statut="N" DateNaissance="06.01.2002" Classement="39" Points="39.500"></Tireur>
+    <Tireur ID="58620" Nom="GUO" Prenom="Yifan" Sexe="M" Lateralite="D" Nation="CHN" Licence="01032006002" Statut="N" DateNaissance="01.03.2006" Classement="92" Points="17.250"></Tireur>
+    <Tireur ID="59725" Nom="TANG" Prenom="Yuncong" Sexe="M" Lateralite="D" Nation="CHN" Licence="20032000010" Statut="N" DateNaissance="20.03.2000" Classement="303" Points="2.000"></Tireur>
+    <Tireur ID="65698" Nom="FEI" Prenom="Xiaotian" Sexe="M" Lateralite="D" Nation="CHN" Licence="10012000011" Statut="N" DateNaissance="10.01.2000" Classement="217" Points="4.625"></Tireur>
+    <Tireur ID="43548" Nom="SHEN" Prenom="Weiping" Sexe="M" Lateralite="G" Nation="CHN" Licence="05062000000" Statut="N" DateNaissance="05.06.2000" Classement="222" Points="4.500"></Tireur>
+    <Tireur ID="59681" Nom="XIAO" Prenom="Bosen" Sexe="M" Lateralite="D" Nation="CHN" Licence="08112006001" Statut="N" DateNaissance="08.11.2006" Classement="280" Points="2.750"></Tireur>
+    <Tireur ID="59727" Nom="LU" Prenom="Hengrui" Sexe="M" Lateralite="D" Nation="CHN" Licence="30112007002" Statut="N" DateNaissance="30.11.2007" Classement="314" Points="1.750"></Tireur>
+    <Tireur ID="66588" Nom="LIN" Prenom="Youlong" Sexe="M" Lateralite="G" Nation="CHN" Licence="10082010002" Statut="N" DateNaissance="10.08.2010" Classement="432" Points="0.375"></Tireur>
+    <Tireur ID="68010" Nom="LIN" Prenom="Weile" Sexe="M" Lateralite="G" Nation="CHN" Licence="19022010001" Statut="N" DateNaissance="19.02.2010" Classement="270" Points="3.000"></Tireur>
+    <Tireur ID="61354" Nom="LYU" Prenom="Weiqiao" Sexe="M" Lateralite="D" Nation="CHN" Licence="04012007004" Statut="N" DateNaissance="04.01.2007" Classement="98" Points="16.000"></Tireur>
+    <Tireur ID="62267" Nom="ZOU" Prenom="Tianyi" Sexe="M" Lateralite="D" Nation="CHN" Licence="11052010000" Statut="N" DateNaissance="11.05.2010" Classement="229" Points="4.250"></Tireur>
+    <Tireur ID="68006" Nom="WEI" Prenom="YUXUAN" Sexe="M" Lateralite="D" Nation="CHN" Licence="14032011000" Statut="N" DateNaissance="14.03.2011" Classement="923" Points="0.000"></Tireur>
+    <Tireur ID="63530" Nom="LIAN" Prenom="Yifeng" Sexe="M" Lateralite="D" Nation="CHN" Licence="14022008004" Statut="N" DateNaissance="14.02.2008" Classement="327" Points="1.500"></Tireur>
+    <Tireur ID="63529" Nom="CHEN" Prenom="Jianghe" Sexe="M" Lateralite="G" Nation="CHN" Licence="15062007011" Statut="N" DateNaissance="15.06.2007" Classement="431" Points="0.375"></Tireur>
+    <Tireur ID="68005" Nom="LAI" Prenom="ZEXIN" Sexe="M" Lateralite="D" Nation="CHN" Licence="20062008003" Statut="N" DateNaissance="20.06.2008" Classement="382" Points="0.750"></Tireur>
+    <Tireur ID="64023" Nom="LIU" Prenom="Boran" Sexe="M" Lateralite="D" Nation="CHN" Licence="26082008001" Statut="N" DateNaissance="26.08.2008" Classement="331" Points="1.500"></Tireur>
+    <Tireur ID="63532" Nom="JIA" Prenom="Hanming" Sexe="M" Lateralite="G" Nation="CHN" Licence="02102009001" Statut="N" DateNaissance="02.10.2009" Classement="328" Points="1.500"></Tireur>
+    <Tireur ID="30562" Nom="KLEIN" Prenom="Felix" Sexe="M" Lateralite="D" Nation="GER" Licence="05101995003" Statut="N" DateNaissance="05.10.1995" Classement="137" Points="9.500"></Tireur>
+    <Tireur ID="38990" Nom="KLEIN" Prenom="Luis" Sexe="M" Lateralite="D" Nation="GER" Licence="06011999003" Statut="N" DateNaissance="06.01.1999" Classement="73" Points="23.000"></Tireur>
+    <Tireur ID="51529" Nom="FAUL" Prenom="Paul Luca" Sexe="M" Lateralite="D" Nation="GER" Licence="11102002006" Statut="N" DateNaissance="11.10.2002" Classement="123" Points="12.000"></Tireur>
+    <Tireur ID="30314" Nom="KAHL" Prenom="Alexander" Sexe="M" Lateralite="D" Nation="GER" Licence="05101993002" Statut="N" DateNaissance="05.10.1993" Classement="78" Points="21.500"></Tireur>
+    <Tireur ID="54300" Nom="DIESTELKAMP" Prenom="Niklas" Sexe="M" Lateralite="D" Nation="GER" Licence="17052005003" Statut="N" DateNaissance="17.05.2005" Classement="128" Points="11.375"></Tireur>
+    <Tireur ID="57468" Nom="BARBY" Prenom="Henrik" Sexe="M" Lateralite="G" Nation="GER" Licence="11092007001" Statut="N" DateNaissance="11.09.2007" Classement="219" Points="4.500"></Tireur>
+    <Tireur ID="59285" Nom="SCHULZ" Prenom="Linus" Sexe="M" Lateralite="D" Nation="GER" Licence="23012006009" Statut="N" DateNaissance="23.01.2006" Classement="205" Points="5.750"></Tireur>
+    <Tireur ID="48591" Nom="RIEGER" Prenom="Laurenz" Sexe="M" Lateralite="G" Nation="GER" Licence="07012002006" Statut="N" DateNaissance="07.01.2002" Classement="125" Points="11.625"></Tireur>
+    <Tireur ID="37805" Nom="VELLA" Prenom="Rosario" Sexe="M" Lateralite="D" Nation="GER" Licence="04091998002" Statut="N" DateNaissance="04.09.1998" Classement="309" Points="1.750"></Tireur>
+    <Tireur ID="60884" Nom="BECKMANN" Prenom="Otto" Sexe="M" Lateralite="D" Nation="GER" Licence="27032007002" Statut="N" DateNaissance="27.03.2007" Classement="281" Points="2.625"></Tireur>
+    <Tireur ID="60883" Nom="BERGERT" Prenom="Michael" Sexe="M" Lateralite="D" Nation="GER" Licence="18012007001" Statut="N" DateNaissance="18.01.2007" Classement="356" Points="1.000"></Tireur>
+    <Tireur ID="69517" Nom="YANG" Prenom="Jintao" Sexe="M" Lateralite="D" Nation="CHN" Licence="14042009003" Statut="N" DateNaissance="14.04.2009" Classement="856" Points="0.000"></Tireur>
+    <Tireur ID="42856" Nom="BOURTIS" Prenom="James" Sexe="M" Lateralite="D" Nation="USA" Licence="02012000003" Statut="N" DateNaissance="02.01.2000" Classement="88" Points="18.500"></Tireur>
+    <Tireur ID="12343" Nom="CHAMLEY-WATSON" Prenom="Miles" Sexe="M" Lateralite="D" Nation="USA" Licence="03121989000" Statut="N" DateNaissance="03.12.1989" Classement="97" Points="16.000"></Tireur>
+    <Tireur ID="44984" Nom="GASSNER" Prenom="Ethan" Sexe="M" Lateralite="G" Nation="USA" Licence="05122001001" Statut="N" DateNaissance="05.12.2001" Classement="146" Points="9.000"></Tireur>
+    <Tireur ID="49004" Nom="EMMER" Prenom="Chase" Sexe="M" Lateralite="D" Nation="USA" Licence="11072004000" Statut="N" DateNaissance="11.07.2004" Classement="57" Points="28.000"></Tireur>
+    <Tireur ID="53372" Nom="GRAHAM" Prenom="Roy" Sexe="M" Lateralite="D" Nation="USA" Licence="30062005000" Statut="N" DateNaissance="30.06.2007" Classement="249" Points="3.500"></Tireur>
+    <Tireur ID="36441" Nom="ITKIN" Prenom="Nick" Sexe="M" Lateralite="D" Nation="USA" Licence="09101999000" Statut="N" DateNaissance="09.10.1999" Classement="6" Points="151.000"></Tireur>
+    <Tireur ID="35857" Nom="KUMBLA" Prenom="Sidarth" Sexe="M" Lateralite="D" Nation="USA" Licence="27091998001" Statut="N" DateNaissance="27.09.1998" Classement="141" Points="9.500"></Tireur>
+    <Tireur ID="57422" Nom="KUMBLA" Prenom="Samarth" Sexe="M" Lateralite="D" Nation="USA" Licence="29092004002" Statut="N" DateNaissance="29.09.2004" Classement="122" Points="12.000"></Tireur>
+    <Tireur ID="21958" Nom="MASSIALAS" Prenom="Alexander" Sexe="M" Lateralite="D" Nation="USA" Licence="20041994001" Statut="N" DateNaissance="20.04.1994" Classement="5" Points="158.000"></Tireur>
+    <Tireur ID="49110" Nom="LOUIE" Prenom="Bryce" Sexe="M" Lateralite="D" Nation="USA" Licence="06032002004" Statut="N" DateNaissance="06.03.2002" Classement="19" Points="78.000"></Tireur>
+    <Tireur ID="14397" Nom="MEINHARDT" Prenom="Gerek" Sexe="M" Lateralite="D" Nation="USA" Licence="27071990000" Statut="N" DateNaissance="27.07.1990" Classement="21" Points="65.000"></Tireur>
+    <Tireur ID="43020" Nom="OLIVARES" Prenom="Marcello" Sexe="M" Lateralite="D" Nation="USA" Licence="04042001004" Statut="N" DateNaissance="04.04.2001" Classement="36" Points="44.000"></Tireur>
+    <Tireur ID="48623" Nom="NURUMOV" Prenom="Galim" Sexe="M" Lateralite="D" Nation="KAZ" Licence="15032004002" Statut="N" DateNaissance="15.03.2004" Classement="142" Points="9.375"></Tireur>
+    <Tireur ID="52776" Nom="SEMYONOV " Prenom="Timofey" Sexe="M" Lateralite="D" Nation="KAZ" Licence="11042006000" Statut="N" DateNaissance="11.04.2006" Classement="147" Points="8.875"></Tireur>
+    <Tireur ID="29296" Nom="ABE" Prenom="Yoshiki" Sexe="M" Lateralite="D" Nation="JPN" Licence="11061996001" Statut="N" DateNaissance="11.06.1996" Classement="90" Points="18.000"></Tireur>
+    <Tireur ID="45623" Nom="BABA" Prenom="Shunsuke" Sexe="M" Lateralite="G" Nation="JPN" Licence="23092002000" Statut="N" DateNaissance="23.09.2002" Classement="28" Points="49.000"></Tireur>
+    <Tireur ID="55145" Nom="FUKUDA" Prenom="Ryosuke" Sexe="M" Lateralite="D" Nation="JPN" Licence="15092004004" Statut="N" DateNaissance="15.09.2004" Classement="96" Points="16.500"></Tireur>
+    <Tireur ID="46543" Nom="IIMURA" Prenom="Kazuki" Sexe="M" Lateralite="D" Nation="JPN" Licence="27122003000" Statut="N" DateNaissance="27.12.2003" Classement="10" Points="109.000"></Tireur>
+    <Tireur ID="42387" Nom="KAWAMURA" Prenom="Kyota" Sexe="M" Lateralite="D" Nation="JPN" Licence="27062000003" Statut="N" DateNaissance="27.06.2000" Classement="86" Points="19.000"></Tireur>
+    <Tireur ID="65220" Nom="MAEDA" Prenom="Masashi" Sexe="M" Lateralite="G" Nation="JPN" Licence="03032010003" Statut="N" DateNaissance="03.03.2010" Classement="258" Points="3.250"></Tireur>
+    <Tireur ID="29076" Nom="MATSUYAMA" Prenom="Kyosuke" Sexe="M" Lateralite="G" Nation="JPN" Licence="19121996000" Statut="N" DateNaissance="19.12.1996" Classement="20" Points="70.000"></Tireur>
+    <Tireur ID="36173" Nom="NAGANO" Prenom="Yudai" Sexe="M" Lateralite="D" Nation="JPN" Licence="15101998001" Statut="N" DateNaissance="15.10.1998" Classement="25" Points="59.000"></Tireur>
+    <Tireur ID="51746" Nom="NISHIGUCHI" Prenom="Yasutaka" Sexe="M" Lateralite="D" Nation="JPN" Licence="07122002001" Statut="N" DateNaissance="07.12.2002" Classement="131" Points="11.000"></Tireur>
+    <Tireur ID="61335" Nom="ONO" Prenom="Ryoga" Sexe="M" Lateralite="D" Nation="JPN" Licence="26032008001" Statut="N" DateNaissance="26.03.2008" Classement="111" Points="14.000"></Tireur>
+    <Tireur ID="30489" Nom="SAITO" Prenom="Toshiya" Sexe="M" Lateralite="D" Nation="JPN" Licence="29051997000" Statut="N" DateNaissance="29.05.1997" Classement="55" Points="29.000"></Tireur>
+    <Tireur ID="61334" Nom="TANAKA" Prenom="Takushin" Sexe="M" Lateralite="G" Nation="JPN" Licence="05122007000" Statut="N" DateNaissance="05.12.2007" Classement="312" Points="1.750"></Tireur>
+    <Tireur ID="52902" Nom="RUBIN" Prenom="Mattia" Sexe="M" Lateralite="D" Nation="HUN" Licence="02082006000" Statut="N" DateNaissance="02.08.2006" Classement="212" Points="5.000"></Tireur>
+    <Tireur ID="68966" Nom="ORAL" Prenom="CAN" Sexe="M" Lateralite="G" Nation="TUR" Licence="26102000003" Statut="N" DateNaissance="26.10.2000" Classement="946" Points="0.000"></Tireur>
+    <Tireur ID="42984" Nom="ROBIN" Prenom="Noe" Sexe="M" Lateralite="G" Nation="SEN" Licence="08082000006" Statut="N" DateNaissance="08.08.2000" Classement="47" Points="33.250"></Tireur>
+    <Tireur ID="26857" Nom="ESSAM" Prenom="Mohamed" Sexe="M" Lateralite="D" Nation="EGY" Licence="06121994001" Statut="N" DateNaissance="06.12.1994" Classement="347" Points="1.125"></Tireur>
+    <Tireur ID="54974" Nom="CASTRO" Prenom="Felipe" Sexe="M" Lateralite="G" Nation="CHI" Licence="12052003004" Statut="N" DateNaissance="12.05.2003" Classement="421" Points="0.500"></Tireur>
+    <Tireur ID="35181" Nom="FRUHAUF" Prenom="Benjamin" Sexe="M" Lateralite="D" Nation="HUN" Licence="13071998004" Statut="N" DateNaissance="13.07.1998" Classement="240" Points="3.875"></Tireur>
+    <Tireur ID="30289" Nom="RZADKOWSKI" Prenom="Andrzej" Sexe="M" Lateralite="D" Nation="POL" Licence="04031997000" Statut="N" DateNaissance="04.03.1997" Classement="30" Points="48.000"></Tireur>
+    <Tireur ID="45828" Nom="ESPINOZA" Prenom="Joaquin" Sexe="M" Lateralite="D" Nation="PER" Licence="10112002000" Statut="N" DateNaissance="10.11.2002" Classement="239" Points="3.875"></Tireur>
+    <Tireur ID="64733" Nom="RABTSAU" Prenom="Yahor" Sexe="M" Lateralite="G" Nation="AIN_" Licence="05052006006" Statut="N" DateNaissance="05.05.2006" Classement="391" Points="0.625"></Tireur>
+    <Tireur ID="37878" Nom="BORODACHEV" Prenom="Kirill" Sexe="M" Lateralite="G" Nation="_AIN" Licence="23032000001" Statut="N" DateNaissance="23.03.2000" Classement="1" Points="225.000"></Tireur>
+    <Tireur ID="40355" Nom="BORODACHEV" Prenom="Anton" Sexe="M" Lateralite="D" Nation="_AIN" Licence="23032000004" Statut="N" DateNaissance="23.03.2000" Classement="24" Points="61.000"></Tireur>
+    <Tireur ID="49766" Nom="BARANNIKOV" Prenom="Egor" Sexe="M" Lateralite="G" Nation="_AIN" Licence="28112002003" Statut="N" DateNaissance="28.11.2002" Classement="38" Points="42.000"></Tireur>
+    <Tireur ID="61642" Nom="BULATOV" Prenom="Iskander" Sexe="M" Lateralite="D" Nation="_AIN" Licence="07082005001" Statut="N" DateNaissance="07.08.2005" Classement="106" Points="14.750"></Tireur>
+    <Tireur ID="53650" Nom="IVANOV" Prenom="Alexey" Sexe="M" Lateralite="D" Nation="_AIN" Licence="14042004003" Statut="N" DateNaissance="14.04.2004" Classement="238" Points="4.000"></Tireur>
+    <Tireur ID="61643" Nom="KERIK" Prenom="Aleksandr" Sexe="M" Lateralite="D" Nation="_AIN" Licence="10122005000" Statut="N" DateNaissance="10.12.2005" Classement="46" Points="34.000"></Tireur>
+    <Tireur ID="61977" Nom="KERIK" Prenom="Daniil" Sexe="M" Lateralite="D" Nation="_AIN" Licence="10122005001" Statut="N" DateNaissance="10.12.2005" Classement="84" Points="19.750"></Tireur>
+    <Tireur ID="61641" Nom="KORNILOV" Prenom="Valerii" Sexe="M" Lateralite="G" Nation="_AIN" Licence="22122005002" Statut="N" DateNaissance="22.12.2005" Classement="169" Points="7.500"></Tireur>
+    <Tireur ID="40354" Nom="MYLNIKOV" Prenom="Vladislav" Sexe="M" Lateralite="G" Nation="_AIN" Licence="12092000001" Statut="N" DateNaissance="12.09.2000" Classement="31" Points="48.000"></Tireur>
+    <Tireur ID="46892" Nom="OSIPOV" Prenom="Dmitrii" Sexe="M" Lateralite="D" Nation="_AIN" Licence="16072003000" Statut="N" DateNaissance="16.07.2003" Classement="108" Points="14.500"></Tireur>
+    <Tireur ID="37875" Nom="SEMENYUK " Prenom="Grigoriy" Sexe="M" Lateralite="G" Nation="_AIN" Licence="24071998002" Statut="N" DateNaissance="24.07.1998" Classement="85" Points="19.500"></Tireur>
+    <Tireur ID="53895" Nom="PUZANKOV" Prenom="Pavel" Sexe="M" Lateralite="D" Nation="_AIN" Licence="02022005000" Statut="N" DateNaissance="02.02.2005" Classement="69" Points="24.000"></Tireur>
+    <Tireur ID="51470" Nom="ANANE" Prenom="Anas" Sexe="M" Lateralite="D" Nation="FRA" Licence="13052004002" Statut="N" DateNaissance="13.05.2004" Classement="11" Points="109.000"></Tireur>
+    <Tireur ID="66437" Nom="ANANE" Prenom="Zakariya" Sexe="M" Lateralite="G" Nation="FRA" Licence="09122007004" Statut="N" DateNaissance="09.12.2007" Classement="243" Points="3.750"></Tireur>
+    <Tireur ID="40104" Nom="BIBARD" Prenom="Tyvan" Sexe="M" Lateralite="D" Nation="FRA" Licence="22051999002" Statut="N" DateNaissance="22.05.1999" Classement="99" Points="16.000"></Tireur>
+    <Tireur ID="34638" Nom="EDIRI" Prenom="Alexandre" Sexe="M" Lateralite="D" Nation="FRA" Licence="30011998000" Statut="N" DateNaissance="30.01.1998" Classement="178" Points="7.250"></Tireur>
+    <Tireur ID="53930" Nom="HELMY-COCOYNACQ" Prenom="Adrien" Sexe="M" Lateralite="D" Nation="FRA" Licence="26012005003" Statut="N" DateNaissance="26.01.2005" Classement="51" Points="31.000"></Tireur>
+    <Tireur ID="22555" Nom="LEFORT" Prenom="Enzo" Sexe="M" Lateralite="D" Nation="FRA" Licence="29091991001" Statut="N" DateNaissance="29.09.1991" Classement="291" Points="2.250"></Tireur>
+    <Tireur ID="54306" Nom="PRADEL" Prenom="Louis" Sexe="M" Lateralite="D" Nation="FRA" Licence="07112005000" Statut="N" DateNaissance="07.11.2005" Classement="110" Points="14.000"></Tireur>
+    <Tireur ID="64669" Nom="ROBINET" Prenom="Lucas" Sexe="M" Lateralite="D" Nation="FRA" Licence="27022009003" Statut="N" DateNaissance="27.02.2009" Classement="282" Points="2.500"></Tireur>
+    <Tireur ID="34789" Nom="ROGER" Prenom="Wallerand" Sexe="M" Lateralite="D" Nation="FRA" Licence="25071998001" Statut="N" DateNaissance="25.07.1998" Classement="59" Points="26.000"></Tireur>
+    <Tireur ID="57677" Nom="MURUHIN" Prenom="Yaroslav" Sexe="M" Lateralite="D" Nation="UKR" Licence="06012005002" Statut="N" DateNaissance="06.01.2005" Classement="168" Points="7.750"></Tireur>
+    <Tireur ID="53929" Nom="SPICHIGER" Prenom="Antoine" Sexe="M" Lateralite="D" Nation="FRA" Licence="13022005001" Statut="N" DateNaissance="13.02.2005" Classement="161" Points="7.875"></Tireur>
+    <Tireur ID="30808" Nom="SIDO" Prenom="Alexandre" Sexe="M" Lateralite="D" Nation="FRA" Licence="31101996000" Statut="N" DateNaissance="31.10.1996" Classement="60" Points="26.000"></Tireur>
+    <Tireur ID="39650" Nom="SAVIN" Prenom="Rafael" Sexe="M" Lateralite="D" Nation="FRA" Licence="15092000001" Statut="N" DateNaissance="15.09.2000" Classement="23" Points="61.000"></Tireur>
+    <Tireur ID="58017" Nom="ADITYA" Prenom="Aditya" Sexe="M" Lateralite="D" Nation="IND" Licence="21032006004" Statut="N" DateNaissance="21.03.2006" Classement="911" Points="0.000"></Tireur>
+    <Tireur ID="55358" Nom="SANASAM" Prenom="Hemash Singh" Sexe="M" Lateralite="D" Nation="IND" Licence="02032006002" Statut="N" DateNaissance="02.03.2006" Classement="414" Points="0.500"></Tireur>
+    <Tireur ID="56382" Nom="SACHIN" Prenom="Sachin" Sexe="M" Lateralite="D" Nation="IND" Licence="02012009000" Statut="N" DateNaissance="02.01.2009" Classement="433" Points="0.375"></Tireur>
+    <Tireur ID="58019" Nom="PATIL" Prenom="Tejas Manoj" Sexe="M" Lateralite="D" Nation="IND" Licence="09082006005" Statut="N" DateNaissance="09.08.2006" Classement="926" Points="0.000"></Tireur>
+    <Tireur ID="51055" Nom="FAZEKAS" Prenom="Arpad" Sexe="M" Lateralite="D" Nation="SVK" Licence="08052004000" Statut="N" DateNaissance="08.05.2004" Classement="127" Points="11.500"></Tireur>
+    <Tireur ID="46574" Nom="YOUN" Prenom="Jeonghyun" Sexe="M" Lateralite="D" Nation="KOR" Licence="05012001005" Statut="N" DateNaissance="05.01.2001" Classement="33" Points="47.000"></Tireur>
+    <Tireur ID="25142" Nom="LEE" Prenom="Kwanghyun" Sexe="M" Lateralite="D" Nation="KOR" Licence="17081993004" Statut="N" DateNaissance="17.08.1993" Classement="40" Points="37.000"></Tireur>
+    <Tireur ID="31278" Nom="IM" Prenom="Cheolwoo" Sexe="M" Lateralite="G" Nation="KOR" Licence="14051993004" Statut="N" DateNaissance="14.05.1993" Classement="45" Points="34.000"></Tireur>
+    <Tireur ID="43234" Nom="KIM" Prenom="Gyeongmu" Sexe="M" Lateralite="G" Nation="KOR" Licence="13031999002" Statut="N" DateNaissance="13.03.1999" Classement="155" Points="8.250"></Tireur>
+    <Tireur ID="46317" Nom="AN" Prenom="Hyeonbhin" Sexe="M" Lateralite="D" Nation="KOR" Licence="15032004001" Statut="N" DateNaissance="15.03.2004" Classement="171" Points="7.500"></Tireur>
+    <Tireur ID="27286" Nom="KWAK" Prenom="Junhyuk" Sexe="M" Lateralite="G" Nation="KOR" Licence="30101993001" Statut="N" DateNaissance="30.10.1993" Classement="166" Points="7.750"></Tireur>
+    <Tireur ID="50363" Nom="CHOI" Prenom="Minseo" Sexe="M" Lateralite="D" Nation="KOR" Licence="19072000005" Statut="N" DateNaissance="19.07.2000" Classement="183" Points="6.750"></Tireur>
+    <Tireur ID="39124" Nom="KIM" Prenom="Tae Hwan" Sexe="M" Lateralite="D" Nation="KOR" Licence="05012001000" Statut="N" DateNaissance="05.01.2001" Classement="53" Points="30.500"></Tireur>
+    <Tireur ID="58722" Nom="SEO" Prenom="Yechan" Sexe="M" Lateralite="D" Nation="KOR" Licence="08122003004" Statut="N" DateNaissance="08.12.2003" Classement="80" Points="21.000"></Tireur>
+    <Tireur ID="54490" Nom="CHOI" Prenom="Hyeokjun" Sexe="M" Lateralite="D" Nation="KOR" Licence="22092006000" Statut="N" DateNaissance="22.09.2006" Classement="381" Points="0.750"></Tireur>
+    <Tireur ID="35215" Nom="LEE" Prenom="Hanseok" Sexe="M" Lateralite="G" Nation="KOR" Licence="12121994002" Statut="N" DateNaissance="12.12.1994" Classement="902" Points="0.000"></Tireur>
+    <Tireur ID="37798" Nom="LEE" Prenom="Seong-Jong" Sexe="M" Lateralite="G" Nation="KOR" Licence="19091998004" Statut="N" DateNaissance="19.09.1998" Classement="207" Points="5.500"></Tireur>
+    <Tireur ID="52639" Nom="FERREIRO" Prenom="German" Sexe="M" Lateralite="D" Nation="ESP" Licence="05102004001" Statut="N" DateNaissance="05.10.2004" Classement="633" Points="0.000"></Tireur>
+    <Tireur ID="66305" Nom="GROSZ" Prenom="Roland" Sexe="M" Lateralite="G" Nation="HUN" Licence="30012008003" Statut="N" DateNaissance="30.01.2008" Classement="159" Points="8.000"></Tireur>
+    <Tireur ID="43713" Nom="KRAVTSOV" Prenom="Daniil" Sexe="M" Lateralite="D" Nation="UZB" Licence="14012002001" Statut="N" DateNaissance="14.01.2002" Classement="210" Points="5.250"></Tireur>
+    <Tireur ID="50901" Nom="MOLINA" Prenom="Ilyas" Sexe="M" Lateralite="G" Nation="UZB" Licence="23092003004" Statut="N" DateNaissance="23.09.2003" Classement="186" Points="6.625"></Tireur>
+    <Tireur ID="50896" Nom="SEMENEEV" Prenom="Radmir" Sexe="M" Lateralite="D" Nation="UZB" Licence="15082005002" Statut="N" DateNaissance="15.08.2005" Classement="162" Points="7.875"></Tireur>
+    <Tireur ID="54007" Nom="USMANOV" Prenom="Ulugbek" Sexe="M" Lateralite="D" Nation="UZB" Licence="08122006000" Statut="N" DateNaissance="08.12.2006" Classement="190" Points="6.500"></Tireur>
+  </Tireurs>
+  <Arbitres>
+    <Arbitre ID="17792" Nom="SRNA" Prenom="Jan" Sexe="M" Nation="CZE" Licence="21051990001" DateNaissance="21.05.1990" Categorie="B"></Arbitre>
+    <Arbitre ID="23648" Nom="BARDENHAGEN" Prenom="Tim" Sexe="M" Nation="GER" Licence="27101988002" DateNaissance="27.10.1988" Categorie="B"></Arbitre>
+    <Arbitre ID="8845" Nom="PIERUCCI" Prenom="Simona" Sexe="F" Nation="ITA" Licence="29101972001" DateNaissance="29.10.1972" Categorie="B"></Arbitre>
+    <Arbitre ID="5503" Nom="WITKOWSKI" Prenom="Andrzej" Sexe="M" Nation="POL" Licence="29081979000" DateNaissance="29.08.1979" Categorie="B"></Arbitre>
+    <Arbitre ID="11472" Nom="DUL" Prenom="Michal" Sexe="M" Nation="POL" Licence="22091985007" DateNaissance="22.09.1985" Categorie="B"></Arbitre>
+    <Arbitre ID="9664" Nom="GORAL" Prenom="Tomasz" Sexe="M" Nation="SWE" Licence="13061981000" DateNaissance="13.06.1981" Categorie="B"></Arbitre>
+    <Arbitre ID="36756" Nom="MENTOR" Prenom="Victoria" Sexe="F" Nation="AUS" Licence="19081997004" DateNaissance="19.08.1997" Categorie="B"></Arbitre>
+    <Arbitre ID="4008" Nom="WONG" Prenom="Kam Kau" Sexe="M" Nation="HKG" Licence="13091978000" DateNaissance="13.09.1978" Categorie="B"></Arbitre>
+    <Arbitre ID="939" Nom="SUH" Prenom="Sangwon" Sexe="M" Nation="KOR" Licence="19071967000" DateNaissance="19.07.1967" Categorie="B"></Arbitre>
+    <Arbitre ID="18816" Nom="CHUA" Prenom="Eugene Wee Hong" Sexe="M" Nation="SGP" Licence="13021988000" DateNaissance="13.02.1988" Categorie="B"></Arbitre>
+    <Arbitre ID="11037" Nom="CHANTASUVANNASIN" Prenom="Nunta" Sexe="F" Nation="THA" Licence="26091983008" DateNaissance="26.09.1983" Categorie="B"></Arbitre>
+    <Arbitre ID="19358" Nom="NGUYEN" Prenom="Thi Tuoi" Sexe="F" Nation="VIE" Licence="12081985006" DateNaissance="12.08.1985" Categorie="B"></Arbitre>
+    <Arbitre ID="417" Nom="ACEVEDO" Prenom="Pablo" Sexe="M" Nation="PAN" Licence="01101977000" DateNaissance="01.10.1977" Categorie="B"></Arbitre>
+    <Arbitre ID="46699" Nom="ZELJKOVIC" Prenom="Jelena" Sexe="F" Nation="USA" Licence="04111977002" DateNaissance="04.11.1977" Categorie="B"></Arbitre>
+    <Arbitre ID="29006" Nom="KHALED" Prenom="Amr" Sexe="M" Nation="EGY" Licence="19041991009" DateNaissance="19.04.1991" Categorie="B"></Arbitre>
+    <Arbitre ID="37079" Nom="KADAME" Prenom="Babacar" Sexe="M" Nation="SEN" Licence="21121988003" DateNaissance="21.12.1988" Categorie="B"></Arbitre>
+  </Arbitres>
+  <Coaches>
+    <Coach ID="1768" Nom="PICHON" Prenom="Marc" Sexe="M" Nation="BEL" Licence="21081977000" DateNaissance="21.08.1977" FEDID="BEL"></Coach>
+    <Coach ID="62176" Nom="MATSEICHUK" Prenom="Oleg" Sexe="M" Nation="SGP" Licence="08031972003" DateNaissance="08.03.1972" FEDID="SGP"></Coach>
+    <Coach ID="9641" Nom="COOK" Prenom="Keith" Sexe="M" Nation="GBR" Licence="19011981002" DateNaissance="19.01.1981" FEDID="GBR"></Coach>
+    <Coach ID="46735" Nom="BOBOK" Prenom="Viacheslav" Sexe="M" Nation="SGP" Licence="28031966001" DateNaissance="28.03.1966" FEDID="SGP"></Coach>
+    <Coach ID="23837" Nom="CERIONI" Prenom="Stefano" Sexe="M" Nation="ITA" Licence="24011964000" DateNaissance="24.01.1964" FEDID="HKG"></Coach>
+    <Coach ID="63911" Nom="BORTOLASO" Prenom="Giovanni" Sexe="M" Nation="CZE" Licence="29031963003" DateNaissance="29.03.1963" FEDID="CZE"></Coach>
+    <Coach ID="54050" Nom="ONTAM" Prenom="Pongpipat" Sexe="M" Nation="THA" Licence="29121992005" DateNaissance="29.12.1992" FEDID="THA"></Coach>
+    <Coach ID="28651" Nom="KONTOCHRISTOPOULOU" Prenom="Aikaterini-Maria" Sexe="F" Nation="GRE" Licence="10061997000" DateNaissance="10.06.1997" FEDID="GRE"></Coach>
+    <Coach ID="10547" Nom="OU" Prenom="Feng Ming" Sexe="M" Nation="TPE" Licence="14031987001" DateNaissance="14.03.1987" FEDID="TPE"></Coach>
+    <Coach ID="55517" Nom="STAVISSKY" Prenom="Simon" Sexe="M" Nation="CAN" Licence="28081992004" DateNaissance="28.08.1992" FEDID="CAN"></Coach>
+    <Coach ID="10435" Nom="WANG" Prenom="Wenying" Sexe="F" Nation="SGP" Licence="24111980000" DateNaissance="24.11.1980" FEDID="SGP"></Coach>
+    <Coach ID="4728" Nom="VANNI" Prenom="Simone" Sexe="M" Nation="ITA" Licence="16021979002" DateNaissance="16.02.1979" FEDID="ITA"></Coach>
+    <Coach ID="4730" Nom="VANNINI" Prenom="Marco" Sexe="M" Nation="ITA" Licence="18111976000" DateNaissance="18.11.1976" FEDID="ITA"></Coach>
+    <Coach ID="44335" Nom="GALLI" Prenom="Fabio Maria" Sexe="M" Nation="ITA" Licence="07071968000" DateNaissance="07.07.1968" FEDID="ITA"></Coach>
+    <Coach ID="4687" Nom="SIMONCELLI" Prenom="Luca" Sexe="M" Nation="ITA" Licence="05031985000" DateNaissance="05.03.1985" FEDID="ITA"></Coach>
+    <Coach ID="56127" Nom="PAPALE" Prenom="Luca" Sexe="M" Nation="ESP" Licence="06071989005" DateNaissance="06.07.1989" FEDID="ESP"></Coach>
+    <Coach ID="2516" Nom="MENENDEZ" Prenom="Javier" Sexe="M" Nation="ESP" Licence="18061981001" DateNaissance="18.06.1981" FEDID="ESP"></Coach>
+    <Coach ID="61284" Nom="HUANG" Prenom="Jialing" Sexe="F" Nation="MAC" Licence="03081982005" DateNaissance="03.08.1982" FEDID="MAC"></Coach>
+    <Coach ID="1611" Nom="HINTERSEER" Prenom="Moritz" Sexe="M" Nation="AUT" Licence="18071984000" DateNaissance="18.07.1984" FEDID="AUT"></Coach>
+    <Coach ID="46544" Nom="NINI" Prenom="Lorenzo" Sexe="M" Nation="AUT" Licence="09081987005" DateNaissance="09.08.1987" FEDID="AUT"></Coach>
+    <Coach ID="56191" Nom="KOENIG" Prenom="Gregory Andre Maurice" Sexe="M" Nation="HKG" Licence="21081978002" DateNaissance="21.08.1978" FEDID="HKG"></Coach>
+    <Coach ID="19252" Nom="ZHENG" Prenom="Kang Zhao" Sexe="M" Nation="HKG" Licence="17071964000" DateNaissance="17.07.1964" FEDID="HKG"></Coach>
+    <Coach ID="38400" Nom="ZHANG" Prenom="Han" Sexe="M" Nation="HKG" Licence="05011984005" DateNaissance="05.01.1984" FEDID="HKG"></Coach>
+    <Coach ID="56192" Nom="ZOMPARELLI" Prenom="Maurizio" Sexe="M" Nation="HKG" Licence="02081965000" DateNaissance="02.08.1965" FEDID="HKG"></Coach>
+    <Coach ID="59201" Nom="ZHANG" Prenom="Liang" Sexe="M" Nation="HKG" Licence="20031992003" DateNaissance="20.03.1992" FEDID="CHN"></Coach>
+    <Coach ID="41049" Nom="SZIRMAI" Prenom="Benedek" Sexe="M" Nation="HUN" Licence="25021989001" DateNaissance="25.02.1989" FEDID="HUN"></Coach>
+    <Coach ID="8219" Nom="ZHANG" Prenom="Liangliang" Sexe="M" Nation="CHN" Licence="01101982002" DateNaissance="01.10.1982" FEDID="CHN"></Coach>
+    <Coach ID="67998" Nom="WU" Prenom="XIAOLONG" Sexe="M" Nation="CHN" Licence="08101992004" DateNaissance="08.10.1992" FEDID="CHN"></Coach>
+    <Coach ID="9935" Nom="WANG" Prenom="Haibin" Sexe="M" Nation="CHN" Licence="27121973002" DateNaissance="27.12.1973" FEDID="CHN"></Coach>
+    <Coach ID="54271" Nom="CHERNIKOV" Prenom="Denis" Sexe="M" Nation="GER" Licence="03071987003" DateNaissance="03.07.1987" FEDID="GER"></Coach>
+    <Coach ID="59902" Nom="WANG" Prenom="Changyong" Sexe="M" Nation="CHN" Licence="17121957000" DateNaissance="17.12.1957" FEDID="CHN"></Coach>
+    <Coach ID="10416" Nom="ZHUANG" Prenom="Yan" Sexe="M" Nation="CHN" Licence="20031977001" DateNaissance="20.03.1977" FEDID="CHN"></Coach>
+    <Coach ID="32890" Nom="CHEN" Prenom="Weiquan" Sexe="M" Nation="CHN" Licence="19061991005" DateNaissance="19.06.1991" FEDID="CHN"></Coach>
+    <Coach ID="29326" Nom="SHI" Prenom="Yanan" Sexe="F" Nation="CHN" Licence="04021996000" DateNaissance="04.02.1996" FEDID="CHN"></Coach>
+    <Coach ID="11086" Nom="YE" Prenom="Chong" Sexe="M" Nation="CHN" Licence="29111969000" DateNaissance="29.11.1969" FEDID="CHN"></Coach>
+    <Coach ID="69778" Nom="CHEN" Prenom="BIAO" Sexe="M" Nation="CHN" Licence="09021971003" DateNaissance="09.02.1971" FEDID="CHN"></Coach>
+    <Coach ID="25183" Nom="LI" Prenom="Chen" Sexe="M" Nation="CHN" Licence="14081992003" DateNaissance="14.08.1992" FEDID="CHN"></Coach>
+    <Coach ID="18362" Nom="ANTIPOVA" Prenom="Olga" Sexe="F" Nation="KAZ" Licence="07041977001" DateNaissance="07.04.1977" FEDID="KAZ"></Coach>
+    <Coach ID="20028" Nom="SIM" Prenom="Alexandr" Sexe="M" Nation="KAZ" Licence="21071976003" DateNaissance="21.07.1976" FEDID="KAZ"></Coach>
+    <Coach ID="69776" Nom="HU" Prenom="CHENGAN" Sexe="M" Nation="CHN" Licence="19011976003" DateNaissance="19.01.1976" FEDID="CHN"></Coach>
+    <Coach ID="69775" Nom="WANG" Prenom="YU" Sexe="F" Nation="CHN" Licence="02081972003" DateNaissance="02.08.1972" FEDID="CHN"></Coach>
+    <Coach ID="69777" Nom="CHE" Prenom="XUAN" Sexe="M" Nation="CHN" Licence="10021991004" DateNaissance="10.02.1991" FEDID="CHN"></Coach>
+    <Coach ID="17707" Nom="LI" Prenom="Hua" Sexe="M" Nation="CHN" Licence="08041988009" DateNaissance="08.04.1988" FEDID="CHN"></Coach>
+    <Coach ID="21860" Nom="LI" Prenom="Zhaoqiang" Sexe="M" Nation="CHN" Licence="14101977001" DateNaissance="14.10.1977" FEDID="CHN"></Coach>
+    <Coach ID="69779" Nom="LI" Prenom="ZHE" Sexe="M" Nation="CHN" Licence="06011969000" DateNaissance="06.01.1969" FEDID="CHN"></Coach>
+    <Coach ID="69785" Nom="LI" Prenom="HAIFENG" Sexe="M" Nation="CHN" Licence="18061984001" DateNaissance="18.06.1984" FEDID="CHN"></Coach>
+    <Coach ID="38121" Nom="XU" Prenom="Yanlin" Sexe="M" Nation="CHN" Licence="28071993002" DateNaissance="28.07.1993" FEDID="CHN"></Coach>
+    <Coach ID="12713" Nom="FUJINO" Prenom="Daiki" Sexe="M" Nation="JPN" Licence="28051987002" DateNaissance="28.05.1987" FEDID="JPN"></Coach>
+    <Coach ID="43575" Nom="BOIDIN" Prenom="Franck" Sexe="M" Nation="JPN" Licence="28081972001" DateNaissance="28.08.1972" FEDID="JPN"></Coach>
+    <Coach ID="56203" Nom="LE PECHOUX" Prenom="Erwann" Sexe="M" Nation="JPN" Licence="13011982005" DateNaissance="13.01.1982" FEDID="JPN"></Coach>
+    <Coach ID="4861" Nom="SUGAWARA" Prenom="Chieko" Sexe="F" Nation="JPN" Licence="15081976000" DateNaissance="15.08.1976" FEDID="JPN"></Coach>
+    <Coach ID="26808" Nom="KISS" Prenom="Tibor" Sexe="M" Nation="HUN" Licence="23041973000" DateNaissance="23.04.1973" FEDID="HUN"></Coach>
+    <Coach ID="3643" Nom="KLEIBRINK" Prenom="Benjamin" Sexe="M" Nation="GER" Licence="30071985000" DateNaissance="30.07.1985" FEDID="GER"></Coach>
+    <Coach ID="54327" Nom="WEBER" Prenom="Chris" Sexe="M" Nation="GER" Licence="13051991007" DateNaissance="13.05.1991" FEDID="GER"></Coach>
+    <Coach ID="31116" Nom="PROKHARAU" Prenom="Pavel" Sexe="M" Nation="AIN_" Licence="18041995001" DateNaissance="18.04.1995" FEDID="BLR"></Coach>
+    <Coach ID="506" Nom="CLOS" Prenom="Emeric" Sexe="M" Nation="FRA" Licence="03091973000" DateNaissance="03.09.1973" FEDID="FRA"></Coach>
+    <Coach ID="2861" Nom="GUYART" Prenom="Brice" Sexe="M" Nation="FRA" Licence="15031981000" DateNaissance="15.03.1981" FEDID="FRA"></Coach>
+    <Coach ID="5835" Nom="SEDOV" Prenom="Artem" Sexe="M" Nation="_AIN" Licence="26031984000" DateNaissance="26.03.1984" FEDID="_AIN"></Coach>
+    <Coach ID="35110" Nom="CHUEV" Prenom="Alexey" Sexe="M" Nation="_AIN" Licence="18121997003" DateNaissance="18.12.1997" FEDID="RUS"></Coach>
+    <Coach ID="41393" Nom="ORLOVA" Prenom="Elina" Sexe="F" Nation="_AIN" Licence="18111962000" DateNaissance="18.11.1962" FEDID="RUS"></Coach>
+    <Coach ID="10399" Nom="MA" Prenom="Jianfei" Sexe="M" Nation="CHN" Licence="29071984004" DateNaissance="29.07.1984" FEDID="CHN"></Coach>
+    <Coach ID="22483" Nom="OZKURT" Prenom="Emir" Sexe="M" Nation="TUR" Licence="30061992001" DateNaissance="30.06.1992" FEDID="TUR"></Coach>
+    <Coach ID="22761" Nom="KUMAR" Prenom="Vijay" Sexe="M" Nation="IND" Licence="02041981001" DateNaissance="02.04.1981" FEDID="IND"></Coach>
+    <Coach ID="18617" Nom="KOVALEVA" Prenom="Viktoriya" Sexe="F" Nation="_AIN" Licence="12091989008" DateNaissance="12.09.1989" FEDID="_AIN"></Coach>
+    <Coach ID="14682" Nom="NAGY" Prenom="Jozef" Sexe="M" Nation="SVK" Licence="19081966000" DateNaissance="19.08.1966" FEDID="SVK"></Coach>
+    <Coach ID="47792" Nom="HAMZA" Prenom="Maher " Sexe="M" Nation="EGY" Licence="04081966002" DateNaissance="04.08.1966" FEDID="EGY"></Coach>
+    <Coach ID="4917" Nom="CHA" Prenom="Hyung Woo" Sexe="M" Nation="KOR" Licence="30061977000" DateNaissance="30.06.1977" FEDID="KOR"></Coach>
+    <Coach ID="43627" Nom="JEONG" Prenom="Myeonghwan" Sexe="M" Nation="KOR" Licence="15021977001" DateNaissance="15.02.1977" FEDID="KOR"></Coach>
+    <Coach ID="4954" Nom="JEONG" Prenom="Changyoung" Sexe="M" Nation="KOR" Licence="12111981001" DateNaissance="12.11.1981" FEDID="KOR"></Coach>
+    <Coach ID="8278" Nom="KWON" Prenom="Youngho" Sexe="M" Nation="KOR" Licence="03051985000" DateNaissance="03.05.1985" FEDID="KOR"></Coach>
+    <Coach ID="18861" Nom="HA" Prenom="Taegyu" Sexe="M" Nation="KOR" Licence="20121989001" DateNaissance="20.12.1989" FEDID="KOR"></Coach>
+    <Coach ID="7665" Nom="OH" Prenom="Ha Na" Sexe="F" Nation="KOR" Licence="08011985001" DateNaissance="08.01.1985" FEDID="KOR"></Coach>
+    <Coach ID="60316" Nom="BOURDAGEAU" Prenom="Mario" Sexe="M" Nation="FRA" Licence="10091952000" DateNaissance="10.09.1952" FEDID="SEN"></Coach>
+    <Coach ID="57441" Nom="FORTUNATOV" Prenom="Oleksiy" Sexe="M" Nation="USA" Licence="29011984002" DateNaissance="29.01.1984" FEDID="USA"></Coach>
+    <Coach ID="14115" Nom="MARSH-SENIC" Prenom="Ann" Sexe="F" Nation="USA" Licence="30061971002" DateNaissance="30.06.1971" FEDID="MDA"></Coach>
+    <Coach ID="56175" Nom="VASHKEVICH" Prenom="Serge" Sexe="M" Nation="USA" Licence="06021983006" DateNaissance="06.02.1983" FEDID="USA"></Coach>
+    <Coach ID="1368" Nom="MASSIALAS" Prenom="Gregory" Sexe="M" Nation="USA" Licence="20051956000" DateNaissance="20.05.1956" FEDID="USA"></Coach>
+    <Coach ID="56165" Nom="ITKIN" Prenom="Michael" Sexe="M" Nation="USA" Licence="29021960000" DateNaissance="29.02.1960" FEDID="CAN"></Coach>
+    <Coach ID="23251" Nom="KANESHIGE" Prenom="Brian" Sexe="M" Nation="USA" Licence="24101993000" DateNaissance="24.10.1993" FEDID="USA"></Coach>
+    <Coach ID="56167" Nom="KHAZBAK" Prenom="Amgad" Sexe="M" Nation="USA" Licence="21101963000" DateNaissance="21.10.1963" FEDID="IRL"></Coach>
+    <Coach ID="57434" Nom="KVARATSKHELIA" Prenom="Guiorgie" Sexe="M" Nation="USA" Licence="07021974002" DateNaissance="07.02.1974" FEDID="USA"></Coach>
+    <Coach ID="11071" Nom="MCCLAIN" Prenom="Michael Sean" Sexe="M" Nation="USA" Licence="13091975000" DateNaissance="13.09.1975" FEDID="CYP"></Coach>
+    <Coach ID="57438" Nom="ZHAO" Prenom="Kai" Sexe="M" Nation="USA" Licence="05031986003" DateNaissance="05.03.1986" FEDID="USA"></Coach>
+    <Coach ID="56156" Nom="BISSDORF" Prenom="Ralf" Sexe="M" Nation="USA" Licence="15031971001" DateNaissance="15.03.1971" FEDID="USA"></Coach>
+    <Coach ID="60048" Nom="MALENKIN" Prenom="Vitalii" Sexe="M" Nation="UZB" Licence="11121982003" DateNaissance="11.12.1982" FEDID="UZB"></Coach>
+  </Coaches>
+</BaseCompetitionIndividuelle>
