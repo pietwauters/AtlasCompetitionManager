@@ -375,7 +375,7 @@
                       </select>
                     </label>
                   </template>
-                  <template x-if="addForm.de_round">
+                  <template x-if="addForm.tableau">
                     <div style="display:flex;gap:.4rem;align-items:flex-end">
                       <label>From bout
                         <input type="number" x-model.number="addForm.bout_start" min="1" style="width:4rem">
@@ -384,7 +384,7 @@
                         <input type="number" x-model.number="addForm.bout_end" min="1" style="width:4rem">
                       </label>
                       <span style="font-size:.75rem;color:#888;padding-bottom:.3rem"
-                        x-text="'1–' + (deRounds.find(r => r.de_round === addForm.de_round)?.total_bouts || '?') + ' available'"></span>
+                        x-text="'1–' + (addForm.tableau / 2) + ' available'"></span>
                     </div>
                   </template>
                 </div>
@@ -948,7 +948,7 @@ function app() {
         suggested = this.round5(`${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
       }
       this.addForm = { type: 'pool', pool_id: '', phase_id: '', team_match_id: '',
-                       de_round: '', bout_start: '', bout_end: '',
+                       de_round: '', tableau: null, bout_start: '', bout_end: '',
                        scheduled_start: suggested, minutes_per_bout: '', standardMinutes: null };
       this.wantMulti = false;
       this.multiStrips = [];
@@ -961,6 +961,7 @@ function app() {
       this.addForm.phase_id = '';
       this.addForm.team_match_id = '';
       this.addForm.de_round = '';
+      this.addForm.tableau = null;
       this.addForm.bout_start = '';
       this.addForm.bout_end = '';
       this.addForm.standardMinutes = null;
@@ -997,14 +998,25 @@ function app() {
     async submitAddSlot() {
       const strip = this.selectedStrip;
       if (!strip) return;
+      if (this.addForm.type === 'de') {
+        if (!this.addForm.tableau) { this.showNotice('Select a DE phase and round first', true); return; }
+        const n = this.addForm.tableau / 2;
+        const lo = Number(this.addForm.bout_start) || 1;
+        const hi = Number(this.addForm.bout_end)   || n;
+        const partition = this.rangeToPartition(lo, hi, n);
+        if (partition === null) {
+          this.showNotice(`Bout range ${lo}–${hi} cannot be assigned as one slot — use single bouts or the bulk assign.`, true);
+          return;
+        }
+        this.addForm._partition = partition;
+      }
 
       const body = {
         type:             this.addForm.type,
         pool_id:          this.addForm.type === 'pool'       ? (this.addForm.pool_id       || null) : null,
         phase_id:         this.addForm.type === 'de'   ? (this.addForm.phase_id      || null) : null,
-        de_round:         this.addForm.type === 'de'   ? (this.addForm.de_round      || null) : null,
-        bout_start:       this.addForm.type === 'de'   ? (this.addForm.bout_start    || null) : null,
-        bout_end:         this.addForm.type === 'de'   ? (this.addForm.bout_end      || null) : null,
+        tableau:          this.addForm.type === 'de'   ? (this.addForm.tableau        || null) : null,
+        partition:        this.addForm.type === 'de'   ? (this.addForm._partition     ?? null) : null,
         team_match_id:    this.addForm.type === 'team_match' ? (this.addForm.team_match_id || null) : null,
         scheduled_start:  this.addForm.scheduled_start  || null,
         minutes_per_bout: this.addForm.minutes_per_bout || null,
@@ -1229,7 +1241,8 @@ function app() {
 
     async loadDeRounds(phaseId) {
       this.deRounds = [];
-      this.addForm.de_round   = '';
+      this.addForm.de_round = '';
+      this.addForm.tableau  = null;
       this.addForm.bout_start = '';
       this.addForm.bout_end   = '';
       if (!phaseId) return;
@@ -1248,7 +1261,15 @@ function app() {
       const deRound = Number(val);
       this.addForm.de_round = deRound;
       const rd = this.deRounds.find(r => r.de_round === deRound);
-      if (rd) { this.addForm.bout_start = 1; this.addForm.bout_end = rd.total_bouts; }
+      if (rd) {
+        this.addForm.tableau   = rd.total_bouts * 2;
+        this.addForm.bout_start = 1;
+        this.addForm.bout_end   = rd.total_bouts;
+      } else {
+        this.addForm.tableau = null;
+        this.addForm.bout_start = '';
+        this.addForm.bout_end   = '';
+      }
     },
 
     async loadRefereeSchedule() {
@@ -1268,6 +1289,23 @@ function app() {
         if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
       }
       return [lo, hi];
+    },
+
+    // Inverse of boutRangeForPartition: encode [lo,hi] in [1,n] to a partition code.
+    // Returns null if [lo,hi] does not align with a binary-tree node (use multiple slots).
+    rangeToPartition(lo, hi, n) {
+      if (lo === 1 && hi === n) return 'full';
+      const loChars = ['A', '1', 'a', 'c', 'e', 'g'];
+      const hiChars = ['B', '2', 'b', 'd', 'f', 'h'];
+      let lo_ = 1, hi_ = n, code = '', depth = 0;
+      while (lo_ < hi_) {
+        const mid = Math.floor((lo_ + hi_) / 2);
+        if (lo >= lo_ && hi <= mid)      { code += loChars[depth]; hi_ = mid; }
+        else if (lo >= mid + 1 && hi <= hi_) { code += hiChars[depth]; lo_ = mid + 1; }
+        else break;
+        depth++;
+      }
+      return (lo_ === lo && hi_ === hi) ? code : null;
     },
 
     // Returns the unique partition code for the single bout at round_index i (1-based)
