@@ -315,7 +315,15 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Final results table: unique rank per place when `allPlacesFenced`/repechage rules are
   used; otherwise 1st/2nd unique, 3rd shared if no bronze bout, others by seed
 - UI: `public/de.html` — generic `sections`/`displayHint` renderer handles main,
-  placement, and repechage brackets side by side; narrow-screen accordion not yet built
+  placement, and repechage brackets side by side. Below 700px width, `displayHint:
+  'bracket'` sections (main/Finals) become a per-round collapsible accordion instead of
+  horizontal scroll (`isNarrow`/`matchMedia`, same pattern as `opp2.html`'s master-detail
+  drill-down); one round auto-expands on load (first with an unfinished real bout, else
+  the last round). `displayHint: 'list'` sections (repechage/placement) already reflowed
+  fine via CSS grid and needed no JS change. Also fixed while building this: the piste
+  label/strip-filter functions (`roundPisteLabel`, `roundVisible`, `boutVisible`) matched
+  slots by `(bracket, tableau)` only — the same ambiguity fixed server-side in
+  `services/pipeline.js` above — now match on `de_round` when available.
 - Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
 
 ### Competition formats (complete)
@@ -383,10 +391,9 @@ rankings, `admin.html`, `referee-schedule.html`, `clubs.html`, `strips.html`,
 `competitions.html`, `tournaments.html`, `tournaments-detail.html`,
 `results.html`. Skipped: `team-results.html` (only 3 columns, already fine).
 
-**Not yet done:** the DE bracket's narrow-screen representation (a
-round-by-round accordion instead of horizontal scroll) is intentionally
-deferred to the planned `de.html` redesign (see priority #1) rather than
-solved twice.
+**DE bracket narrow-screen accordion — DONE 2026-07-02:** see "DE phase (complete)"
+above for the implementation; verified in a real browser at 390px (phone) and 1400px
+(desktop) with a live repechage phase.
 
 ### OPP2 design principle — ecosystem independence
 
@@ -491,17 +498,16 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ## What is NOT yet built — priority order
 
-### 1. de.html narrow-screen bracket accordion
-- The only remaining open item from the old "full DE tableau" bucket. Both the repechage
-  bracket-completion bug and OPP2 pipeline placement/repechage strip assignment were
-  fixed and verified 2026-07-02 (see "DE phase (complete)" and "Pipeline — piste
-  scheduling" above) — bracket generation, routing, results, and pipeline assignment are
-  now all solid for main/repechage/placement DE. What's left is purely UI: replace the
-  horizontal-scroll bracket view with a round-by-round accordion below some width
-  threshold, per the frontend layout system note above (same spirit as `opp2.html`'s
-  `isNarrow`/`matchMedia` master-detail pattern).
+The "full DE tableau" bucket (repechage/allPlacesFenced bracket generation, the OPP2
+pipeline placement/repechage strip-assignment bug, the repechage bracket-completion bug,
+and the narrow-screen accordion) is now **fully done and verified** as of 2026-07-02 —
+see "DE phase (complete)" and "Pipeline — piste scheduling" above. Also fixed in the same
+pass: `addSlot` didn't dedupe `team_match_id` the way it already did for `pool_id`,
+so reassigning a team match to a new strip left a stale slot on the old one — both
+strips would then offer the same next relay (relays have no per-relay strip column to
+partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 
-### 2. Run a full tournament locally (no cloud needed)
+### 1. Run a full tournament locally (no cloud needed)
 - Direct competition import — federation/FIE start lists without touching the local people DB
   - Engarde XML format now fully understood (see `docs/GP/` for reference files); move this off "out of scope"
 - Registration desk — review `checkin.html` for competition-day check-in completeness
@@ -512,12 +518,12 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Manual appendices B and C
 - Fencer handedness (`hand`: R/L) — not yet in `fencers` table; Engarde stores `Lateralite` (D/G); relevant for scoresheet display and OPP2 `software/fencers` payload
 
-### 3. Scoresheets
+### 2. Scoresheets
 - Pool scoresheet grid (fencer vs fencer diagonal matrix) requires each fencer's **slot position in the pool** (Engarde: `NoDansLaPoule` 1–N). Currently derivable from seeding order but not stored. If a fencer is manually moved the grid breaks. Add `pool_slot` to the pool-fencer join table via migration.
 - Cards are annotation/audit data only — Engarde does not include them in the results XML export. Keep card records separate from the authoritative bout result.
 - Per-bout scheduled time: Engarde assigns `Heure` per individual DE bout (across strips). Atlas schedules at slot (round) level. Deriving per-bout times from slot data is sufficient for now.
 
-### 4. Architecture / code hygiene
+### 3. Architecture / code hygiene
 - `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
   simulated competition run over live MQTT to confirm the observed-average path behaves
   (see OPP2 section above)
@@ -525,14 +531,14 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Resilience: discuss network loss / crash recovery across the ecosystem
 - Minor: `CyranoServer.js` missing `'use strict'`
 
-### 5. Security
+### 4. Security
 - Authentication: fully wired — session-based PIN login, roles: `admin` / `director` / `assistant` / `referee`
 - GET requests are public; mutations are gated per route (`writeOnly(role)` in `server.js`)
 - OPP2/MQTT config and user management require `admin`; phase/bout scoring requires `director`
 - Install creates an `admin` account with a one-time PIN (forced change on first login)
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
-### 6. OPP2 cloud bridge
+### 5. OPP2 cloud bridge
 - Mosquitto bridge config to remote broker
 - `tournament_id` / `competition_id` from Atlas in payloads
 - Lower priority: local operation is fully functional without it

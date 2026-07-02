@@ -18,6 +18,22 @@
     .round-col-note{font-size:.72rem;color:#aaa;text-align:center;padding:.15rem 0 .25rem}
     .bout-slot{flex:1;display:flex;align-items:center;padding:.25rem .5rem}
 
+    /* Narrow screens: round-by-round accordion instead of horizontal scroll
+       (see isNarrow/toggleRound in app()). Driven by JS width detection, not
+       just this media query, so the threshold stays a single source of
+       truth — see the matchMedia call in init(). */
+    .bracket.bracket-accordion{flex-direction:column}
+    .bracket.bracket-accordion .round-col{min-width:0;width:100%;flex:none}
+    .bracket.bracket-accordion .round-col h3{
+      display:flex;justify-content:space-between;align-items:center;text-align:left;
+      cursor:pointer;background:#f5f5f5;border-radius:6px;border-bottom:none;
+      padding:.6rem .75rem;margin-bottom:.4rem;
+    }
+    .bracket.bracket-accordion .round-col h3::after{content:'▸';font-size:.7rem;color:#999;margin-left:.5rem}
+    .bracket.bracket-accordion .round-col.expanded h3::after{content:'▾'}
+    .bracket.bracket-accordion .round-col:not(.expanded){margin-bottom:.4rem}
+    .bracket.bracket-accordion .bout-slot{padding:.2rem .25rem}
+
     /* ── List (flat rounds) ── */
     .list-section{}
     .list-round{margin-bottom:1rem}
@@ -140,18 +156,24 @@
       <p class="section-note" x-show="section.note" x-text="section.note"></p>
 
       <!-- ── Bracket layout ── -->
+      <!-- Below the narrow-screen breakpoint (see isNarrow in app()), rounds
+           become a collapsible accordion instead of a horizontal-scrolling
+           row: the header becomes a toggle, and each round's bouts are only
+           shown while that round is expanded. One round is auto-expanded on
+           load (see defaultExpandRound) so the accordion isn't empty. -->
       <template x-if="section.displayHint === 'bracket'">
         <div class="bracket-wrap">
-          <div class="bracket">
+          <div class="bracket" :class="{'bracket-accordion': isNarrow}">
             <template x-for="(round, ri) in section.rounds" :key="ri">
-              <div class="round-col" x-show="roundVisible(round, ri, section)">
-                <h3 x-text="round.label"></h3>
+              <div class="round-col" :class="{expanded: isNarrow && isRoundExpanded(section.id, ri)}"
+                   x-show="roundVisible(round, ri, section)">
+                <h3 @click="isNarrow && toggleRound(section.id, ri)" x-text="round.label"></h3>
                 <div class="round-col-note" x-show="round.note" x-text="round.note"></div>
                 <div x-show="round.stripSlot && roundPisteLabel(round)"
                      style="font-size:.72rem;color:#1a6bab;text-align:center;padding:.15rem .5rem .3rem"
                      x-text="roundPisteLabel(round)"></div>
                 <template x-for="bout in round.bouts" :key="bout.id">
-                  <div class="bout-slot" x-show="boutVisible(round, bout) && !isBye(bout)">
+                  <div class="bout-slot" x-show="boutVisible(round, bout) && !isBye(bout) && (!isNarrow || isRoundExpanded(section.id, ri))">
                     <div class="bout-card" :class="boutCardClass(bout)" @click="selectBout(bout)">
                       <template x-if="isBye(bout)">
                         <div>
@@ -336,9 +358,14 @@ function app() {
     scoreLeft: '', scoreRight: '', tieWinner: null,
     notice: { text: '', error: false },
     finalResults: null,
+    isNarrow: false,
+    expandedRounds: {},
 
     async init() {
       this.$watch('filterSectionId', () => { this.filterFromRoundIdx = 0; });
+      const mq = window.matchMedia('(max-width: 700px)');
+      this.isNarrow = mq.matches;
+      mq.addEventListener('change', e => { this.isNarrow = e.matches; });
       if (!phaseId) { this.showNotice('No phase ID', true); return; }
       await this.load();
       const es = new EventSource('/api/phases/' + phaseId + '/events');
@@ -411,6 +438,35 @@ function app() {
 
       this.computeFinalResults();
       await this.loadDeSlots();
+      this.initDefaultExpandedRounds();
+    },
+
+    // ── Narrow-screen accordion ──────────────────────────────────────────────
+
+    // Auto-expand, per bracket section, the round an operator would most
+    // likely want to see on load: the first round with an unfinished real
+    // bout (byes/TBD slots don't count), or the last round if the whole
+    // bracket is done. Only sets a default the first time a section is seen
+    // (keyed by section id), so a manual toggle survives a live-update reload.
+    initDefaultExpandedRounds() {
+      for (const section of this.sections) {
+        if (section.displayHint !== 'bracket') continue;
+        const anyKeyForSection = Object.keys(this.expandedRounds).some(k => k.startsWith(section.id + '/'));
+        if (anyKeyForSection) continue;
+        let idx = section.rounds.findIndex(round =>
+          round.bouts.some(b => !this.isBye(b) && !this.isEmpty(b) && b.status !== 'finished'));
+        if (idx === -1) idx = section.rounds.length - 1;
+        if (idx >= 0) this.expandedRounds[section.id + '/' + idx] = true;
+      }
+    },
+
+    toggleRound(sectionId, ri) {
+      const key = sectionId + '/' + ri;
+      this.expandedRounds[key] = !this.expandedRounds[key];
+    },
+
+    isRoundExpanded(sectionId, ri) {
+      return !!this.expandedRounds[sectionId + '/' + ri];
     },
 
     async loadDeSlots() {
@@ -640,13 +696,30 @@ function app() {
 
     // ── Piste display / filter ───────────────────────────────────────────────
 
+    // A round is identified by (bracket, de_round) when available — tableau
+    // alone is ambiguous for repechage phases (the last main round and the
+    // first Finals round always share the same tableau value). Placement
+    // rounds have no de_round at all; they're identified by
+    // (tableau=startPlace, partition=level) instead. Legacy slots created
+    // before migration 026 have de_round=NULL and fall back to tableau-only
+    // matching (only ever reachable for plain main-bracket rounds, since
+    // repechage/placement assignment didn't work before that migration).
+    _matchingDeSlots(round) {
+      if (!round.stripSlot) return [];
+      const { bracket, tableau, de_round, partition } = round.stripSlot;
+      return this.deSlots.filter(s => {
+        const bracketMatch = bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket;
+        if (!bracketMatch) return false;
+        if (bracket === 'placement') {
+          return s.tableau === tableau && String(s.partition ?? 'full') === String(partition ?? 'full');
+        }
+        if (de_round != null && s.de_round != null) return s.de_round === de_round;
+        return s.tableau === tableau;
+      });
+    },
+
     roundPisteLabel(round) {
-      if (!round.stripSlot) return '';
-      const { bracket, tableau } = round.stripSlot;
-      const slots = this.deSlots.filter(s =>
-        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
-        s.tableau === tableau
-      );
+      const slots = this._matchingDeSlots(round);
       if (!slots.length) return '';
       return slots.map(s => s.strip_name || ('Piste ' + s.strip_number)).join(' / ');
     },
@@ -672,24 +745,17 @@ function app() {
       const fs = this.currentSectionForFilter;
       if (fs && section && section.id === fs.id && ri < this.filterFromRoundIdx) return false;
       if (!this.filterStripId || !round.stripSlot) return true;
-      const { bracket, tableau } = round.stripSlot;
-      return this.deSlots.some(s =>
-        String(s.strip_id) === this.filterStripId &&
-        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
-        s.tableau === tableau
-      );
+      return this._matchingDeSlots(round).some(s => String(s.strip_id) === this.filterStripId);
     },
 
     boutVisible(round, bout) {
       if (!this.filterStripId || !round.stripSlot) return true;
-      const { bracket, tableau } = round.stripSlot;
-      const slot = this.deSlots.find(s =>
-        String(s.strip_id) === this.filterStripId &&
-        (bracket === 'main' ? (s.bracket === 'main' || !s.bracket) : s.bracket === bracket) &&
-        s.tableau === tableau
-      );
+      const slot = this._matchingDeSlots(round).find(s => String(s.strip_id) === this.filterStripId);
       if (!slot) return false;
-      const [lo, hi] = this._partitionRange(slot.partition, tableau);
+      // Placement rounds are assigned to a strip as a whole (no sub-partition
+      // support, same as the backend) — every bout in a matching round is visible.
+      if (round.stripSlot.bracket === 'placement') return true;
+      const [lo, hi] = this._partitionRange(slot.partition, round.stripSlot.tableau);
       return bout.tableau_position >= lo && bout.tableau_position <= hi;
     },
 
