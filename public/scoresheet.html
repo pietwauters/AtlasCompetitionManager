@@ -197,7 +197,14 @@
     .h-side{font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-3);
             width:2.8rem;flex-shrink:0}
     .h-reason{flex:1}
+    .h-official{font-size:.75rem;color:var(--text-3);flex-shrink:0}
     .h-time{font-size:.75rem;color:var(--text-4);flex-shrink:0}
+
+    /* ── Official picker (card dialog) ── */
+    .official-picker{margin-bottom:.9rem}
+    .official-chip{padding:.45rem .75rem;background:var(--input-bg);border:1px solid var(--border-2);
+                   border-radius:8px;color:var(--text);font-size:.85rem;cursor:pointer;margin:0 .4rem .4rem 0}
+    .official-chip.selected{border-color:#4a8abf;background:var(--active-bg);color:var(--text)}
 
     /* ── Dialog overlay ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;
@@ -249,7 +256,7 @@
     <span x-show="slotLabel" class="slot-label" x-text="slotLabel"></span>
     <span x-show="refereeDisplayName" class="slot-label" x-text="'Referee: ' + refereeDisplayName"></span>
     <span x-show="officialDisplayName(referee2)" class="slot-label" x-text="'Ref 2: ' + officialDisplayName(referee2)"></span>
-    <span x-show="officialDisplayName(videoAssistant)" class="slot-label" x-text="'VA: ' + officialDisplayName(videoAssistant)"></span>
+    <span x-show="officialDisplayName(videoOfficial)" class="slot-label" x-text="'VA: ' + officialDisplayName(videoOfficial)"></span>
     <span x-show="assessorsDisplayName" class="slot-label" x-text="'Assessors: ' + assessorsDisplayName"></span>
     <template x-if="auth && !auth.authenticated">
       <a :href="'/login.html?next=' + encodeURIComponent(location.pathname + location.search)"
@@ -385,6 +392,7 @@
                 <span class="h-side"
                       x-text="ann.side?.charAt(0).toUpperCase() + ann.side?.slice(1)"></span>
                 <span class="h-reason" x-text="ann.reason"></span>
+                <span class="h-official" x-show="ann.official" x-text="ann.official?.name || ''"></span>
                 <span class="h-time" x-text="ann.time || ''"></span>
               </div>
             </template>
@@ -409,6 +417,15 @@
           <span x-show="dialog.step === 2" style="color:#4a8abf">Which Group 1 offence?</span>
         </div>
         <div class="dialog-fencer" x-text="dialog.fencerName"></div>
+      </div>
+
+      <div class="official-picker" x-show="cardOfficials.length > 1">
+        <div class="annotations-title">Recorded by</div>
+        <template x-for="o in cardOfficials" :key="o.id">
+          <button type="button" class="official-chip" :class="dialog.officialId === o.id ? 'selected' : ''"
+                  @click="dialog.officialId = o.id"
+                  x-text="o.name + ' (' + roleLabel(o.role) + ')'"></button>
+        </template>
       </div>
 
       <div class="reason-grid">
@@ -455,7 +472,7 @@ function app() {
     darkTheme:   true,
 
     slotId: null, phaseType: null, slotLabel: '', activeBoutId: null,
-    referee: null, referee2: null, videoAssistant: null, assessor1: null, assessor2: null,
+    referee: null, referee2: null, videoOfficial: null, assessor1: null, assessor2: null,
     participants: [], bouts: [], matrixOpen: true,
 
     weapon: 'F', score: null, lastScore: null, baselineSeq: null,
@@ -537,7 +554,7 @@ function app() {
       const prevActive = this.activeBoutId, slotChanged = newSlotId !== this.slotId;
       this.referee = payload.referee || null;
       this.referee2 = payload.referee2 || null;
-      this.videoAssistant = payload.video_assistant || null;
+      this.videoOfficial = payload.video_official || null;
       this.assessor1 = payload.assessor1 || null;
       this.assessor2 = payload.assessor2 || null;
 
@@ -601,7 +618,32 @@ function app() {
       const fn = side === 'left'
         ? (this.fencerDisplayName(active?.left)  || this.currentBout?.leftName  || 'Left fencer')
         : (this.fencerDisplayName(active?.right) || this.currentBout?.rightName || 'Right fencer');
-      this.dialog = { open: true, side, card, fencerName: fn, custom: '', step: 1 };
+      this.dialog = {
+        open: true, side, card, fencerName: fn, custom: '', step: 1,
+        officialId: this.cardOfficials[0]?.id ?? null,
+      };
+    },
+
+    // Officials who can be attributed a card decision — referee, referee2,
+    // and assessors. Video officials don't issue cards, so they're excluded.
+    get cardOfficials() {
+      const list = [];
+      if (this.referee)   list.push({ ...this.referee,   role: 'referee' });
+      if (this.referee2)  list.push({ ...this.referee2,  role: 'referee2' });
+      if (this.assessor1) list.push({ ...this.assessor1, role: 'assessor1' });
+      if (this.assessor2) list.push({ ...this.assessor2, role: 'assessor2' });
+      return list;
+    },
+
+    get selectedOfficial() {
+      const o = this.cardOfficials.find(o => o.id === this.dialog.officialId);
+      return o ? { id: o.id, name: o.name, role: o.role } : null;
+    },
+
+    roleLabel(role) {
+      return {
+        referee: 'Referee', referee2: 'Referee 2', assessor1: 'Assessor 1', assessor2: 'Assessor 2',
+      }[role] || role;
     },
 
     checkDialogCancelled(score) {
@@ -626,8 +668,7 @@ function app() {
     },
 
     officialDisplayName(o) {
-      if (!o) return '';
-      return [o.last_name, o.first_name].filter(Boolean).join(', ');
+      return o?.name || '';
     },
 
     get assessorsDisplayName() {
@@ -696,10 +737,11 @@ function app() {
       const { side, card, step } = this.dialog;
       const prefix = this.reasonDefs?.strings?.repeated_group1_prefix ?? 'Repeated Group 1: ';
       const finalReason = step === 2 ? prefix + reason.trim() : reason.trim();
-      this.publishCardReason(side, card, finalReason);
+      const official = this.selectedOfficial;
+      this.publishCardReason(side, card, finalReason, official);
       const ann = {
         bout_id: this.activeBoutId || '', event: 'CARD_REASON', side, card,
-        reason: finalReason, ts: Date.now(),
+        reason: finalReason, ts: Date.now(), official,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       if (this.activeBoutId) {
@@ -710,11 +752,12 @@ function app() {
       this.dialog.open = false; this.dialog.step = 1;
     },
 
-    publishCardReason(side, card, reason) {
+    publishCardReason(side, card, reason, official) {
       if (!this.mqttClient || !this.connected) return;
       const msg = new Paho.MQTT.Message(JSON.stringify({
         protocol:'OPP2', version:'1.0', seq:++this.seq, ts:Date.now(),
         event:'CARD_REASON', bout_id:this.activeBoutId||'', side, card, reason,
+        ...(official ? { official } : {}),
       }));
       msg.destinationName = `openpiste/${this.pisteId}/scoresheet/event`;
       msg.qos = 1; this.mqttClient.send(msg);
@@ -724,7 +767,8 @@ function app() {
       if (!this.mqttClient || !this.connected || !this.slotId) return;
       const annotations = this.bouts.flatMap(b =>
         b.annotations.map(a => ({ bout_id:b.id, event:a.event||'CARD_REASON',
-                                   side:a.side, card:a.card, reason:a.reason, ts:a.ts }))
+                                   side:a.side, card:a.card, reason:a.reason, ts:a.ts,
+                                   ...(a.official ? { official: a.official } : {}) }))
       );
       const msg = new Paho.MQTT.Message(JSON.stringify({
         protocol:'OPP2', version:'1.0', seq:++this.seq, slot_id:this.slotId, annotations,

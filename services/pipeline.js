@@ -19,7 +19,7 @@ const stmtPendingTeam    = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE te
 const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
 const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
 const stmtRefereeName    = db.prepare(`
-  SELECT p.first_name AS ref_first, p.last_name AS ref_last
+  SELECT p.first_name AS ref_first, p.last_name AS ref_last, p.nationality AS ref_nation
   FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?
 `);
 const stmtSetOfficial    = db.prepare(`
@@ -29,7 +29,7 @@ const stmtSetOfficial    = db.prepare(`
 `);
 const stmtClearOfficial  = db.prepare('DELETE FROM pipeline_slot_officials WHERE slot_id = ? AND role = ?');
 const stmtOfficialsForSlot = db.prepare(`
-  SELECT so.role, p.first_name, p.last_name
+  SELECT so.role, so.referee_id, p.first_name, p.last_name, p.nationality
   FROM pipeline_slot_officials so
   JOIN referees r ON r.id = so.referee_id
   JOIN people   p ON p.id = r.person_id
@@ -94,15 +94,18 @@ const Pipeline = {
   refereeName(refereeId) {
     if (!refereeId) return null;
     const ref = stmtRefereeName.get(refereeId);
-    return ref ? { first_name: ref.ref_first || '', last_name: ref.ref_last || '' } : null;
+    return ref
+      ? { referee_id: Number(refereeId), first_name: ref.ref_first || '', last_name: ref.ref_last || '', nation: ref.ref_nation || '' }
+      : null;
   },
 
-  // { referee2, video_assistant, assessor1, assessor2 }, each null or {first_name, last_name}.
+  // { referee2, video_assistant, assessor1, assessor2 }, each null or
+  // {referee_id, first_name, last_name, nation}.
   getOfficials(slotId) {
     const rows = stmtOfficialsForSlot.all(slotId);
     const result = { referee2: null, video_assistant: null, assessor1: null, assessor2: null };
     for (const r of rows) {
-      result[r.role] = { first_name: r.first_name || '', last_name: r.last_name || '' };
+      result[r.role] = { referee_id: r.referee_id, first_name: r.first_name || '', last_name: r.last_name || '', nation: r.nationality || '' };
     }
     return result;
   },
@@ -715,11 +718,8 @@ const Pipeline = {
   // Attach referee name fields to a bout result using slot.referee_id.
   _attachReferee(bout, slot) {
     if (!bout || !slot.referee_id) return bout;
-    const ref = db.prepare(
-      `SELECT p.first_name AS ref_first, p.last_name AS ref_last
-       FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?`
-    ).get(slot.referee_id);
-    if (ref) { bout.ref_first = ref.ref_first; bout.ref_last = ref.ref_last; }
+    const ref = stmtRefereeName.get(slot.referee_id);
+    if (ref) { bout.ref_first = ref.ref_first; bout.ref_last = ref.ref_last; bout.ref_nation = ref.ref_nation; }
     return bout;
   },
 

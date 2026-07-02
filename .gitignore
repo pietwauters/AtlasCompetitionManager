@@ -10,3 +10,4 @@ npm-debug.log*
 server.log
 errorlog.txt
 *.csv
+mqttlog.txt
