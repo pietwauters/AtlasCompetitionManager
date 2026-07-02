@@ -53,6 +53,11 @@
               style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
       <button @click="saveSettings()" style="background:#f0f2f5">Save</button>
     </div>
+    <div x-show="effectiveBrokerUrl && effectiveBrokerUrl !== brokerUrl"
+         style="font-size:.8rem;color:#856404;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
+      ⚠ <code x-text="brokerUrl"></code> means "this device" to a tablet, not this server. Scoresheets on other
+      devices will connect via <code x-text="effectiveBrokerUrl"></code> instead.
+    </div>
   </div>
 
   <div class="card">
@@ -246,6 +251,7 @@ function app() {
     notice:         { text: '', error: false },
     status:         { connected: false, brokerUrl: '', pistes: [] },
     brokerUrl:      '',
+    effectiveBrokerUrl: '',
     autoNextOnEnd:  false,
     tieBreakMethod:  'alphabetical',
     manualTieBreak:  false,
@@ -261,6 +267,7 @@ function app() {
         fetch('/api/settings').then(r => r.json()).catch(() => ({})),
       ]);
       this.brokerUrl      = s.broker_url || 'mqtt://openpiste.local:1883';
+      this.effectiveBrokerUrl = s.effective_broker_url || this.brokerUrl;
       this.autoNextOnEnd  = s.auto_next_on_end || false;
       this.tieBreakMethod = cs.tie_break_method || 'alphabetical';
       this.manualTieBreak = cs.manual_tie_break === '1';
@@ -301,6 +308,8 @@ function app() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ broker_url: this.brokerUrl, auto_next_on_end: this.autoNextOnEnd }),
       });
+      const s = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
+      this.effectiveBrokerUrl = s.effective_broker_url || this.brokerUrl;
       this.showNotice('Settings saved');
     },
 

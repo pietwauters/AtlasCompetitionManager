@@ -491,7 +491,7 @@ function app() {
 
       this.auth = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
       const settings = await fetch('/api/opp2/settings').then(r => r.json()).catch(() => ({}));
-      const brokerUrl = settings.broker_url || 'mqtt://openpiste.local:1883';
+      const brokerUrl = settings.effective_broker_url || settings.broker_url || 'mqtt://openpiste.local:1883';
       this.brokerWsUrl = brokerUrl.replace(/^mqtts?:\/\//, 'ws://').replace(/:\d+$/, ':9001');
       this.connectMqtt();
     },

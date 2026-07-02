@@ -16,9 +16,10 @@ const router = express.Router();
 
 router.get('/settings', (req, res) => {
   res.json({
-    broker_url:        Settings.get('opp2_broker_url'),
-    enabled:           Settings.get('opp2_enabled') === '1',
-    auto_next_on_end:  Settings.get('opp2_auto_next_on_end') === '1',
+    broker_url:           Settings.get('opp2_broker_url'),
+    effective_broker_url: Settings.effectiveBrokerUrl(),
+    enabled:              Settings.get('opp2_enabled') === '1',
+    auto_next_on_end:     Settings.get('opp2_auto_next_on_end') === '1',
   });
 });
 
