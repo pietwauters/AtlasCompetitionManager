@@ -14,7 +14,12 @@ const stmtMarkDone       = db.prepare("UPDATE pipeline_slots SET status='done'  
 const stmtSlotStripId    = db.prepare('SELECT strip_id FROM pipeline_slots WHERE id=?');
 const stmtActiveCount    = db.prepare("SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id=? AND status IN ('pending','active')");
 const stmtSetStripIdle   = db.prepare("UPDATE strips SET status='idle' WHERE id=?");
-const stmtPendingPool    = db.prepare("SELECT COUNT(*) AS n FROM bouts  WHERE pool_id=?        AND status!='finished'");
+const stmtPendingPool    = db.prepare(`
+  SELECT COUNT(*) AS n FROM bouts b
+  JOIN pools po ON po.id = b.pool_id
+  WHERE b.pool_id = @pool_id AND b.status != 'finished'
+    AND (po.strip_count <= 1 OR b.strip_id = @strip_id)
+`);
 const stmtPendingTeam    = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=?  AND status!='finished'");
 const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
 const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
@@ -149,7 +154,8 @@ const Pipeline = {
         so_a1.referee_id   AS assessor1_id,        rp_a1.first_name   AS assessor1_first,        rp_a1.last_name   AS assessor1_last,
         so_a2.referee_id   AS assessor2_id,        rp_a2.first_name   AS assessor2_first,        rp_a2.last_name   AS assessor2_last,
         CASE WHEN ps.type = 'pool'
-          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
+                  AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
           WHEN ps.type = 'team_match'
           THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
           ELSE NULL  -- computed in JS for DE slots (depends on partition)
@@ -201,7 +207,8 @@ const Pipeline = {
         tm_slot.right_team_id, tm_right.name AS right_team_name,
         GROUP_CONCAT(so.role) AS other_roles,
         CASE WHEN ps.type = 'pool'
-          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id)
+          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
+                  AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
           WHEN ps.type = 'team_match'
           THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
           ELSE NULL
@@ -327,7 +334,11 @@ const Pipeline = {
       });
 
       if (data.pool_id) {
-        db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
+        // Secondary slots (extra strips for a distributed pool) must not
+        // overwrite pools.strip_id — that stays the primary/home strip.
+        if (!data.secondary) {
+          db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
+        }
         db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
       }
 
@@ -479,7 +490,7 @@ const Pipeline = {
 
   pendingBoutCount(slot) {
     if (slot.type === 'pool') {
-      return stmtPendingPool.get(slot.pool_id).n;
+      return stmtPendingPool.get({ pool_id: slot.pool_id, strip_id: slot.strip_id }).n;
     }
     if (slot.type === 'team_match') {
       if (!slot.team_match_id) return 0;
