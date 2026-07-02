@@ -108,6 +108,32 @@ This applies to both `emit()` and any keepalive/heartbeat loops.
 Adding or changing a column means creating `db/migrations/005_describe_change.sql`.
 Never modify existing migration files. Never ALTER tables in application code.
 
+### `docs/level2.md` is a mirror — spec changes need an upstream PR
+`docs/level2.md` is a local copy of the canonical OPP2 spec, which lives at
+**https://github.com/OpenPiste/protocols** (`docs/level2.md` there). Atlas's copy
+is kept in sync via `scripts/sync-spec.sh` (`./scripts/sync-spec.sh` to check for
+drift, `--update` to pull the official version). Editing the file in *this* repo
+only updates Atlas's own reference copy — it does **not** propagate anywhere
+else, and no other OPP2 implementer (a video-review tool, a third-party
+scoresheet, Cyrano) will ever see it.
+
+**Any change to the wire protocol itself** (new/changed message fields,
+retained/QoS semantics, topic structure — not just Atlas's own code) must also
+land upstream:
+1. Edit `docs/level2.md` here as usual, and get the Atlas-side implementation
+   working against it.
+2. Clone `https://github.com/OpenPiste/protocols`, apply the same diff to its
+   `docs/level2.md`, push a branch, and open a PR (`gh pr create --repo
+   OpenPiste/protocols ...`). Confirm with the user before merging — this is a
+   shared, external repo, not Atlas's own.
+3. Run `./scripts/sync-spec.sh` afterward to confirm Atlas's local copy matches
+   the merged upstream version exactly.
+
+A commit to `docs/level2.md` in the Atlas repo is **not** "the spec changing" —
+only the merge to `OpenPiste/protocols` is. Confirmed once already, on
+2026-07-02: local spec edits were pushed to Atlas's own repo and initially
+assumed to be "the spec update" until the mismatch was caught.
+
 ### 3-minute rule
 **Stop after ~3 minutes of tool use without producing a user-facing message.**
 Report what was tried and where it got stuck. Ask for direction.
@@ -328,9 +354,33 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Each slot has optional `scheduled_start` (HH:MM) and `minutes_per_bout` for predicted-end computation
 - `predicted_end` = `scheduled_start` + `bout_count × minutes_per_bout` (computed, not stored)
 - `bout_duration_standards` table holds future weapon/phase-type defaults (empty for now)
-- Referee schedule is a derived view: all slots where `referee_id = X`
+- Referee schedule is a derived view: all slots where the person is assigned in *any*
+  officiating role (`pipeline_slot_officials` — see below), not just as primary referee
 - On NEXT: Atlas walks the pipeline — exhausted slot auto-advances to the next one
 - Multiple competitions can run simultaneously; each piste's pipeline determines what it fences
+
+**Officiating roster & decision attribution (complete as of 2026-07-02):**
+- `pipeline_slots.referee_id` is the primary referee only. `pipeline_slot_officials`
+  (migration 024) adds up to four more roles per slot: `referee2` (second referee —
+  common in team competitions), `video_assistant`, `assessor1`, `assessor2`. Any
+  combination is optional; `Pipeline.getOfficials(slotId)` / `Pipeline.setOfficial(...)`
+  in `services/pipeline.js` manage them.
+- **Wire split, per the upstream spec (see the mirror rule above):** `software/fencers`
+  (apparatus-facing) carries only `common.referee` — the apparatus and Cyrano-compatible
+  systems never need more. The full roster (`referee`, `referee2`, `video_official`,
+  `assessor1`, `assessor2`) is published on `software/record` instead — scoresheet-facing
+  and retained, so a reconnecting scoresheet gets it immediately. Built in
+  `lib/opp2Composer.js`'s `buildFencersCommon` / `buildRecordOfficials`.
+- **Decision attribution:** `scoresheet/event` / `scoresheet/record` annotations (card
+  reasons) carry an optional `official {id, name, role}` naming which specific official
+  made that call — separate from the roster, which only says who's assigned to the bout
+  at all. `public/scoresheet.html`'s card dialog shows a "Recorded by" picker only when
+  more than one official is assigned (silent default otherwise — zero added friction for
+  the common single-referee case). Persisted via `card_reasons.official_referee_id` /
+  `official_role` (migration 025).
+- `public/referee-schedule.html` (by-piste and by-referee views) and the referee Gantt
+  chart in `public/opp2.html` both iterate every assigned official, not just the primary
+  referee, tagging each with their role.
 
 **Key files added:**
 | Path | Purpose |
@@ -352,8 +402,10 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 **What is NOT yet done in OPP2:**
 - Cloud bridging (Mosquitto bridge to remote broker)
 - `bout_duration_standards` table is empty — fill it to get automatic `predicted_end`
-- DE referee assignment (currently a placeholder in the query)
 - Pipeline UI drag-to-reorder (▲▼ buttons work; drag is future)
+- `video_review`'s `official` field is spec-documented (upstream, see the mirror rule
+  above) but unimplemented — no Atlas code publishes `var/video_review` at all yet;
+  there's no video-review tool built
 
 ---
 
@@ -369,7 +421,10 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Direct competition import — federation/FIE start lists without touching the local people DB
   - Engarde XML format now fully understood (see `docs/GP/` for reference files); move this off "out of scope"
 - Registration desk — review `checkin.html` for competition-day check-in completeness
-- Card reasons — full FIE t.170 text, English + French; store OPP2 `ts` + clock at card time
+- Card reasons — FIE t.170 text (English + French) and decision attribution (which
+  official — referee/referee2/assessor — made the call) are both done; still open:
+  store the spec `ts` field instead of server datetime, and the match clock value
+  (from `apparatus/clock`) at card time
 - Manual appendices B and C
 - Fencer handedness (`hand`: R/L) — not yet in `fencers` table; Engarde stores `Lateralite` (D/G); relevant for scoresheet display and OPP2 `software/fencers` payload
 
@@ -380,7 +435,6 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ### 4. Architecture / code hygiene
 - `bout_duration_standards` table empty — fill for automatic `predicted_end`
-- DE referee assignment in pipeline (placeholder query in `opp2Composer`)
 - Pipeline UI drag-to-reorder (▲▼ works; drag is future)
 - Resilience: discuss network loss / crash recovery across the ecosystem
 - Minor: `CyranoServer.js` missing `'use strict'`
@@ -416,17 +470,22 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 |---|---|
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
 | `db/migrator.js` | Runs pending `.sql` files on start |
-| `db/migrations/` | Numbered schema migrations (001–005) |
+| `db/migrations/` | Numbered schema migrations (001–025) |
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) |
 | `lib/poolFormation.js` | FIE pool seeding + calcPoolOptions |
 | `lib/boutOrder.js` | FIE official bout order tables |
 | `lib/deFormation.js` | FIE DE tableau seeding (buildSeedPositions, buildDE) |
 | `lib/opp2Client.js` | OPP2 MQTT client singleton |
+| `lib/opp2Composer.js` | Builds/publishes OPP2 messages (fencers, match, score, record) |
 | `services/phases.js` | Phase create/activate/close + DE creation + simulate |
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |
 | `services/results.js` | Final competition results combining DE + pool |
-| `services/pipeline.js` | Piste pipeline: CRUD, bout navigation, predicted-end |
+| `services/pipeline.js` | Piste pipeline: CRUD, bout navigation, predicted-end, officials roster |
 | `services/settings.js` | Key/value settings (broker URL, enabled flag) |
+| `services/cardReasons.js` | Card reason persistence, incl. official attribution |
+| `public/opp2.html` | Pipeline builder, live piste status, piste + referee Gantt charts |
+| `public/referee-schedule.html` | By-piste / by-referee schedule views |
+| `scripts/sync-spec.sh` | Diff/update `docs/level2.md` against the canonical upstream spec |
 
 ---
 

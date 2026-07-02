@@ -46,6 +46,7 @@ The narrow bar at the top of the screen shows:
 - **Strip number** — confirms which piste this scoresheet is tracking
 - **Connection indicator** — Connected / Disconnected
 - **Slot label** — the name of the current assignment (e.g. *U17 Foil Men · Pool 3*)
+- **Assigned officials** — the referee, and (when assigned) a second referee, video assistant, and up to two assessors for this slot, each shown by name
 - **Theme toggle** button
 
 ---
@@ -80,6 +81,12 @@ Finished bouts show the final score in the collapsed header row. Tap to expand a
 
 ---
 
+### 2.5 Team match view
+
+When your strip is scheduled for a team match, a banner appears above the bout list showing **"Team relay N / 9"**, the two team names, the live cumulative score (e.g. *12 – 8*), and that relay's touch target — so you always know how many touches are needed for the current relay to end the match. Everything else on the screen — live score, cards, card reasons — works exactly as in individual bouts.
+
+---
+
 ## 3. Recording Card Reasons
 
 ### 3.1 When the dialog appears
@@ -92,9 +99,11 @@ The dialog title shows the card colour and the side (← Left or Right →) and 
 
 ### 3.2 Choosing a reason
 
-The dialog shows a grid of reason buttons for the card type and the weapon being fenced. Tap the reason that applies. The reason is recorded and the dialog closes.
+The dialog shows a grid of reason buttons for the card type and the weapon being fenced, using the official FIE t.170 wording. Tap the reason that applies. The reason is recorded and the dialog closes.
 
 If none of the listed reasons fits, type a free-text reason in the **Other reason…** field and tap **Submit**.
+
+**Language:** the reason list is available in English, French, and Spanish. Add `&lang=fr` or `&lang=es` to the scoresheet URL (e.g. `?piste=3&lang=fr`) to show reasons in that language — useful at international events where the table official may prefer a different language than the app's default English.
 
 ---
 
@@ -118,7 +127,15 @@ If the referee removes a card using the remote control before you have submitted
 
 ### 3.6 Viewing recorded reasons
 
-Tap any bout row to expand it. If card reasons were recorded during that bout, they are listed below the score with the card colour, side, reason text, and time.
+Tap any bout row to expand it. If card reasons were recorded during that bout, they are listed below the score with the card colour, side, reason text, official (if attributed — see §3.7), and time.
+
+---
+
+### 3.7 Attributing a card to a specific official
+
+When only one referee is assigned to your slot, nothing changes — reasons are recorded as usual with no extra step. When **more than one official** is assigned (a second referee and/or one or two assessors — set up by the competition manager, see the Competition Manager Guide §8.3), the card reason dialog shows a **"Recorded by"** row above the reason grid, listing each official by name and role. Tap the one who made the call before choosing (or typing) the reason. It defaults to the primary referee, so if the primary referee made the call you can simply ignore it and proceed as normal.
+
+This lets the competition record not just *that* a card was given, but *which* official — referee, second referee, or assessor — made that specific decision, which matters when reviewing contentious calls after the fact. Video assistants are never shown in this list — they don't issue cards.
 
 ---
 

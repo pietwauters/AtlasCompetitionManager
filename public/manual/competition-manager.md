@@ -2,6 +2,8 @@
 
 Atlas is a fencing competition management system designed to run pool rounds and direct elimination tableaux on competition day. This guide walks you through the full workflow from first setup to final results.
 
+> Every page has a light/dark theme toggle in the top navigation bar. Atlas remembers your choice per device.
+
 ---
 
 ## 1. Key Terms
@@ -240,6 +242,28 @@ Use the search box to find a fencer quickly by name or club. The filter tabs (**
 
 ---
 
+### 3.7 Using a competition format (optional)
+
+For simple competitions, creating rounds one at a time as described in Sections 4–6 works fine. For larger events with a standard multi-stage structure — a Grand Prix format, or two pool rounds combined into one seeding — Atlas can drive the whole thing from a predefined **format**.
+
+On the competition detail page, before any round has been created, a **Competition format (optional)** box appears above the Rounds card (individual competitions only — team competitions don't use formats). The dropdown defaults to **— no format (manual) —**; leave it there for the plain workflow already described in this guide. To use a format, select one:
+
+| Format | Stages |
+|---|---|
+| One Pool Round then DE | One pool round (advancement % configurable, default 70%), then a final tableau |
+| Two Pool Rounds (combined seeding) then DE | Pool round 1 (no elimination), pool round 2, then a tableau seeded on combined stats across both rounds |
+| Two Pool Rounds (round 2 seeding) then DE | Same two pool rounds, but the tableau is seeded only from round 2 |
+| Pool Round then Level Pools (final ranking) | One pool round, then ranked "level" pools (blocks of 6) whose result *is* the final ranking — no DE |
+| FIE Grand Prix | Preliminary Pools (top 16 seeds exempt) → Preliminary Tableau (runs until 32 survivors remain) → Final Tableau (64-fencer bracket combining the 16 exempts, the pool-exempt top 16, and the 32 survivors) |
+
+If the format takes a parameter (only "One Pool Round then DE" does today), a field appears — e.g. **Advancement after pools (%)**. Click **Apply format**. Atlas checks the format is compatible with your current roster size and shows a specific error if not (e.g. *"requires more than 16 competitors for the preliminary pool round"*). While no round has been created yet, a **✕ Remove format** link lets you undo the choice and go back to manual.
+
+**Working through the stages:** once a format is applied, the Rounds card shows a stage plan — one card per stage with its status, type, and projected fencer count. The **+ New round** button is replaced by a stage-specific one, e.g. **+ Preliminary Pools**, then **+ Preliminary Tableau**, then **+ Final Tableau** — click it to open the same pool/DE creation form used elsewhere in this guide, already scoped to that stage's participants.
+
+For a preliminary tableau with a survivor target (the Grand Prix's middle stage), the bracket runs until the target number remain undefeated, then a **Close (N survivors)** button appears on the phase — click it to lock in survivors and eliminated fencers and move on to the next stage. Trying to close early (bouts still pending, or the wrong number of survivors) shows a specific error explaining what's missing.
+
+---
+
 ## 4. Running a Pool Round
 
 ### 4.1 Creating a pool round
@@ -326,6 +350,8 @@ The round page shows a live rankings table below the pool cards. It updates auto
 | TR | Touches received |
 
 Fencers are ranked in order: best V/M first, then best indicator, then most touches scored. The label *(live — not saved yet)* is shown while the round is open to make clear that these standings are provisional.
+
+**Exact ties:** when two or more fencers share identical V/M, indicator, and touches scored, the rank column shows a shared number with a **T** suffix (e.g. *3T*) for every row in the tied block. By default the tied order is arbitrary (alphabetical or random, depending on the Admin setting — see below). If your federation requires a manual fence-off or draw to break the tie, an Admin can enable **"Allow manual tie-break reordering on phase page"** in Admin → Competition Settings; once enabled, an extra ▲ / ▼ column appears on this table for tied rows only, letting you reorder them by hand. Your chosen order is saved and carries into DE seeding.
 
 ---
 
@@ -501,21 +527,15 @@ Atlas can run several competitions at the same time — for example Men's Foil U
 
 ### 8.1 Strip pipeline overview
 
-A pipeline is an ordered list of **slots** for one strip. A slot is either:
+A pipeline is an ordered list of **slots** for one strip. A slot is one of three types:
 
 - A **pool** — all bouts from one pool, sent to the apparatus in FIE order
 - A **DE range** — a selection of bouts from one round of a DE tableau (useful when multiple strips share a DE tableau, each fencing a different portion)
+- A **team match** — a full team match (9 relays), see §10
 
 When the referee presses **NEXT** on the apparatus remote, Atlas finds the next pending bout in that strip's pipeline and sends the fencer names and match settings to the apparatus automatically. When all bouts in a slot are done, Atlas advances to the next slot without any manual intervention.
 
-Each slot can carry optional timing information:
-
-| Field | What it does |
-|---|---|
-| **Start** | The scheduled start time for this slot (HH:MM) |
-| **Min/bout** | Estimated minutes per bout — used to calculate predicted end time |
-| **Predicted end** | Displayed automatically as *start + (bout count × min/bout)* |
-| **Referee** | The referee assigned to this slot — shown in the referee schedule view |
+Each slot can carry optional timing information (Start, Min/bout, and an automatically-computed Predicted end), and up to five officiating roles: **Referee**, **Referee 2**, **Video assistant**, **Assessor 1**, **Assessor 2** — see §8.3.
 
 A ⚠ warning appears on a slot if its scheduled start time is earlier than the predicted end of the previous slot, flagging a scheduling overlap.
 
@@ -523,40 +543,43 @@ A ⚠ warning appears on a slot if its scheduled start time is earlier than the 
 
 ### 8.2 Building a strip pipeline
 
-Open the **Schedule** page from the navigation bar. Each strip is shown as a card with its current pipeline.
+Open the **Schedule** page from the navigation bar (`/opp2.html`). It's a two-panel layout:
 
-**To add a slot:**
+- **Left — Strips.** A grid of every piste with a status dot (green = apparatus online), name, pending-slot count, and scheduled time range. Tick **Hide offline** to declutter. Click a strip to select it.
+- **Right — pipeline detail.** Once a strip is selected, its pipeline is shown as a list of slot cards, plus an **Add slot** form at the bottom.
 
-1. Click **+ Add slot** at the bottom of a strip's card
-2. Choose the slot type: **Pool** or **DE range**
+**To add a slot,** fill in the Add slot form: choose the type (**Pool**, **DE range**, or **Team match**), then:
 
-For a **Pool** slot:
-- Select the competition and pool from the dropdown (only pools not already scheduled elsewhere are shown)
-- Optionally set a start time, minutes per bout, and referee
-- Click **Add**
+- **Pool** — pick a pool from the dropdown (already-scheduled pools are shown disabled with ⊗ and the strip they're on). If the pool has 8 or more bouts, a **Split bouts across multiple pistes** checkbox appears — see §8.4.
+- **DE range** — pick the DE phase, then the round, then the "From bout / To bout" range this strip will fence.
+- **Team match** — pick from the active team matches. A match is flagged with a warning if the draw hasn't been done yet or the fencing order isn't fully submitted (see §10.4).
 
-For a **DE range** slot:
-- Select the competition and DE phase
-- Select the round (Round of 32, Quarter-final, etc.)
-- Select the bout range — which bouts within that round this strip will fence
-- Optionally set timing and referee
-- Click **Add**
+Set a Start time if you want one; **Min/bout** is optional too — leave it blank to use the adaptive default (§8.6). Click **Add slot**.
 
-**To reorder slots:** use the **▲** and **▼** buttons. Slots are sent to the apparatus in the order they appear.
+**To reorder slots:** drag a slot by its ⠿ handle to a new position, or use the **▲ / ▼** buttons in its detail row — both work, drag-and-drop didn't replace the buttons.
 
-**To remove a slot:** click **Remove**. This does not affect any scores already recorded — it only removes the slot from the pipeline.
+**To remove a slot:** click **Remove**. This does not affect any scores already recorded — it only removes the slot from the pipeline. Use **Move to →** in a slot's detail row to shift it to a different strip instead of removing and re-adding it.
 
 Completed slots collapse automatically into a compact *✓ done* row. Click the row to expand it again if you need to review it.
+
+Below the pipeline builder, a **Piste schedule** Gantt chart shows every scheduled slot across all strips on one timeline (blue = pending, green = active, gray = done, with a red "now" line) — useful for spotting overlaps at a glance across the whole competition day.
 
 ![Schedule page showing strip pipelines](images/opp2-admin.png)
 
 ---
 
-### 8.3 Referee schedule
+### 8.3 Referee and officiating schedule
 
-The bottom of the Schedule page shows a **referee schedule** — all slots across all strips filtered by referee. Use the dropdown to select a referee and see their full assignment for the day: which pools and DE rounds they are assigned to, on which strips, and at what times.
+Each pipeline slot can carry up to five officials, not just one referee — set them from the slot's detail row on the Schedule page: **Referee**, **Referee 2** (a second referee — common in team competitions), **Video assistant**, **Assessor 1**, **Assessor 2**. All are optional; most slots only need the primary Referee.
 
-This view is read-only; assignments are set per slot using the Referee dropdown in the slot detail (see §8.2).
+**Referee Gantt chart** — at the bottom of the Schedule page, a second Gantt chart shows every official's day on one timeline, one row per person, with each bar labelled by piste and — for anyone other than the primary referee — their role (e.g. *"Piste 3 — Pool A (Assessor 1)"*). This is the fastest way to see whether someone is double-booked.
+
+**Dedicated Referee Schedule page** (`/referee-schedule.html`, linked from the nav bar as **Referees**) gives a fuller, filterable view with two toggles:
+
+- **By piste** — one card per strip, listing its slots with start/end time, assignment, the primary referee, and any other officials in a compact tag row.
+- **By referee** — one card per person (referee, video assistant, or assessor — anyone assigned to at least one slot in any role), listing every slot they're involved in with a **Role** column showing which capacity they're serving in for that slot. A separate **Unassigned slots** card lists any slot with no primary referee, so gaps are easy to spot.
+
+Tick **Show completed** to include already-finished slots in either view. Both views auto-refresh every 30 seconds.
 
 ---
 
@@ -595,6 +618,26 @@ The standard FIE bout order for pools of 11 and 12 has a very uneven rest distri
 When this checkbox is ticked, Atlas monitors actual progress during the pool and may swap an upcoming bout to a different position if a fencer would otherwise have insufficient rest. The minimum rest is set globally in the OPP2 settings (default: 3 minutes). Dynamic reordering acts within a small look-ahead window of 4 bouts, so swaps are minor — the overall structure of the pool is preserved.
 
 This option is most useful when bouts take significantly different amounts of time (e.g. one strip consistently finishes faster than the other). Disable it if you prefer a fixed, predictable bout sequence.
+
+---
+
+### 8.5 Bulk assignment
+
+Adding pools or DE bouts to strips one at a time is fine for a handful of slots, but for a whole competition's worth of pools it's faster to assign them all at once. Click **⚡ Bulk assign pools / DE** at the top of the Schedule page's strip list.
+
+**Pools tab:** pick a competition. A piste selector appears — tick strips to use (**Select all idle** ticks every free strip in one click; busy strips are highlighted with a ⚠ warning). Set an optional start time. A live preview table matches every pool in the competition to a piste, largest pool first, and flags any pool that couldn't be assigned (not enough pistes selected) in red. Click **Assign N pools**.
+
+**DE rounds tab:** pick a DE phase and round (shown with its bout and bye count, e.g. *"R2 · 6 bouts (2 byes)"*) — a **↻ Same pistes as R&lt;n-1&gt;** shortcut appears if the previous round used specific pistes already. The preview lists each real bout (byes are skipped automatically) matched to a piste round-robin, with each successive wave of bouts getting a later start time. Click **Assign N slots**.
+
+If any selected piste already has pending slots, choose **Append anyway** or **Skip busy pistes** before submitting. Made a mistake? **↩ Undo last bulk assign** removes everything the last bulk operation just created, in one click.
+
+---
+
+### 8.6 Bout timing defaults
+
+Predicted end times (§8.1) need a default minutes-per-bout figure to work from. Admins set this on the **Admin** page, under **Bout Timing Defaults** — a table per weapon (Foil/Épée/Sabre) with a row per gender and separate Pool/DE default columns.
+
+Once a weapon/gender/phase combination has at least 4 completed bouts logged, Atlas automatically switches to a rolling **observed average** instead of the manual default — shown alongside it, and used everywhere the manual default would otherwise apply (including as the "N (auto)" placeholder when adding a slot). Click **Reset averages** on a row to discard the accumulated observations and fall back to the manual figure, for example after changing weapon rules or noticing an outlier skewing the average.
 
 ---
 
@@ -670,7 +713,49 @@ Atlas generates two distinct kinds of QR code, used for different purposes:
 
 ---
 
+## 10. Team Competitions
 
+Atlas supports FIE-style team events — three fencers plus one reserve per team, competing in a 9-relay match. Team competitions are direct-elimination only; there is no team pool phase.
+
+### 10.1 Creating a team competition
+
+Create the competition as in §3.2, but tick **Team competition** in the creation form. This is a property of the whole competition, set once — it can't be toggled per round. Once ticked, the competition detail page reshapes itself: "Competitors" becomes **Registered fencers**, the round picker only offers **Team DE**, and results go to a dedicated team results page (§10.5).
+
+### 10.2 Registering teams
+
+On the competition detail page, first add fencers to the competition as **Registered fencers** (right-hand panel, same as §3.3). Then, in the **Teams** card, click **+ Add team** and give it a name (e.g. *Leonidas A*).
+
+Each team card shows a fencer count (e.g. *3/3 fencers + R*) and a **▼ Members** toggle. Expand it to assign registered fencers into the team via the **— add competitor —** dropdown, choosing a role: **Regular** (up to 3) or **Reserve** (up to 1). Remove a member with the ✕ next to their name.
+
+Once every team's roster is set, click **⚡ Auto-seed teams by ranking** — this ranks teams by the combined seeding of their regular members and is required before creating the tableau (at least 2 seeded teams).
+
+### 10.3 The team DE tableau
+
+Click **Team DE**, then **Create Team DE tableau** (shown once ≥2 teams are seeded, with a live preview like *"8-team tableau (2 byes)"*). This opens `team-de.html`, a standard-looking bracket — *Round of N*, *Semi-final*, *Final* — plus a separate **3rd Place bout** card. Each bracket entry is a full team match (§10.4), not a single bout. The phase header shows *"X / Y matches complete"* and a **Close phase** button, enabled once every match is done, which records the final team rankings. **Simulate all** is available for testing.
+
+### 10.4 Running a team match
+
+Open a match ("Open →" on a ready bracket card) to reach `team-match.html`:
+
+1. **Initial draw** — **Auto draw (random)**, or pick a winner manually and confirm. The winner becomes "Team A" (relay positions 1–3), the loser "Team B" (positions 4–6).
+2. **Fencing order** — each side assigns its 3 regular fencers to positions via dropdowns, then clicks **Submit Team A/B order**. Once both sides have submitted, the match goes active.
+3. **Relays** — 9 rows, each a 3-minute bout between one fencer per side per the FIE rotation. Enter each relay's touches (Left/Right) and save; a **⏱️ time** checkbox marks a relay that ended on time rather than touches. The **Cumul.** column tracks the running total — each relay has its own target (5, 10, 15 … up to 45 for relay 9), and the match ends the moment either team reaches 45, even mid-relay.
+4. **Substitution** — a captain can swap in the reserve for a named position from a chosen relay onward, via **Declare Substitution** — once per team per match.
+5. **Tiebreak** — if cumulative scores are still level after relay 9, a **Tiebreak!** banner appears for a one-minute sudden-death bout; record the result by clicking the winning team's name.
+
+**Simulate match** is available for testing.
+
+### 10.5 Team results
+
+The team results page (`team-results.html`) shows Place, Team (name + club), and Members (reserves marked *(R)*). It populates once the Team DE phase is closed — before that it shows a reminder to close the phase first.
+
+### 10.6 Scheduling and live scoring
+
+Team matches are scheduled onto a piste like any other slot (§8.2) — choose **Team match** as the slot type and pick from the active matches. On the referee's live scoresheet, a dedicated banner shows *"Team relay N / 9"*, both team names, the live cumulative score, and that relay's target — so the referee always knows how many touches are needed to end the match.
+
+---
+
+## Appendix A — CSV Import Reference
 
 ### A.1 Column reference
 
@@ -746,4 +831,24 @@ See Section 8 for the full pipeline workflow.
 
 ### C.4 Assigning referees to strips
 
-Referees are assigned per pipeline slot on the Schedule page. The referee schedule view (bottom of the Schedule page) shows the full day's assignments for any selected referee across all strips.
+Officials are assigned per pipeline slot on the Schedule page — up to five roles per slot (Referee, Referee 2, Video assistant, Assessor 1, Assessor 2). See §8.3 for the full referee/officiating schedule views and the referee Gantt chart.
+
+---
+
+## Appendix D — Importing from FIE XML
+
+If your federation's registration system (e.g. Engarde) can export a start list as FIE XML, Atlas can import it directly instead of re-entering fencers by hand or preparing a CSV.
+
+On the **Tournaments & Competitions** page, Competitions tab, click **Import FIE XML**. In the dialog:
+
+1. Choose the XML file.
+2. Optionally pick **Attach to existing tournament** — leave it on *"— Auto-create from XML —"* to let Atlas create a new tournament from the file's own event details.
+3. Click **Import**.
+
+Atlas reports how many fencers were created and updated (and skipped, with any warnings), plus a **Go to competition →** link to jump straight to the newly imported competition.
+
+**Caveats:**
+- Only the individual start-list document type (`BaseCompetitionIndividuelle`) is currently supported — other FIE XML document types are rejected with an explanation.
+- The import creates the competition and its fencer roster as a **draft** — it does not import pools, DE brackets, or results. Continue from §3.3 onward as normal.
+- Weapon is inferred automatically from the file.
+- Importing requires Director-level access (§9.1).
