@@ -139,7 +139,7 @@
       Rankings
       <span style="font-size:.8rem;color:#888;font-weight:400" x-show="phase?.status!=='finished'"> (live — not saved yet)</span>
     </h2>
-    <table>
+    <table class="table-responsive">
       <thead><tr>
         <th>#</th><th>Name</th><th>Club</th>
         <th title="Victory ratio (victories / matches fenced)">V/M</th>
@@ -152,15 +152,15 @@
       <tbody>
         <template x-for="r in rankings" :key="r.competitor_id">
           <tr :class="r.advanced?'adv':(r.advanced===0?'elim':'')">
-            <td class="rank-pos" x-text="(r.rank||r.position)+(r.tied?'T':'')"></td>
-            <td x-text="r.last_name+', '+r.first_name"></td>
-            <td x-text="r.club_name||'—'"></td>
-            <td class="vr" x-text="r.matches>0?(r.victories/r.matches).toFixed(2):'—'"></td>
-            <td x-text="r.matches"></td>
-            <td x-text="(r.indicator>0?'+':'')+r.indicator"></td>
-            <td x-text="r.touches_scored"></td>
-            <td x-text="r.touches_received"></td>
-            <td x-show="manualTieBreak && phase?.status!=='finished'" style="white-space:nowrap">
+            <td data-label="#" class="rank-pos" x-text="(r.rank||r.position)+(r.tied?'T':'')"></td>
+            <td data-label="Name" x-text="r.last_name+', '+r.first_name"></td>
+            <td data-label="Club" x-text="r.club_name||'—'"></td>
+            <td data-label="V/M" class="vr" x-text="r.matches>0?(r.victories/r.matches).toFixed(2):'—'"></td>
+            <td data-label="M" x-text="r.matches"></td>
+            <td data-label="Ind" x-text="(r.indicator>0?'+':'')+r.indicator"></td>
+            <td data-label="TS" x-text="r.touches_scored"></td>
+            <td data-label="TR" x-text="r.touches_received"></td>
+            <td data-label="" x-show="manualTieBreak && phase?.status!=='finished'" style="white-space:nowrap">
               <button x-show="canMoveUp(r)"   @click="moveInTie(r.competitor_id,'up')"
                       style="padding:.1rem .45rem;font-size:.8rem;line-height:1" title="Move up within tied group">▲</button>
               <button x-show="canMoveDown(r)" @click="moveInTie(r.competitor_id,'down')"

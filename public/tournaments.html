@@ -40,20 +40,20 @@
         <button @click="openFieImport()">Import FIE XML</button>
         <button class="primary" @click="openCompForm()">+ New competition</button>
       </div>
-      <table>
+      <table class="table-responsive">
         <thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Age categories</th><th>Date</th><th>Tournament</th><th>Fencers</th><th>Status</th><th></th></tr></thead>
         <tbody>
           <template x-for="c in competitions" :key="c.id">
             <tr>
-              <td><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
-              <td x-text="c.weapon"></td>
-              <td x-text="c.gender"></td>
-              <td x-text="c.age_cats||'—'"></td>
-              <td x-text="c.date||'—'"></td>
-              <td x-text="c.tournament_name||'—'"></td>
-              <td x-text="c.competitor_count"></td>
-              <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
-              <td>
+              <td data-label="Name"><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
+              <td data-label="Weapon" x-text="c.weapon"></td>
+              <td data-label="Gender" x-text="c.gender"></td>
+              <td data-label="Age categories" x-text="c.age_cats||'—'"></td>
+              <td data-label="Date" x-text="c.date||'—'"></td>
+              <td data-label="Tournament" x-text="c.tournament_name||'—'"></td>
+              <td data-label="Fencers" x-text="c.competitor_count"></td>
+              <td data-label="Status"><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+              <td data-label="">
                 <div class="row-actions">
                   <button @click="editComp(c)">Edit</button>
                   <button @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
@@ -158,21 +158,21 @@
           </div>
           <!-- Competitions inside this tournament -->
           <div x-show="t.competitions.length===0" style="padding:.75rem 1rem;font-size:.85rem;color:#999">No competitions linked to this tournament.</div>
-          <table x-show="t.competitions.length>0" style="margin:0">
+          <table class="table-responsive" x-show="t.competitions.length>0" style="margin:0">
             <thead><tr>
               <th>Name</th><th>Weapon</th><th>Gender</th><th>Age</th><th>Date</th><th>Fencers</th><th>Status</th><th></th>
             </tr></thead>
             <tbody>
               <template x-for="c in t.competitions" :key="c.id">
                 <tr>
-                  <td><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
-                  <td x-text="c.weapon"></td>
-                  <td x-text="c.gender"></td>
-                  <td x-text="c.age_cats||'—'"></td>
-                  <td x-text="c.date||'—'"></td>
-                  <td x-text="c.competitor_count"></td>
-                  <td><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
-                  <td>
+                  <td data-label="Name"><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
+                  <td data-label="Weapon" x-text="c.weapon"></td>
+                  <td data-label="Gender" x-text="c.gender"></td>
+                  <td data-label="Age" x-text="c.age_cats||'—'"></td>
+                  <td data-label="Date" x-text="c.date||'—'"></td>
+                  <td data-label="Fencers" x-text="c.competitor_count"></td>
+                  <td data-label="Status"><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+                  <td data-label="">
                     <button @click="editComp(c);tab='competitions'">Edit</button>
                     <button @click="archiveComp(c)" title="Hide without deleting">Archive</button>
                     <button class="danger" @click="deleteComp(c)">Delete</button>

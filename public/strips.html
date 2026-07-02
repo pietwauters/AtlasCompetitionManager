@@ -45,26 +45,26 @@
       <a href="/piste-qr.html" class="btn" style="font-size:.85rem">QR codes →</a>
     </div>
 
-    <table>
+    <table class="table-responsive">
       <thead><tr>
         <th>#</th><th>Name</th><th>Status</th><th>Network</th><th>Current bout</th><th></th>
       </tr></thead>
       <tbody>
         <template x-for="s in strips" :key="s.id">
           <tr>
-            <td x-text="s.strip_number"></td>
-            <td>
+            <td data-label="#" x-text="s.strip_number"></td>
+            <td data-label="Name">
               <input class="name-input"
                      :value="s.name||''"
                      @change="rename(s, $event.target.value)"
                      @keydown.enter="$event.target.blur()"
                      placeholder="click to add name">
             </td>
-            <td><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
-            <td><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
-            <td style="font-size:.85rem;color:#555"
+            <td data-label="Status"><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
+            <td data-label="Network"><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
+            <td data-label="Current bout" style="font-size:.85rem;color:#555"
                 x-text="s.bout ? '#'+s.bout.bout_order+': '+s.bout.left+' — '+s.bout.right : '—'"></td>
-            <td>
+            <td data-label="">
               <button class="danger" @click="deleteStrip(s)">Delete</button>
             </td>
           </tr>

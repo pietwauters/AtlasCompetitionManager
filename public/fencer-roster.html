@@ -236,7 +236,7 @@
             </template>
 
             <template x-if="filtered.length > 0">
-                <table>
+                <table class="table-responsive">
                     <thead>
                         <tr>
                             <th style="width:2rem">
@@ -258,25 +258,25 @@
                     <tbody>
                         <template x-for="f in filtered" :key="f.fencerId">
                             <tr>
-                                <td>
+                                <td data-label="Select">
                                     <input type="checkbox" :checked="selected.has(f.fencerId)"
                                         @change="toggleOne(f.fencerId, $event.target.checked)">
                                 </td>
-                                <td x-text="f.initial_seed ?? '—'" style="color:#888"></td>
-                                <td x-text="f.display_name"></td>
-                                <td x-text="f.date_of_birth ?? '—'" style="color:#888;font-size:.8rem"></td>
-                                <td>
+                                <td data-label="#" x-text="f.initial_seed ?? '—'" style="color:#888"></td>
+                                <td data-label="Name" x-text="f.display_name"></td>
+                                <td data-label="DOB" x-text="f.date_of_birth ?? '—'" style="color:#888;font-size:.8rem"></td>
+                                <td data-label="Cat.">
                                     <span x-text="f.category ?? '—'"
                                         style="font-size:.78rem;padding:.1rem .4rem;background:#eaf0fb;color:#1a6bab;border-radius:999px"
                                         x-show="f.category"></span>
                                     <span x-show="!f.category" style="color:#bbb">—</span>
                                 </td>
-                                <td x-text="f.gender ?? '—'"></td>
-                                <td x-text="(f.weapons ?? []).join(', ') || '—'" style="font-size:.82rem"></td>
-                                <td x-text="f.club || '—'"></td>
-                                <td x-text="f.nationality || '—'"></td>
-                                <td x-text="f.licence || '—'" style="font-size:.8rem;color:#888"></td>
-                                <td>
+                                <td data-label="Gender" x-text="f.gender ?? '—'"></td>
+                                <td data-label="Weapons" x-text="(f.weapons ?? []).join(', ') || '—'" style="font-size:.82rem"></td>
+                                <td data-label="Club" x-text="f.club || '—'"></td>
+                                <td data-label="NAT" x-text="f.nationality || '—'"></td>
+                                <td data-label="Licence" x-text="f.licence || '—'" style="font-size:.8rem;color:#888"></td>
+                                <td data-label="Status">
                                     <button class="status-btn" :class="f.status" @click="cycleStatus(f)"
                                         x-text="f.status" :disabled="saving"></button>
                                 </td>

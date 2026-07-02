@@ -82,7 +82,7 @@
 
     <div x-show="users.length === 0" style="color:#888;font-size:.9rem">No users yet.</div>
 
-    <table class="table" x-show="users.length > 0" style="width:100%">
+    <table class="table table-responsive" x-show="users.length > 0" style="width:100%">
       <thead>
         <tr>
           <th>Username</th>
@@ -95,11 +95,11 @@
       <tbody>
         <template x-for="u in users" :key="u.id">
           <tr>
-            <td x-text="u.username"></td>
-            <td><span class="badge" :class="roleBadge(u.role)" x-text="u.role"></span></td>
-            <td x-text="u.first_name ? u.first_name+' '+u.last_name : '—'"></td>
-            <td x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:#888"></td>
-            <td style="text-align:right;white-space:nowrap">
+            <td data-label="Username" x-text="u.username"></td>
+            <td data-label="Role"><span class="badge" :class="roleBadge(u.role)" x-text="u.role"></span></td>
+            <td data-label="Person" x-text="u.first_name ? u.first_name+' '+u.last_name : '—'"></td>
+            <td data-label="Last login" x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:#888"></td>
+            <td data-label="" style="text-align:right;white-space:nowrap">
               <button @click="showQr(u)"    style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">QR</button>
               <button @click="doResetPin(u)" style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">Reset PIN</button>
               <button @click="doDelete(u)" class="danger" style="font-size:.82rem;padding:.3rem .7rem;margin:0">Delete</button>
@@ -146,7 +146,7 @@
       <div style="margin-bottom:1.25rem">
         <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:.4rem"
              x-text="{'F':'Foil','E':'Épée','S':'Sabre'}[weapon]"></div>
-        <table class="table" style="width:100%">
+        <table class="table table-responsive" style="width:100%">
           <thead>
             <tr>
               <th style="width:5rem">Gender</th>
@@ -160,20 +160,20 @@
           <tbody>
             <template x-for="gender in ['M','F','X']" :key="gender">
               <tr>
-                <td style="font-weight:600" x-text="{'M':'Men','F':'Women','X':'Mixed'}[gender]"></td>
-                <td>
+                <td data-label="Gender" style="font-weight:600" x-text="{'M':'Men','F':'Women','X':'Mixed'}[gender]"></td>
+                <td data-label="Pool default (min/bout)">
                   <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
                     :value="getStd(weapon,gender,'pool')?.minutes_per_bout"
                     @change="saveDefault(weapon,gender,'pool',+$event.target.value)">
                 </td>
-                <td style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'pool')"></td>
-                <td>
+                <td data-label="Pool observed" style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'pool')"></td>
+                <td data-label="DE default (min/bout)">
                   <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
                     :value="getStd(weapon,gender,'de')?.minutes_per_bout"
                     @change="saveDefault(weapon,gender,'de',+$event.target.value)">
                 </td>
-                <td style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'de')"></td>
-                <td style="text-align:right">
+                <td data-label="DE observed" style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'de')"></td>
+                <td data-label="" style="text-align:right">
                   <button style="font-size:.78rem;padding:.25rem .6rem"
                           x-show="hasObserved(weapon,gender)"
                           @click="resetObserved(weapon,gender)">Reset averages</button>

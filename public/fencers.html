@@ -286,17 +286,17 @@
             if (!rows.length) return `<p class="empty">No fencers yet. Add one above or import a CSV.</p>`;
             const rows_html = rows.map(f => `
                 <tr>
-                    <td>${f.initial_seed ?? '—'}</td>
-                    <td>${esc(f.name)}</td>
-                    <td>${esc(f.club || '—')}</td>
-                    <td>${f.nationality || '—'}</td>
-                    <td class="badge-${f.status}">${f.status}</td>
-                    <td>
+                    <td data-label="Seed">${f.initial_seed ?? '—'}</td>
+                    <td data-label="Name">${esc(f.name)}</td>
+                    <td data-label="Club">${esc(f.club || '—')}</td>
+                    <td data-label="NAT">${f.nationality || '—'}</td>
+                    <td data-label="Status" class="badge-${f.status}">${f.status}</td>
+                    <td data-label="">
                         <button class="sm" onclick='openEdit(${JSON.stringify(f)})'>Edit</button>
                         <button class="sm danger" onclick="deleteFencer(${f.fencer_id})" style="margin-left:.3rem">Remove</button>
                     </td>
                 </tr>`).join('');
-            return `<table>
+            return `<table class="table-responsive">
         <thead><tr>
           <th>Seed</th><th>Name</th><th>Club</th><th>NAT</th><th>Status</th><th></th>
         </tr></thead>

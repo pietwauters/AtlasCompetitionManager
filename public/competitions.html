@@ -237,16 +237,16 @@
                 }
                 return `
                 <tr>
-                    <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
-                    <td>${weaponLabel[c.weapon] || c.weapon}</td>
-                    <td>${genderLabel[c.gender] || c.gender}</td>
-                    <td><span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></td>
-                    <td><div class="row-actions"><a href="/competitions/${c.id}/fencers">Fencers</a>${deleteCell}</div></td>
-                    <td>${tournamentCell}</td>
-                    <td>${dateCell}</td>
+                    <td data-label="Name"><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
+                    <td data-label="Weapon">${weaponLabel[c.weapon] || c.weapon}</td>
+                    <td data-label="Gender">${genderLabel[c.gender] || c.gender}</td>
+                    <td data-label="Status"><span class="badge ${badgeClass[c.status] || ''}">${c.status}</span></td>
+                    <td data-label="Actions"><div class="row-actions"><a href="/competitions/${c.id}/fencers">Fencers</a>${deleteCell}</div></td>
+                    <td data-label="Tournament">${tournamentCell}</td>
+                    <td data-label="Date">${dateCell}</td>
                 </tr>`;
             }).join('');
-            return `<div style="overflow-x:auto;"><table>
+            return `<div style="overflow-x:auto;"><table class="table-responsive">
                 <thead><tr>
                     <th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th><th>Actions</th><th>Tournament</th><th>Date</th>
                 </tr></thead>

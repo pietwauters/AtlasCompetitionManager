@@ -50,12 +50,12 @@
             if (!t.competitions || !t.competitions.length) {
                 html += `<p class='empty'>No competitions linked to this tournament.</p>`;
             } else {
-                html += `<table><thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th></tr></thead><tbody>` +
+                html += `<table class="table-responsive"><thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Status</th></tr></thead><tbody>` +
                     t.competitions.map(c => `<tr>
-                    <td><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
-                    <td>${esc(c.weapon)}</td>
-                    <td>${esc(c.gender)}</td>
-                    <td>${esc(c.status)}</td>
+                    <td data-label="Name"><a class="row-link" href="/competitions/${c.id}">${esc(c.name)}</a></td>
+                    <td data-label="Weapon">${esc(c.weapon)}</td>
+                    <td data-label="Gender">${esc(c.gender)}</td>
+                    <td data-label="Status">${esc(c.status)}</td>
                 </tr>`).join('') + '</tbody></table>';
             }
             document.getElementById('tournament-detail').innerHTML = html;

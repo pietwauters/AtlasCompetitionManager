@@ -317,6 +317,53 @@ th {
 td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--clr-border); vertical-align: middle; }
 tr:hover td { background: var(--clr-row-hover); }
 
+/* ── Responsive tables (table.table-responsive) ──────────────────────────── */
+/* Below the breakpoint, each row becomes a card: the header row is hidden
+   (not removed — screen readers still see it) and each cell gets its column
+   header injected via ::before from a data-label attribute. Opt-in via a
+   class, not global, since some tables (short/narrow ones, preview tables
+   inside modals) read fine as a real table at any width. */
+@media (max-width: 700px) {
+  table.table-responsive thead {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  table.table-responsive, table.table-responsive tbody,
+  table.table-responsive tr, table.table-responsive td {
+    display: block;
+    width: 100%;
+  }
+  table.table-responsive tr {
+    border: 1px solid var(--clr-border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    background: var(--clr-surface);
+  }
+  table.table-responsive td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: right;
+    border-bottom: 1px solid var(--clr-border);
+    padding: 0.5rem 0;
+  }
+  table.table-responsive td:last-child { border-bottom: none; }
+  table.table-responsive td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--clr-text-muted);
+    text-align: left;
+    flex-shrink: 0;
+  }
+  /* Cells with no meaningful label (row-action buttons, a lone checkbox)
+     opt out of the label row via data-label="" — ::before renders empty
+     content, so the flex row just right-aligns the cell's own content. */
+}
+
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 .badge {
   display: inline-block;

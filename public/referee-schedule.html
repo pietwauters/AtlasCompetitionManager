@@ -59,7 +59,7 @@
       <template x-for="strip in pisteRows" :key="strip.id">
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
           <div class="sched-header ref-hdr" x-text="stripLabel(strip)"></div>
-          <table>
+          <table class="table-responsive">
             <thead>
               <tr>
                 <th style="width:5.5rem">Start</th>
@@ -73,20 +73,20 @@
             <tbody>
               <template x-for="slot in visibleSlots(strip.slots)" :key="slot.id">
                 <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
-                  <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slot.predicted_end   || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
-                  <td>
+                  <td data-label="Start" x-text="slot.scheduled_start || '—'"></td>
+                  <td data-label="End" x-text="slot.predicted_end   || '—'"></td>
+                  <td data-label="Assignment" x-text="slotLabel(slot)"></td>
+                  <td data-label="Referee">
                     <span x-show=" slot.referee_id" class="ref-name" x-text="refName(slot)"></span>
                     <span x-show="!slot.referee_id" class="badge badge-archived">Unassigned</span>
                   </td>
-                  <td>
+                  <td data-label="Other officials">
                     <template x-for="o in otherOfficials(slot)" :key="o.role">
                       <span style="font-size:.8rem;margin-right:.6rem"
                             x-text="roleLabel(o.role) + ': ' + [o.last_name, o.first_name].filter(Boolean).join(', ')"></span>
                     </template>
                   </td>
-                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                  <td data-label="Status"><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
               </template>
             </tbody>
@@ -103,7 +103,7 @@
       <template x-for="group in refGroups" :key="group.refId">
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
           <div class="sched-header ref-hdr" x-text="group.name"></div>
-          <table>
+          <table class="table-responsive">
             <thead>
               <tr>
                 <th style="width:7rem">Piste</th>
@@ -117,12 +117,12 @@
             <tbody>
               <template x-for="slot in group.slots" :key="slot.id + '_' + slot.__role">
                 <tr :class="slot.status==='active'?'row-active':slot.status==='done'?'row-done':''">
-                  <td class="piste-col" x-text="stripLabel(slot)"></td>
-                  <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slot.predicted_end   || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
-                  <td x-text="roleLabel(slot.__role)"></td>
-                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                  <td data-label="Piste" class="piste-col" x-text="stripLabel(slot)"></td>
+                  <td data-label="Start" x-text="slot.scheduled_start || '—'"></td>
+                  <td data-label="End" x-text="slot.predicted_end   || '—'"></td>
+                  <td data-label="Assignment" x-text="slotLabel(slot)"></td>
+                  <td data-label="Role" x-text="roleLabel(slot.__role)"></td>
+                  <td data-label="Status"><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
               </template>
             </tbody>
@@ -133,7 +133,7 @@
       <template x-if="unassigned.length > 0">
         <div class="card" style="padding:0;overflow:hidden;margin-bottom:1rem">
           <div class="sched-header unassigned-hdr">Unassigned slots</div>
-          <table>
+          <table class="table-responsive">
             <thead>
               <tr>
                 <th style="width:7rem">Piste</th>
@@ -146,11 +146,11 @@
             <tbody>
               <template x-for="slot in unassigned" :key="slot.id">
                 <tr>
-                  <td class="piste-col" x-text="stripLabel(slot)"></td>
-                  <td x-text="slot.scheduled_start || '—'"></td>
-                  <td x-text="slot.predicted_end   || '—'"></td>
-                  <td x-text="slotLabel(slot)"></td>
-                  <td><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
+                  <td data-label="Piste" class="piste-col" x-text="stripLabel(slot)"></td>
+                  <td data-label="Start" x-text="slot.scheduled_start || '—'"></td>
+                  <td data-label="End" x-text="slot.predicted_end   || '—'"></td>
+                  <td data-label="Assignment" x-text="slotLabel(slot)"></td>
+                  <td data-label="Status"><span class="badge" :class="'badge-'+badgeCls(slot.status)" x-text="slot.status"></span></td>
                 </tr>
               </template>
             </tbody>
