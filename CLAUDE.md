@@ -314,6 +314,51 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Assigning a strip sets `strips.status = 'assigned'`; clearing it resets to `'idle'`
 - UI: `public/strips.html`
 
+### Frontend layout & responsive system (complete as of 2026-07-02)
+
+`public/css/style.css` defines a small named layout vocabulary — use one of
+these on every new page's `<main>` instead of inventing a new `max-width`
+value:
+
+| Class | Behavior | Use for |
+|---|---|---|
+| `.layout-form` | Capped ~700px, centered, even on 4K | Narrow single-entity forms/results |
+| `.layout-data` | Fluid up to ~1500px | Table/list pages (the majority of pages) |
+| `.layout-detail` | Grid, `1fr 1fr` side by side ↔ stacks below 720px | Two-panel detail pages (apply to a wrapper *inside* `<main>`, not `<main>` itself) |
+| `.layout-app` | No cap, fully fluid | Multi-pane dashboards/schedulers |
+| `.layout-wide` | Fluid + `overflow-x:auto` | Inherently wide content (brackets, timelines) |
+
+**Governing principle:** layout decisions are driven by **available width**,
+never by the `orientation:` CSS media feature — a landscape phone can be
+narrower than a portrait tablet, so width is the real signal and orientation
+is just a correlated proxy. No page should hard-lock rotation (WCAG 2.1 SC
+1.3.4 forbids restricting content to one orientation).
+
+Also bundled in the same pass: form inputs/selects have a 16px font-size
+floor (below that, iOS Safari auto-zooms on focus — do not drop this),
+`header`/`.nav-right` wrap instead of overflowing, `.form-grid` stacks to one
+column below 600px, and dense controls (`.row-actions button`, etc.) get
+larger tap targets under `@media (pointer: coarse)` without affecting
+mouse-driven desktop density.
+
+Two pages needed real interaction changes, not just a CSS class:
+- **`opp2.html`**: below 900px, the strip list and pipeline detail no longer
+  both shrink side by side — an Alpine `isNarrow` flag (driven by
+  `matchMedia`, set up in `init()`) switches to a master-detail drill-down:
+  full-width strip list, tap a strip to see its full-width pipeline detail
+  with a "← Back to strips" button.
+- **`scoresheet.html`**: the pool matrix and bout list sit side by side above
+  700px width instead of always stacking (`.pool-layout`), so a landscape
+  tablet/phone uses its width instead of forcing extra scrolling.
+
+**Not yet done:** dense data tables (`people.html`, etc.) still render as
+literal HTML tables at any width rather than reflowing to stacked cards on a
+narrow screen — acceptable today (they scroll), but a genuine mobile-friendly
+upgrade would replace this. The DE bracket's narrow-screen representation
+(a round-by-round accordion instead of horizontal scroll) is intentionally
+deferred to the planned `de.html` redesign (see priority #1) rather than
+solved twice.
+
 ### OPP2 design principle — ecosystem independence
 
 Every component in the OPP2 ecosystem (scoring apparatus, remote control, scoresheet tablet, display, CMS) can be from different and independent implementers who have no knowledge of each other's implementation details. Everything must work if communication follows the spec.
@@ -414,7 +459,9 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 ### 1. Full functional DE tableau
 - `allPlacesFenced`: all places fenced off from 1st to last (T8+, common in youth events)
 - Repechage: losers re-enter the tableau from a defined round
-- `de.html` full redesign to accommodate both of the above
+- `de.html` full redesign to accommodate both of the above — fold in a
+  narrow-screen bracket representation (round-by-round accordion instead of
+  horizontal scroll) at the same time, see the frontend layout system note above
 - Bronze bout for placement bouts in pipeline (strip picker doesn't yet cover placement/repechage)
 
 ### 2. Run a full tournament locally (no cloud needed)
@@ -446,9 +493,12 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Install creates an `admin` account with a one-time PIN (forced change on first login)
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
-### 6. CSS centralisation
-- ~1 600 lines of inline `<style>` spread across 20 pages; extract to `css/style.css`
-- Do this when the UI component vocabulary is stable (after DE redesign)
+### 6. Mobile-friendly data tables
+- CSS centralisation and the responsive layout system are both done (see
+  "Frontend layout & responsive system" above)
+- Remaining gap: dense data tables (`people.html`, `clubs.html`, etc.) still
+  render as literal HTML tables at any width — usable via horizontal scroll,
+  but a stacked-card reflow on narrow screens would be a genuine improvement
 
 ### 7. OPP2 cloud bridge
 - Mosquitto bridge config to remote broker

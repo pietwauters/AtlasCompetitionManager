@@ -85,8 +85,15 @@
     .broker-row{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-top:.75rem}
     .broker-row input{flex:1;min-width:220px;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
 
-    main{max-width:none;padding:1rem}
+    main{padding:1rem}
     @media(max-width:900px){.strip-list-panel{width:200px}.pipeline-panel{height:auto;min-height:300px}}
+    /* Master-detail drill-down below 900px (see isNarrow in app()): show
+       either the strip list or the selected strip's pipeline, never both
+       squeezed side by side. */
+    .schedule-panel.drill-list .pipeline-panel{display:none}
+    .schedule-panel.drill-list .strip-list-panel{width:100%}
+    .schedule-panel.drill-detail .strip-list-panel{display:none}
+    .schedule-panel.drill-detail .pipeline-panel{height:auto;min-height:400px}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -103,7 +110,7 @@
     <a href="/admin.html">Admin</a>
   </div>
 </header>
-<main>
+<main class="layout-app">
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
@@ -139,7 +146,8 @@
   </div>
 
   <!-- ── Two-panel pipeline builder ────────────────────────────────────────── -->
-  <div class="schedule-panel" style="margin-bottom:1rem">
+  <div class="schedule-panel" style="margin-bottom:1rem"
+       :class="{'drill-list': isNarrow && !selectedStripId, 'drill-detail': isNarrow && selectedStripId}">
 
     <!-- Left: strip list -->
     <div class="strip-list-panel">
@@ -194,6 +202,10 @@
 
           <!-- Strip header -->
           <div class="pipeline-panel-header">
+            <button x-show="isNarrow" @click="backToStrips()"
+                    style="font-size:.8rem;background:none;border:1px solid #ccc;padding:.25rem .6rem;border-radius:4px;cursor:pointer">
+              ← Back to strips
+            </button>
             <h2 x-text="selectedStrip.name || 'Piste ' + selectedStrip.strip_number"></h2>
             <template x-if="liveState(selectedStrip.name)">
               <span class="badge"
@@ -829,6 +841,7 @@ function app() {
     multiDynamic: false,
     selectedReferee: '',
     refSchedule: [],
+    isNarrow: false,
 
     async init() {
       await Promise.all([
@@ -841,7 +854,17 @@ function app() {
       this.resetAddForm();
       setInterval(() => this.loadStatus(), 5000);
       setInterval(() => this._tick++, 60000);
+
+      // Below this width, the strip list and pipeline detail can't both fit
+      // comfortably side by side — switch to a master-detail drill-down
+      // instead of squeezing both panels. Width-driven, not orientation:
+      // a narrow landscape phone should behave the same as a narrow portrait one.
+      const mq = window.matchMedia('(max-width: 900px)');
+      this.isNarrow = mq.matches;
+      mq.addEventListener('change', (e) => { this.isNarrow = e.matches; });
     },
+
+    backToStrips() { this.selectedStripId = null; },
 
     async loadStatus() {
       const s = await fetch('/api/opp2/status').then(r => r.json()).catch(() => ({ connected: false, pistes: [] }));

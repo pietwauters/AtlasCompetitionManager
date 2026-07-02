@@ -123,6 +123,17 @@
     .toggle-arrow{display:inline-block;transition:transform .15s;font-size:.7rem;color:var(--text-4)}
     .toggle-arrow.open{transform:rotate(90deg)}
 
+    /* ── Pool matrix + bout list layout ── */
+    /* Stacked by default (portrait phone/tablet); side by side once there's
+       enough width for both to be useful (landscape). Width-driven, not
+       orientation — a wide-enough portrait tablet gets the same benefit. */
+    .pool-layout{display:flex;flex-direction:column}
+    @media (min-width:700px){
+      .pool-layout{flex-direction:row;align-items:flex-start}
+      .pool-layout>.matrix-col,.pool-layout>.bout-col{flex:1;min-width:0}
+      .pool-layout>.bout-col{border-left:1px solid var(--border-3)}
+    }
+
     /* ── Pool matrix ── */
     .matrix-wrap{overflow-x:auto;padding:0 1rem 1rem}
     .mtx{border-collapse:collapse;font-size:1rem;white-space:nowrap}
@@ -282,8 +293,11 @@
           x-text="'target ' + (matchInfo?.target||'')"></span>
   </div>
 
-  <!-- Pool matrix -->
-  <div x-show="phaseType === 'pool' && matrix">
+  <!-- Pool matrix + bout list: side by side once there's enough width for
+       both (landscape tablets/phones), stacked otherwise. Width-driven via
+       CSS, not orientation — see .pool-layout below. -->
+  <div class="pool-layout">
+  <div class="matrix-col" x-show="phaseType === 'pool' && matrix">
     <button class="section-toggle" @click="matrixOpen = !matrixOpen">
       <span class="toggle-arrow" :class="matrixOpen ? 'open' : ''">▶</span>
       Results matrix
@@ -329,7 +343,7 @@
   </div>
 
   <!-- Bout list -->
-  <div x-show="bouts.length > 0" class="bout-list">
+  <div class="bout-col bout-list" x-show="bouts.length > 0">
     <template x-for="bout in bouts" :key="bout.id">
       <div class="bout-item" :class="{ 'live-item': bout.id === activeBoutId && !bout.result }">
 
@@ -402,6 +416,7 @@
       </div>
     </template>
   </div>
+  </div><!-- /pool-layout -->
 
   <div x-show="connected && bouts.length === 0" class="idle-msg">Waiting for bout data…</div>
 

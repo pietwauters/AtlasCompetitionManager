@@ -15,8 +15,6 @@
     .comp-meta span{margin-right:1rem}
     .seed-input{width:3.5rem;padding:.2rem .3rem;border:1px solid #ccc;border-radius:3px;font-size:.85rem;text-align:center}
     .elig-row.registered td{color:#aaa}
-    .panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-    @media(max-width:720px){.panel-grid{grid-template-columns:1fr}}
     .phase-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid #eee;flex-wrap:wrap}
     .phase-row:last-child{border-bottom:none}
     .badge-pending{background:#fef3cd;color:#856404}
@@ -46,7 +44,7 @@
     <a href="/admin.html">Admin</a>
   </div>
 </header>
-<main>
+<main class="layout-data">
   <div class="notice-bar notice-ok" x-show="notice.text&&!notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
@@ -391,7 +389,7 @@
 
   <!-- ── Individual competitors (non-team competitions only) ── -->
 
-  <div class="panel-grid">
+  <div class="layout-detail">
     <!-- Registered competitors -->
     <div class="card">
       <h2 style="margin-top:0">
