@@ -1,5 +1,6 @@
 'use strict';
 const db = require('../db');
+const DeLayout = require('./deLayout');
 
 // Hot-path statements compiled once at module load.
 const stmtSlotById    = db.prepare('SELECT * FROM pipeline_slots WHERE id = ?');
@@ -43,13 +44,14 @@ const stmtOfficialsForSlot = db.prepare(`
 
 // Bouts in a DE round ordered by tableau position.
 // round_index is 1-based within the round, matching partition ranges.
+// bracket is bound as the first parameter of the outer query (see call sites).
 const DE_BOUT_ORDER = `
   SELECT b.id, b.tableau_position, b.status, b.left_id, b.right_id,
          b.left_score, b.right_score, b.winner_id, b.de_round,
          ROW_NUMBER() OVER (PARTITION BY b.phase_id, b.de_round
                             ORDER BY b.tableau_position) AS round_index
   FROM bouts b
-  WHERE b.de_round IS NOT NULL AND b.bracket = 'main'
+  WHERE b.de_round IS NOT NULL AND b.bracket = ?
 `;
 
 // Convert a slot's tableau size to the de_round integer stored on bouts.
@@ -264,7 +266,10 @@ const Pipeline = {
 
   addSlot(stripId, data) {
     return db.transaction(() => {
-      // A DE round (phase_id + bracket + tableau + partition) can only live on one strip.
+      // A DE round (phase_id + bracket + de_round/tableau + partition) can only live
+      // on one strip. de_round must be part of this key: a repechage phase's last
+      // main-bracket round and first Finals round share the same bracket ('main')
+      // and tableau by construction, and would otherwise look like the same round.
       if (data.type === 'de' && data.phase_id && data.tableau) {
         const existing = db.prepare(`
           SELECT * FROM pipeline_slots
@@ -272,7 +277,8 @@ const Pipeline = {
             AND COALESCE(bracket, 'main') = ?
             AND COALESCE(tableau, 0) = ?
             AND COALESCE(partition, 'full') = ?
-        `).get(data.phase_id, data.bracket ?? 'main', data.tableau, data.partition ?? 'full');
+            AND COALESCE(de_round, -1) = COALESCE(?, -1)
+        `).get(data.phase_id, data.bracket ?? 'main', data.tableau, data.partition ?? 'full', data.de_round ?? null);
         if (existing) {
           if (existing.strip_id === Number(stripId)) return this.findById(existing.id);
           db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
@@ -305,6 +311,32 @@ const Pipeline = {
         }
       }
 
+      // A team match happens on one strip at a time (relays have no per-relay
+      // strip column to partition across multiple strips the way pool bouts
+      // do), so — unlike pools — it can never legitimately live on more than
+      // one strip at once. Reassigning it must remove the old slot, or both
+      // strips would offer the same next relay simultaneously.
+      if (data.team_match_id) {
+        const existingOnThisStrip = db.prepare(
+          'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id = ?'
+        ).get(data.team_match_id, Number(stripId));
+        if (existingOnThisStrip) {
+          db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existingOnThisStrip.id);
+          db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+          return this.findById(existingOnThisStrip.id);
+        }
+        const others = db.prepare(
+          'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id != ?'
+        ).all(data.team_match_id, Number(stripId));
+        for (const s of others) {
+          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(s.id);
+          const rem = db.prepare(
+            'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND team_match_id IS NOT NULL'
+          ).get(s.strip_id).n;
+          if (rem === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(s.strip_id);
+        }
+      }
+
       const maxOrder = db.prepare(
         'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
       ).get(stripId).m;
@@ -312,11 +344,11 @@ const Pipeline = {
       const { lastInsertRowid } = db.prepare(`
         INSERT INTO pipeline_slots
           (strip_id, slot_order, type, pool_id, phase_id, team_match_id,
-           bracket, tableau, partition,
+           bracket, tableau, partition, de_round,
            scheduled_start, minutes_per_bout, referee_id)
         VALUES
           (@strip_id, @slot_order, @type, @pool_id, @phase_id, @team_match_id,
-           @bracket, @tableau, @partition,
+           @bracket, @tableau, @partition, @de_round,
            @scheduled_start, @minutes_per_bout, @referee_id)
       `).run({
         strip_id:         Number(stripId),
@@ -328,6 +360,7 @@ const Pipeline = {
         bracket:          data.bracket          ?? null,
         tableau:          data.tableau          ?? null,
         partition:        data.partition        ?? 'full',
+        de_round:         data.de_round         ?? null,
         scheduled_start:  data.scheduled_start  ?? null,
         minutes_per_bout: data.minutes_per_bout ?? null,
         referee_id:       data.referee_id       ?? null,
@@ -496,7 +529,16 @@ const Pipeline = {
       if (!slot.team_match_id) return 0;
       return stmtPendingTeam.get(slot.team_match_id).n;
     }
-    const { deRound, lo, hi } = this._deSlotParams(slot);
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      if (!ids.length) return 0;
+      return db.prepare(`
+        SELECT COUNT(*) AS n FROM bouts
+        WHERE id IN (${ids.map(() => '?').join(',')})
+          AND status != 'finished' AND left_id IS NOT NULL AND right_id IS NOT NULL
+      `).get(...ids).n;
+    }
+    const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return 0;
     return db.prepare(`
       WITH ordered AS (${DE_BOUT_ORDER})
@@ -506,7 +548,7 @@ const Pipeline = {
         AND o.round_index BETWEEN ? AND ?
         AND b.status != 'finished'
         AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
-    `).get(slot.phase_id, deRound, lo, hi).n;
+    `).get(bracket, slot.phase_id, deRound, lo, hi).n;
   },
 
   nextBout(slot, afterBoutId = null) {
@@ -583,7 +625,44 @@ const Pipeline = {
       `).get(slot.pool_id, afterBoutId) || null;
     }
 
-    const { deRound, lo, hi } = this._deSlotParams(slot);
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      if (!ids.length) return null;
+      const idList = ids.map(() => '?').join(',');
+      const PLACEMENT_JOIN = `
+        SELECT b.*, b.id AS bout_id,
+          lc.first_name AS left_first,  lc.last_name  AS left_last,
+          lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+          rc.first_name AS right_first, rc.last_name  AS right_last,
+          rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+          ph.phase_order,
+          co.name AS competition_name, co.weapon
+        FROM bouts b
+        JOIN phases     ph  ON ph.id  = b.phase_id
+        JOIN competitions co ON co.id = ph.competition_id
+        LEFT JOIN competitors lc  ON lc.id  = b.left_id
+        LEFT JOIN people      lpl ON lpl.id = lc.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
+        LEFT JOIN competitors rc  ON rc.id  = b.right_id
+        LEFT JOIN people      rpl ON rpl.id = rc.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
+      `;
+      const forward = db.prepare(`${PLACEMENT_JOIN}
+        WHERE b.id IN (${idList})
+          AND b.status != 'finished'
+          AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+          AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
+        ORDER BY b.bout_order LIMIT 1
+      `).get(...ids, afterBoutId, afterBoutId);
+      const bout = forward || (afterBoutId ? db.prepare(`${PLACEMENT_JOIN}
+        WHERE b.id IN (${idList}) AND b.status != 'finished'
+          AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL AND b.id != ?
+        ORDER BY b.bout_order LIMIT 1
+      `).get(...ids, afterBoutId) : null);
+      return this._attachReferee(bout, slot);
+    }
+
+    const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return null;
 
     const bout = db.prepare(`
@@ -614,7 +693,7 @@ const Pipeline = {
             ))
       ORDER BY o.round_index
       LIMIT 1
-    `).get(slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
+    `).get(bracket, slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
     return this._attachReferee(bout, slot);
   },
 
@@ -690,7 +769,35 @@ const Pipeline = {
       `).get(slot.pool_id, beforeBoutId) || null;
     }
 
-    const { deRound, lo, hi } = this._deSlotParams(slot);
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      if (!ids.length) return null;
+      const idList = ids.map(() => '?').join(',');
+      const bout = db.prepare(`
+        SELECT b.*, b.id AS bout_id,
+          lc.first_name AS left_first,  lc.last_name  AS left_last,
+          lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+          rc.first_name AS right_first, rc.last_name  AS right_last,
+          rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+          ph.phase_order, co.name AS competition_name, co.weapon
+        FROM bouts b
+        JOIN phases ph ON ph.id = b.phase_id
+        JOIN competitions co ON co.id = ph.competition_id
+        LEFT JOIN competitors lc  ON lc.id  = b.left_id
+        LEFT JOIN people      lpl ON lpl.id = lc.person_id
+        LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
+        LEFT JOIN competitors rc  ON rc.id  = b.right_id
+        LEFT JOIN people      rpl ON rpl.id = rc.person_id
+        LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
+        WHERE b.id IN (${idList})
+          AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+          AND b.bout_order < (SELECT bout_order FROM bouts WHERE id = ?)
+        ORDER BY b.bout_order DESC LIMIT 1
+      `).get(...ids, beforeBoutId);
+      return this._attachReferee(bout, slot);
+    }
+
+    const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return null;
 
     const bout = db.prepare(`
@@ -717,7 +824,7 @@ const Pipeline = {
         AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)
       ORDER BY o.round_index DESC
       LIMIT 1
-    `).get(slot.phase_id, deRound, lo, hi, beforeBoutId);
+    `).get(bracket, slot.phase_id, deRound, lo, hi, beforeBoutId);
     return this._attachReferee(bout, slot);
   },
 
@@ -735,15 +842,31 @@ const Pipeline = {
   },
 
   // Resolve a DE slot's bracket parameters into the values the SQL queries need.
+  // Slots created since migration 026 carry an explicit de_round (set by
+  // de.html/opp2.html from deLayout's stripSlot) so no guessing is needed —
+  // this is what lets repechage/Finals rounds be told apart even though a
+  // repechage phase's last main round and first Finals round always share
+  // the same `tableau` value. Older slots (pre-026, main bracket only) fall
+  // back to the previous tableau-based inference.
   _deSlotParams(slot) {
+    const bracket = slot.bracket || 'main';
+    if (slot.de_round != null) {
+      const [lo, hi] = partitionToRange(slot.partition, slot.tableau);
+      return { deRound: slot.de_round, lo, hi, bracket };
+    }
     const deRound = tableauToDeRound(slot.phase_id, slot.tableau);
     const [lo, hi] = partitionToRange(slot.partition, slot.tableau);
-    return { deRound, lo, hi };
+    return { deRound, lo, hi, bracket };
   },
 
   // Fill in bout_count for DE slots (needed for predicted-end computation).
   _fillDeBoutCount(slot) {
-    if (slot.type !== 'de' || slot.bout_count != null || !slot.tableau) return slot;
+    if (slot.type !== 'de' || slot.bout_count != null) return slot;
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      return { ...slot, bout_count: ids.length };
+    }
+    if (!slot.tableau) return slot;
     const [lo, hi] = partitionToRange(slot.partition, slot.tableau);
     return { ...slot, bout_count: hi - lo + 1 };
   },

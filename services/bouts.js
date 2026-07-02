@@ -167,8 +167,25 @@ const Bout = {
           (next.bracket !== 'placement' && next.bracket !== 'repechage')) continue;
       const hasLeft  = next.left_id  != null;
       const hasRight = next.right_id != null;
-      if (!hasLeft && !hasRight) continue; // both still empty — too early
-      if (hasLeft  && hasRight)  continue; // both filled — normal bout
+      if (hasLeft && hasRight) continue; // both filled — normal bout
+
+      if (!hasLeft && !hasRight) {
+        // Neither side filled. Usually just "too early" (a source is still
+        // pending). But if BOTH sides' sources are already finished without
+        // ever routing here — e.g. two adjacent R1 byes paired into the same
+        // repechage slot, neither of which has a loser to send — this bout
+        // will never receive anyone and must be resolved as a no-result
+        // phantom so whatever it would have fed can itself cascade.
+        const pendingLeft  = stmtPendingCascade.get(nextId, 'left',  nextId, 'left').n;
+        const pendingRight = stmtPendingCascade.get(nextId, 'right', nextId, 'right').n;
+        if (pendingLeft > 0 || pendingRight > 0) continue; // still waiting on a real source
+        db.prepare("UPDATE bouts SET status='finished', winner_id=NULL WHERE id=?").run(nextId);
+        cascaded.push(this.findById(nextId));
+        const sub = this.routeBoutResult(nextId);
+        cascaded.push(...sub.cascaded);
+        continue;
+      }
+
       const nullSide = hasLeft ? 'right' : 'left';
       const pending = stmtPendingCascade.get(nextId, nullSide, nextId, nullSide).n;
       if (pending === 0) {

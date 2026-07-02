@@ -148,6 +148,18 @@ function buildPlacementSections(bouts) {
 }
 
 const DeLayout = {
+  // Resolve a placement pipeline slot (bracket='placement', tableau=startPlace,
+  // partition=level) to its concrete bout IDs, reusing the same grouping
+  // buildPlacementSections uses for display so pipeline assignment and
+  // de.html rendering never disagree about which bouts a "round" contains.
+  placementGroupBoutIds(phaseId, startPlace, level) {
+    const bouts = Bout.findByPhase(phaseId).filter(b => b.bracket === 'placement');
+    const sections = buildPlacementSections(bouts);
+    const section = sections.find(s => s.id === 'placement-' + startPlace);
+    const round = section?.rounds[level];
+    return round ? round.bouts.map(b => b.id) : [];
+  },
+
   buildSections(phaseId) {
     const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
     if (!phase) return null;
@@ -182,7 +194,7 @@ const DeLayout = {
         mainSection.rounds.push({
           label:    'Table ' + letter(r - 1),
           note:     'Round of ' + tableau,
-          stripSlot: { bracket: 'main', tableau, partition: 'full' },
+          stripSlot: { bracket: 'main', tableau, de_round: r, partition: 'full' },
           bouts:    sortByPosition(mainByRound[r] || []),
         });
       }
@@ -194,11 +206,12 @@ const DeLayout = {
         id: 'repechage', label: 'Repechage', displayHint: 'list', note: null, rounds: [],
       };
       for (let r = 1; r <= maxRepRound; r++) {
+        const roundBouts = repByRound[r] || [];
         repSection.rounds.push({
           label:    'Table ' + letter(lastMainRound + r - 1),
           note:     null,
-          stripSlot: null,
-          bouts:    sortByPosition(repByRound[r] || []),
+          stripSlot: { bracket: 'repechage', tableau: roundBouts.length * 2, de_round: r, partition: 'full' },
+          bouts:    sortByPosition(roundBouts),
         });
       }
       sections.push(repSection);
@@ -218,7 +231,7 @@ const DeLayout = {
           finalsSection.rounds.push({
             label:    'Table ' + letter(letterIdx) + finalsRoundLabel(fi, numFinalsRounds),
             note:     null,
-            stripSlot: { bracket: 'main', tableau, partition: 'full' },
+            stripSlot: { bracket: 'main', tableau, de_round: r, partition: 'full' },
             bouts:    sortByPosition(finalsByRound[r] || []),
           });
         });
@@ -238,7 +251,7 @@ const DeLayout = {
         mainSection.rounds.push({
           label:    mainRoundLabel(ri, N, tableau),
           note:     null,
-          stripSlot: { bracket: 'main', tableau, partition: 'full' },
+          stripSlot: { bracket: 'main', tableau, de_round: r, partition: 'full' },
           bouts:    sortByPosition(mainByRound[r] || []),
         });
       });

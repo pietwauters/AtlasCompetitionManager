@@ -291,8 +291,31 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - All rounds pre-built on phase creation; byes auto-finished and wired
 - Score entry, undo, winner auto-advancement
 - Simulate function
-- Final results table (1st/2nd unique; 3rd shared if no bronze; others by seed)
-- UI: `public/de.html`
+- `allPlacesFenced` (unique rank down to last place): fully implemented and **verified
+  end-to-end** — `de-all-places-t16.json` runs through `Phase.simulate()` to completion
+  with zero stuck bouts, including multi-level placement groups (5th-8th, 9th-16th etc.)
+- Repechage (Tables D/E/F/G with FIE injection seeding): bracket-building is correct, and
+  a real completion bug found 2026-07-02 is now **fixed and verified**. Root cause: Table
+  D pairs *consecutive R1 losers* — when two R1 byes land adjacent in the seeding (high
+  bye-count draws, e.g. N=20 in a T32), neither bye has a real loser to route, so that
+  Table D slot got permanently stuck with zero entrants, stalling everything downstream
+  (confirmed on both `de-repechage-t32-t8.json` and `de-repechage-t64-t4.json`; light-bye
+  draws like N=30 in a T32 were unaffected, which is what hid this for so long — no
+  repechage phase had ever actually been run with a heavy enough bye count to hit it).
+  Fix: `services/bouts.js`'s `routeBoutResult` cascade now detects when *both* sides of a
+  repechage/placement bout are permanently starved (not just "one side, other side is a
+  dead bye" as before) and resolves it as a no-result phantom bout (`winner_id = NULL`,
+  `status = 'finished'`) so the emptiness propagates transparently to whatever it would
+  have fed. `services/phases.js`'s `createDE` now runs every bye through
+  `routeBoutResult` at creation time (Pass 4) instead of only hand-forwarding its winner,
+  since that's what makes the cascade check fire at all. Verified against N=20/T32
+  (heavy bye), N=30/T32 (light bye), and N=34/T64→T4 (very heavy bye, 14 phantom bouts) —
+  all complete with zero stuck bouts and `services/results.js` produces unique ranks with
+  no crash even with phantom bouts present.
+- Final results table: unique rank per place when `allPlacesFenced`/repechage rules are
+  used; otherwise 1st/2nd unique, 3rd shared if no bronze bout, others by seed
+- UI: `public/de.html` — generic `sections`/`displayHint` renderer handles main,
+  placement, and repechage brackets side by side; narrow-screen accordion not yet built
 - Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
 
 ### Competition formats (complete)
@@ -351,11 +374,17 @@ Two pages needed real interaction changes, not just a CSS class:
   700px width instead of always stacking (`.pool-layout`), so a landscape
   tablet/phone uses its width instead of forcing extra scrolling.
 
-**Not yet done:** dense data tables (`people.html`, etc.) still render as
-literal HTML tables at any width rather than reflowing to stacked cards on a
-narrow screen — acceptable today (they scroll), but a genuine mobile-friendly
-upgrade would replace this. The DE bracket's narrow-screen representation
-(a round-by-round accordion instead of horizontal scroll) is intentionally
+**Dense tables → cards (complete as of 2026-07-02):** `table.table-responsive`
+in `style.css` — below 700px, each row becomes a bordered card instead of a
+squeezed/scrolled table, via `data-label` + `::before` (no JS). Opt-in per
+table, not global — apply it to any new dense table (label/value pairs, one
+per column). Applied to `people.html`, `fencer-roster.html`, `phase.html`
+rankings, `admin.html`, `referee-schedule.html`, `clubs.html`, `strips.html`,
+`competitions.html`, `tournaments.html`, `tournaments-detail.html`,
+`results.html`. Skipped: `team-results.html` (only 3 columns, already fine).
+
+**Not yet done:** the DE bracket's narrow-screen representation (a
+round-by-round accordion instead of horizontal scroll) is intentionally
 deferred to the planned `de.html` redesign (see priority #1) rather than
 solved twice.
 
@@ -398,7 +427,11 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - DE range slot: `phase_id` + `de_round` + `bout_start`/`bout_end` (1-based, tableau order)
 - Each slot has optional `scheduled_start` (HH:MM) and `minutes_per_bout` for predicted-end computation
 - `predicted_end` = `scheduled_start` + `bout_count × minutes_per_bout` (computed, not stored)
-- `bout_duration_standards` table holds future weapon/phase-type defaults (empty for now)
+- `bout_duration_standards` table holds per-weapon/gender/phase-type default minutes-per-bout,
+  seeded by migration 020 and editable via the admin UI (`GET`/`PATCH /api/opp2/bout-standards`).
+  A running average (`observed_average`/`sample_count`) is recorded automatically from real
+  bout durations over MQTT (`lib/opp2Client.js`, on `apparatus/control END`) and takes over
+  from the configured default once `sample_count >= 4` (`services/boutDurationStandards.js`)
 - Referee schedule is a derived view: all slots where the person is assigned in *any*
   officiating role (`pipeline_slot_officials` — see below), not just as primary referee
 - On NEXT: Atlas walks the pipeline — exhausted slot auto-advances to the next one
@@ -446,7 +479,9 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 **What is NOT yet done in OPP2:**
 - Cloud bridging (Mosquitto bridge to remote broker)
-- `bout_duration_standards` table is empty — fill it to get automatic `predicted_end`
+- `bout_duration_standards`' adaptive running average is built and wired (see above) but
+  unexercised — `sample_count` is 0 across the board in the dev DB, meaning no real or
+  simulated competition has run enough bouts over live MQTT to validate it yet
 - Pipeline UI drag-to-reorder (▲▼ buttons work; drag is future)
 - `video_review`'s `official` field is spec-documented (upstream, see the mirror rule
   above) but unimplemented — no Atlas code publishes `var/video_review` at all yet;
@@ -456,13 +491,15 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 
 ## What is NOT yet built — priority order
 
-### 1. Full functional DE tableau
-- `allPlacesFenced`: all places fenced off from 1st to last (T8+, common in youth events)
-- Repechage: losers re-enter the tableau from a defined round
-- `de.html` full redesign to accommodate both of the above — fold in a
-  narrow-screen bracket representation (round-by-round accordion instead of
-  horizontal scroll) at the same time, see the frontend layout system note above
-- Bronze bout for placement bouts in pipeline (strip picker doesn't yet cover placement/repechage)
+### 1. de.html narrow-screen bracket accordion
+- The only remaining open item from the old "full DE tableau" bucket. Both the repechage
+  bracket-completion bug and OPP2 pipeline placement/repechage strip assignment were
+  fixed and verified 2026-07-02 (see "DE phase (complete)" and "Pipeline — piste
+  scheduling" above) — bracket generation, routing, results, and pipeline assignment are
+  now all solid for main/repechage/placement DE. What's left is purely UI: replace the
+  horizontal-scroll bracket view with a round-by-round accordion below some width
+  threshold, per the frontend layout system note above (same spirit as `opp2.html`'s
+  `isNarrow`/`matchMedia` master-detail pattern).
 
 ### 2. Run a full tournament locally (no cloud needed)
 - Direct competition import — federation/FIE start lists without touching the local people DB
@@ -481,7 +518,9 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Per-bout scheduled time: Engarde assigns `Heure` per individual DE bout (across strips). Atlas schedules at slot (round) level. Deriving per-bout times from slot data is sufficient for now.
 
 ### 4. Architecture / code hygiene
-- `bout_duration_standards` table empty — fill for automatic `predicted_end`
+- `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
+  simulated competition run over live MQTT to confirm the observed-average path behaves
+  (see OPP2 section above)
 - Pipeline UI drag-to-reorder (▲▼ works; drag is future)
 - Resilience: discuss network loss / crash recovery across the ecosystem
 - Minor: `CyranoServer.js` missing `'use strict'`
@@ -493,14 +532,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - Install creates an `admin` account with a one-time PIN (forced change on first login)
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
-### 6. Mobile-friendly data tables
-- CSS centralisation and the responsive layout system are both done (see
-  "Frontend layout & responsive system" above)
-- Remaining gap: dense data tables (`people.html`, `clubs.html`, etc.) still
-  render as literal HTML tables at any width — usable via horizontal scroll,
-  but a stacked-card reflow on narrow screens would be a genuine improvement
-
-### 7. OPP2 cloud bridge
+### 6. OPP2 cloud bridge
 - Mosquitto bridge config to remote broker
 - `tournament_id` / `competition_id` from Atlas in payloads
 - Lower priority: local operation is fully functional without it
@@ -520,7 +552,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 |---|---|
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
 | `db/migrator.js` | Runs pending `.sql` files on start |
-| `db/migrations/` | Numbered schema migrations (001–025) |
+| `db/migrations/` | Numbered schema migrations (001–026) |
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) |
 | `lib/poolFormation.js` | FIE pool seeding + calcPoolOptions |
 | `lib/boutOrder.js` | FIE official bout order tables |
@@ -530,6 +562,7 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 | `services/phases.js` | Phase create/activate/close + DE creation + simulate |
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |
 | `services/results.js` | Final competition results combining DE + pool |
+| `services/deLayout.js` | Builds de.html's main/repechage/placement sections incl. stripSlot (bracket, de_round, tableau, partition) for each round; `placementGroupBoutIds` resolves a placement pipeline slot to bout IDs |
 | `services/pipeline.js` | Piste pipeline: CRUD, bout navigation, predicted-end, officials roster |
 | `services/settings.js` | Key/value settings (broker URL, enabled flag) |
 | `services/cardReasons.js` | Card reason persistence, incl. official attribution |

@@ -707,6 +707,19 @@ const Phase = {
         else                              updateSlotR.run(n.winner_id, nextDbId);
       }
 
+      // Pass 4 — run the real routing/cascade check for every bye created above.
+      // Pass 3 only forwards a bye's winner; it never checks whether the bye's
+      // (nonexistent) loser leaves a repechage/placement slot permanently
+      // starved — e.g. two adjacent R1 byes paired into the same repechage
+      // Table D slot, neither of which has a loser to send there. That slot
+      // would otherwise sit pending forever and stall everything downstream.
+      // routeBoutResult's cascade check (services/bouts.js) already detects
+      // this; byes just need to actually go through it once.
+      const Bout = require('./bouts');
+      for (const n of nodes) {
+        if (n.status === 'finished') Bout.routeBoutResult(n.dbId);
+      }
+
       return phaseId;
     })();
 

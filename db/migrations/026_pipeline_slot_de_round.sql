@@ -1,0 +1,11 @@
+-- Migration 026 — Explicit round identity on pipeline_slots
+--
+-- A DE slot's round was previously reverse-engineered from `tableau` via
+-- log2 math (tableauToDeRound). That breaks for repechage phases in two
+-- ways: Tables D/E/F/G reuse de_round numbers 1,2,3... under
+-- bracket='repechage' (colliding with the main bracket's own round
+-- numbers), and a repechage phase's last main-bracket round always has the
+-- same `tableau` value as its first Finals round (both bracket='main'),
+-- since tableau = reentryAt for both by construction. Store the round
+-- identity directly instead of inferring it, so it can never collide.
+ALTER TABLE pipeline_slots ADD COLUMN de_round INTEGER;
