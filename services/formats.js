@@ -121,34 +121,52 @@ function resolveParticipants(compId, format, stage) {
   `).all(compId);
 }
 
+// FIE o.87.2 / o.102.1 "drawing lots in pairs": within a ranked cohort, adjacent rank
+// pairs (1st&2nd, 3rd&4th, ...) always land on adjacent seed numbers, which are always
+// siblings from the same tier split in buildSeedPositions — equally difficult bracket
+// slots, just not identical. FIE draws lots per pair to decide which entrant gets the
+// lower seed rather than fixing it by rank. Odd one out (odd cohort size) keeps its slot.
+// See docs/format-system-comparison.md §5 for the full derivation.
+function _pairedLotDraw(rows) {
+  const out = [...rows];
+  for (let i = 0; i + 1 < out.length; i += 2) {
+    if (Math.random() < 0.5) [out[i], out[i + 1]] = [out[i + 1], out[i]];
+  }
+  return out;
+}
+
 // Resolve one cohort spec for the final's multi-cohort participants
 function _resolveCohort(compId, spec) {
+  let rows;
+
   if (spec.cohort === 'initial_exempt') {
-    return db.prepare(`
+    rows = db.prepare(`
       SELECT id AS competitor_id FROM competitors
       WHERE competition_id = ? AND format_cohort = 'initial_exempt'
       ORDER BY initial_seed ASC
     `).all(compId);
+  } else {
+    // pool_exempt and de_survivors: sort by their position in the pool stage rankings
+    const poolPhase = spec.poolStage ? _findPhaseByStage(compId, spec.poolStage) : null;
+    if (poolPhase) {
+      rows = db.prepare(`
+        SELECT r.competitor_id
+        FROM   rankings r
+        JOIN   competitors c ON c.id = r.competitor_id
+        WHERE  r.phase_id = ? AND c.format_cohort = ?
+        ORDER  BY r.position ASC
+      `).all(poolPhase.id, spec.cohort);
+    } else {
+      // Fallback: sort by initial_seed
+      rows = db.prepare(`
+        SELECT id AS competitor_id FROM competitors
+        WHERE competition_id = ? AND format_cohort = ?
+        ORDER BY initial_seed ASC
+      `).all(compId, spec.cohort);
+    }
   }
 
-  // pool_exempt and de_survivors: sort by their position in the pool stage rankings
-  const poolPhase = spec.poolStage ? _findPhaseByStage(compId, spec.poolStage) : null;
-  if (poolPhase) {
-    return db.prepare(`
-      SELECT r.competitor_id
-      FROM   rankings r
-      JOIN   competitors c ON c.id = r.competitor_id
-      WHERE  r.phase_id = ? AND c.format_cohort = ?
-      ORDER  BY r.position ASC
-    `).all(poolPhase.id, spec.cohort);
-  }
-
-  // Fallback: sort by initial_seed
-  return db.prepare(`
-    SELECT id AS competitor_id FROM competitors
-    WHERE competition_id = ? AND format_cohort = ?
-    ORDER BY initial_seed ASC
-  `).all(compId, spec.cohort);
+  return spec.pairedLotDraw ? _pairedLotDraw(rows) : rows;
 }
 
 // Assign initial_exempt cohort to the top N active competitors by initial_seed.

@@ -1,0 +1,31 @@
+{
+  "id": "mixed-formula-b",
+  "description": "FIE Mixed Formula B — Pools then single DE, no bronze bout (o.89-94: Junior/Cadet Worlds, Cadet/Junior World Cups, Zonal Championships)",
+  "params": [
+    {
+      "id": "pool_advancement_pct",
+      "label": "Advancement after pools (%)",
+      "type": "integer",
+      "default": 80,
+      "min": 10,
+      "max": 100
+    }
+  ],
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "useParam": "pool_advancement_pct" }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination",
+      "phaseType": "de",
+      "rule": "de-no-bronze.json",
+      "participants": { "seedingMethod": "last_pool" }
+    }
+  ]
+}

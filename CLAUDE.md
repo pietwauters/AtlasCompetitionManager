@@ -207,7 +207,16 @@ Tournament      — named series of competitions
 
 ### Pool formation
 - FIE serpentine seeding across pools
-- Separation: club (default) or nationality — asked when creating the phase
+- Separation: configured per rule file's `poolFormation.separation` array (`rules/RULES.md`).
+  **FIE-format rule files must use `["nationality"]` only** — the same array also drives
+  which pools get FIE's special nationality-conflict bout-order tables (o.70) in
+  `lib/boutOrder.js`, and those are officially nationality-only; including `"club"` risks a
+  silent, undetectable deviation from official bout order whenever a same-club, different-
+  nationality pair triggers the conflict-handling tables that o.70 never intended for them
+  (see `docs/format-system-comparison.md` §7 for the real anomaly that surfaced this).
+  `"club"` stays available for non-FIE domestic/club-level rule files. Both shipped FIE
+  rule files (`pool-standard.json`, `level-pools.json`) use `["nationality"]` as of
+  2026-07-05.
 - All valid uniform options shown (e.g. 42 fencers → both 6×7 and 7×6)
 - Mixed options (different pool sizes) also shown when they exist
 
@@ -277,8 +286,11 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - UI: `public/tournaments.html`, `public/competition-detail.html`
 
 ### Pool phase (complete)
-- FIE serpentine seeding + separation (club/nationality)
-- FIE official bout order (pools of 4–12) — **verified against real FIE GP XML**
+- FIE serpentine seeding + separation (nationality for FIE formats; club also supported for
+  non-FIE rule files — see "Pool formation" above)
+- FIE official bout order (pools of 4–12) — **verified against real FIE GP XML, and
+  cross-checked 2026-07-04/05 against 3 independent vendors' real competition data
+  (Fencing Time, Engarde, Ophardt) — see `docs/format-system-comparison.md` §7**
 - Live rankings (V/M, indicator, touches scored/received)
 - Simulate function for random result entry (testing)
 - Phase close: saves rankings, applies advancement, marks eliminated
@@ -333,11 +345,62 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Implemented: `grand-prix-fie.json` (3-stage GP), `two-pool-rounds.json`
 - GP format verified against real FIE Grand Prix XML (Shanghai 2026, 233 fencers): 16 initial exempts, 70% pool advancement, 32 survivors from preliminary tableau, T=64 final
 - UI: format picker in competition detail, stage plan with "+ Next stage" guided creation
+- **Comparison study vs. Engarde and FencingTime (2026-07-03):** see
+  `docs/format-system-comparison.md` for the full analysis. Summary: Atlas's
+  `formats/*.json` shape matches FencingTime's linear `Round`-list model closely (and
+  already covers Engarde's GP-shape, Brazilian, repechage, and all-places-fenced
+  patterns). Confirmed real gaps, prioritized: (1) **fix dead docs/code** —
+  `rules/RULES.md` documents `minimumVictories`/`top_per_pool` advancement methods that
+  `services/phases.js:408-426` never implements, and `rules/pool-advancement-choices.json`
+  is an unwired stub with literal `"?"` placeholders; (2) add a `minForCut` guard to pool
+  `advancement` (don't cut a small field); (3) percentage-range advancement
+  (`fromPercent`/`toPercent`, FIE rules often specify a range e.g. o.86.1's 20–30%); (4)
+  "tableaux by levels" for DE (parallel same-size brackets by rank block — pools already
+  have this via `pool-level-pools.json`, DE doesn't). Also checked FIE's Organisation Rules
+  PDF directly against the codebase (doc §6-7): nationality/club pool separation (o.68.2)
+  and the nationality-conflict special bout-order tables (o.70, pools of 6/7) are both
+  **confirmed correct**, byte-verified against the rules text and (for the no-conflict
+  pool-of-7 case) real GP XML in `docs/GP/`. `lib/boutOrder.js`'s `STANDARD[6]` was
+  initially flagged as a likely bug from that cross-reference, then wrongly retracted after
+  matching a document that turned out to be a probable USA-Fencing-domestic reference
+  (not FIE-international) — then **actually fixed** 2026-07-04 once real data from an
+  actual FIE World Cup (Lion of Bonn 2019) confirmed the original suspicion. `STANDARD[6]`
+  now holds the table backed by that real competition and by a column-major reading of the
+  current Organisation Rules PDF; the old value moved to its own `TRIO_6` (no longer an
+  alias), which is still correct for the trio-conflict case. See doc §7 for the full
+  four-round investigation — the short version is that no single document was trustworthy
+  enough on its own here; it took two independent real/current sources agreeing to close
+  it. **Pairwise lot-draw seeding**
+  (o.87/o.102 "drawing lots in pairs") is now implemented for the individual GP/Worlds
+  cohort merge (`formats/grand-prix-fie.json`'s `initial_exempt` cohort +
+  `services/formats.js`'s `pairedLotDraw` flag) — team side (o.102) still open, needs its
+  own design since team seeding doesn't go through the cohort system at all. Also added
+  `formats/mixed-formula-b.json` (Junior/Cadet Worlds, Cadet/Junior WC, Zonals — pools then
+  single DE, no bronze bout, o.89-94), which didn't exist as a ready preset before even
+  though both ingredients (`pool-de.json`'s shape, `de-no-bronze.json`) already did. Lower
+  priority / still open: sharks-and-minnows pools, Engarde/FencingTime import (export lower
+  value), external/combined seeding lists + ranking-points classification (would make Atlas
+  a cross-event ranking authority — separate scope decision), team DE repechage/
+  all-places-fenced richness, pool-sheet-position-by-lot (o.68.3), pool-size floor
+  (o.67.1).
 
 ### Results
 - Full competition results page combining DE + pool-eliminated fencers
 - Unique ranks except 3rd (shared); pool-eliminated appended in pool-rank order
 - UI: `public/results.html`, endpoint `GET /api/competitions/:id/results`
+
+### Team competitions
+Built to a meaningful degree — the "Out of scope" note that used to be in this file was
+stale (corrected 2026-07-03). `services/teamMatches.js`/`teamPhases.js`, `lib/teamFormation.js`,
+`rules/team-fie-standard.json` (9-relay FIE format, relay bout order verified byte-exact
+against Organisation Rules o.99.3), team DE bracket + results, OPP2 relay integration
+(fencer/score resolution, NAK-on-baseline-regression handling), pipeline scheduling for
+team matches (with `team_match_id` slot dedup matching the pool-slot dedup pattern), and
+referee/official assignment all exist. UI: `public/team-de.html`, `team-match.html`,
+`team-results.html`. **Known gap** (found 2026-07-03, see `docs/format-system-comparison.md`
+§6): `rules/team-fie-standard.json` has no `repechage`/`allPlacesFenced` equivalent, so
+Team World Championships' "all places to 16th fought for" (o.98.1) can't be expressed —
+individual DE has this richness, team DE doesn't yet.
 
 ### Strips
 - CRUD for pistes/strips; inline rename (click-to-edit)
@@ -547,7 +610,6 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | Feature | Notes |
 |---|---|
 | Cyrano scoring machine | Lower priority than cloud bridge |
-| Team competitions | Out of scope |
 | FIE Engarde XML export | Out of scope for now; format fully understood from `docs/GP/` reference files |
 
 ---

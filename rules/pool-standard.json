@@ -12,8 +12,7 @@
     ],
     "singlePoolMaxN": 10,
     "separation": [
-      "nationality",
-      "club"
+      "nationality"
     ]
   },
   "advancement": {

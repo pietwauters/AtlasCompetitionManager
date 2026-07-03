@@ -10,8 +10,7 @@
         ],
         "blockSize": 6,
         "separation": [
-            "nationality",
-            "club"
+            "nationality"
         ]
     },
     "advancement": {

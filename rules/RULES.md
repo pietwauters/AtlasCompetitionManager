@@ -17,7 +17,7 @@ have as many as you like.
     "algorithm": "serpentine-seeding",
     "allowedSizes": [6, 5],
     "singlePoolMaxN": 8,
-    "separation": ["nationality", "club"]
+    "separation": ["nationality"]
   },
   "advancement": {
     "method": "percentage",
@@ -65,6 +65,22 @@ Controls how fencers are distributed into pools.
 | `allowedSizes` | number[] | yes | Pool sizes in priority order, largest first. The system picks the best combination. Common values: `[7,6,5]`, `[6,5]`, `[5,4]`. |
 | `singlePoolMaxN` | number | yes | If the total number of active fencers is ≤ this value, a "single pool of N" option is also offered to the organiser. Set to `0` to never offer it. |
 | `separation` | string[] | yes | Fields to try to separate when placing fencers. Fencers sharing values in these fields are placed in different pools when possible. Allowed values: `"nationality"`, `"club"`. Order matters: the first field is prioritised. Use `[]` for no separation. |
+
+**Use `["nationality"]` only for any FIE-format rule file.** The same `separation`
+array also decides when `lib/boutOrder.js` applies FIE's special nationality-conflict
+bout-order tables (o.70) — those tables are officially defined for *nationality*
+conflicts only. If `"club"` is included and two fencers who share a club (but not a
+nationality) land in the same pool, Atlas will apply the special tables anyway — a
+real, silent deviation from what an actual FIE-sanctioned event would produce, not
+just a formation-time preference. This is exactly the kind of operator/config mistake
+that made a real Fencing Time bout-order anomaly hard to diagnose (see
+`docs/format-system-comparison.md` §7) — the fencer/nationality data looked clean, but
+some other, invisible-in-the-data affiliation still seems to have triggered
+teammate-style bout ordering. `"club"` remains a supported option for genuinely
+non-FIE, domestic/club-level rule files where keeping training partners apart is a
+deliberate choice — just don't combine it with a rule file meant to replicate an
+official FIE formula. `pool-standard.json` and `level-pools.json` both use
+`["nationality"]` only, as of 2026-07-05.
 
 **How `allowedSizes` works**
 

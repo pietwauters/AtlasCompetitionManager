@@ -37,7 +37,7 @@
       "rule": "de-standard.json",
       "participants": {
         "cohorts": [
-          { "cohort": "initial_exempt", "sortBy": "initial_seed_asc" },
+          { "cohort": "initial_exempt", "sortBy": "initial_seed_asc", "pairedLotDraw": true },
           { "cohort": "pool_exempt",    "sortBy": "pool_rank_asc", "poolStage": "preliminary_pools" },
           { "cohort": "de_survivors",   "sortBy": "pool_rank_asc", "poolStage": "preliminary_pools" }
         ]

@@ -11,3 +11,7 @@ server.log
 errorlog.txt
 *.csv
 mqttlog.txt
+
+# Reference/research data, not application code
+/Engarde/
+/publicxmls/
