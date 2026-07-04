@@ -203,51 +203,109 @@ function _dePhaseEntrantCount(phaseId) {
   `).get(phaseId, phaseId).n;
 }
 
-function getCompetitionResults(compId) {
-  const phases = db.prepare(
-    'SELECT id, type, phase_order, status, format_stage FROM phases WHERE competition_id=? ORDER BY phase_order'
-  ).all(compId);
+function fetchPoolRows(phaseId, onlyEliminated) {
+  return db.prepare(`
+    SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
+           c.first_name, c.last_name, cl.name AS club_name
+    FROM rankings r
+    JOIN competitors c  ON c.id  = r.competitor_id
+    LEFT JOIN people p  ON p.id  = c.person_id
+    LEFT JOIN clubs  cl ON cl.id = p.club_id
+    WHERE r.phase_id = ? ${onlyEliminated ? 'AND r.advanced = 0' : ''}
+    ORDER BY r.position
+  `).all(phaseId);
+}
 
-  // ── Identify the terminal DE phase(s) ───────────────────────────────────
-  // Ordinarily there's exactly one — the last DE phase overall. Independent
-  // parallel tracks (Division 1 / Division 2 style formats) have one terminal
-  // DE phase per track; each gets ranked on its own and the tracks are
-  // concatenated in format-declared order (see services/formats.js's
-  // getTerminalStages). Competitions with no format (or no format_stage on
-  // their DE phases) fall back to the original single-last-DE-phase rule
-  // untouched — this is the only path every pre-existing competition takes.
-  let terminalDePhases;
-  const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
-  if (comp?.format_id) {
-    const Format = require('./formats');
-    let format = null;
-    try { format = Format.loadFormat(comp.format_id); } catch { /* format file missing/renamed */ }
-    if (format) {
-      const terminalStageIds = new Set(Format.getTerminalStages(format));
-      const stageOrder = new Map(format.stages.map((s, i) => [s.id, i]));
-      terminalDePhases = phases
-        .filter(p => p.type === 'de' && p.format_stage && terminalStageIds.has(p.format_stage))
-        .sort((a, b) => stageOrder.get(a.format_stage) - stageOrder.get(b.format_stage));
-    }
+// Ranks any phase (pool or DE) into one shared entry shape, sorted best-to-
+// worst, `place` relative to this phase alone — callers renumber. onlyEliminated
+// only affects the pool branch (rankDePhase always returns exactly whoever has
+// a decided outcome in that phase, nothing more).
+function _rankPhase(phase, onlyEliminated) {
+  if (phase.type === 'de') {
+    return rankDePhase(phase.id).sort((a, b) => a.place - b.place);
   }
-  if (!terminalDePhases || terminalDePhases.length === 0) {
-    const last = [...phases].reverse().find(p => p.type === 'de');
-    terminalDePhases = last ? [last] : [];
-  }
+  return fetchPoolRows(phase.id, onlyEliminated).map(row => ({
+    place: row.pool_rank, place_label: String(row.pool_rank),
+    competitor_id: row.competitor_id, de_seed: null,
+    first_name: row.first_name, last_name: row.last_name, club: row.club_name,
+    note: 'Pool rank ' + row.pool_rank,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Format-driven competitions: rank every terminal stage (see
+// services/formats.js's getTerminalStages — nothing else depends on it; the
+// usual case is one DE phase, independent parallel tracks like Division 1/2
+// have one per track, and a stage like pool-level-pools.json's level_pools
+// (isFinalRanking) can be a terminal *pool* phase), merged/offset in
+// format-declared order. Then walk every other (non-terminal) phase, in
+// reverse pipeline order, appending whoever was eliminated there — pool or
+// DE — continuing the running place counter. This replaces the old
+// "guess the boundary from the last pool phase's advanced count" heuristic,
+// which broke on any format with a pre-pool exempt cohort or an intermediate
+// DE stage that itself eliminates people (e.g. grand-prix-fie's preliminary
+// tableau) — see docs/format-system-comparison.md §12 for the full account.
+// ---------------------------------------------------------------------------
+function _getResultsForFormat(compId, phases, format) {
+  const Format = require('./formats');
+  const terminalStageIds = new Set(Format.getTerminalStages(format));
+  const stageOrder = new Map(format.stages.map((s, i) => [s.id, i]));
+
+  const terminalPhases = phases
+    .filter(p => p.format_stage && terminalStageIds.has(p.format_stage))
+    .sort((a, b) => stageOrder.get(a.format_stage) - stageOrder.get(b.format_stage));
+
+  if (terminalPhases.length === 0) return []; // nothing created yet
 
   const entries = [];
   let placeOffset = 0;
-  for (const dePhase of terminalDePhases) {
-    const trackEntries = rankDePhase(dePhase.id);
-    for (const e of trackEntries) {
+  for (const phase of terminalPhases) {
+    // false: a terminal pool phase (e.g. level_pools) shows everyone — by
+    // definition nothing comes after it, so there's no "advanced" subset
+    // reserved for a later stage.
+    const rows = _rankPhase(phase, false);
+    for (const e of rows) {
       const place = e.place + placeOffset;
       entries.push({ ...e, place, place_label: String(place) });
     }
-    placeOffset += _dePhaseEntrantCount(dePhase.id);
+    placeOffset += phase.type === 'de' ? _dePhaseEntrantCount(phase.id) : rows.length;
   }
 
-  // ── Pool fencers ─────────────────────────────────────────────────────────
-  // Sorted most-recent first so finishedPools[0] is the last (final) pool round.
+  const seen = new Set(entries.map(e => e.competitor_id));
+  const terminalIds = new Set(terminalPhases.map(p => p.id));
+  const nonTerminal = phases
+    .filter(p => !terminalIds.has(p.id) && (p.type === 'pool' || p.type === 'de'))
+    .sort((a, b) => b.phase_order - a.phase_order);
+
+  for (const phase of nonTerminal) {
+    const stage = format.stages.find(s => s.id === phase.format_stage);
+    const label = stage?.label || (phase.type === 'de' ? 'Preliminary tableau' : 'Pool round');
+    // true: only the eliminated subset — whoever advanced continues into a
+    // later stage and gets placed from there instead.
+    const rows = _rankPhase(phase, true);
+    for (const row of rows) {
+      if (seen.has(row.competitor_id)) continue;
+      const place = ++placeOffset;
+      const note = phase.type === 'pool' ? `${label} (rank ${row.place})` : `${label} — eliminated`;
+      entries.push({ ...row, place, place_label: String(place), note });
+      seen.add(row.competitor_id);
+    }
+  }
+
+  return entries;
+}
+
+// ---------------------------------------------------------------------------
+// Free-form (no format) competitions: unchanged from before independent
+// parallel tracks or the format-driven rewrite above existed. Kept verbatim
+// on its own path so nothing here can regress — free-form competitions have
+// no cohorts or multi-stage structure, so "advanced out of the last pool
+// phase == the DE bracket's headcount" always holds exactly.
+// ---------------------------------------------------------------------------
+function _getResultsFreeForm(compId, phases) {
+  const dePhase = [...phases].reverse().find(p => p.type === 'de');
+  const entries = dePhase ? rankDePhase(dePhase.id) : [];
+
   const finishedPools = phases
     .filter(p => p.type === 'pool' && p.status === 'finished')
     .sort((a, b) => b.phase_order - a.phase_order);
@@ -255,17 +313,6 @@ function getCompetitionResults(compId) {
   if (finishedPools.length > 0) {
     const seen = new Set(entries.map(e => e.competitor_id));
     const lastPool = finishedPools[0];
-
-    const fetchPoolRows = (phaseId, onlyEliminated) => db.prepare(`
-      SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
-             c.first_name, c.last_name, cl.name AS club_name
-      FROM rankings r
-      JOIN competitors c  ON c.id  = r.competitor_id
-      LEFT JOIN people p  ON p.id  = c.person_id
-      LEFT JOIN clubs  cl ON cl.id = p.club_id
-      WHERE r.phase_id = ? ${onlyEliminated ? 'AND r.advanced = 0' : ''}
-      ORDER BY r.position
-    `).all(phaseId);
 
     const pushEntry = (place, row, note) => {
       entries.push({
@@ -278,8 +325,6 @@ function getCompetitionResults(compId) {
       seen.add(row.competitor_id);
     };
 
-    // True when a later phase exists OR when competitors were marked advanced
-    // (competition is between phases; next phase not yet created).
     const advancedCount = db.prepare(
       'SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1'
     ).get(lastPool.id).n;
@@ -287,14 +332,12 @@ function getCompetitionResults(compId) {
 
     let nextPlace;
     if (hasLaterPhase) {
-      // Not the final phase: only show eliminated fencers; advanced slots reserved for later phase.
       nextPlace = advancedCount + 1;
       for (const row of fetchPoolRows(lastPool.id, true)) {
         if (seen.has(row.competitor_id)) continue;
         pushEntry(nextPlace++, row, 'Pool phase (rank ' + row.pool_rank + ')');
       }
     } else {
-      // This pool is the final phase — show all fencers as the final ranking.
       nextPlace = 1;
       for (const row of fetchPoolRows(lastPool.id, false)) {
         if (seen.has(row.competitor_id)) continue;
@@ -302,7 +345,6 @@ function getCompetitionResults(compId) {
       }
     }
 
-    // Earlier pool rounds: append fencers eliminated before reaching the last pool.
     for (let i = 1; i < finishedPools.length; i++) {
       for (const row of fetchPoolRows(finishedPools[i].id, true)) {
         if (seen.has(row.competitor_id)) continue;
@@ -313,6 +355,21 @@ function getCompetitionResults(compId) {
   }
 
   return entries;
+}
+
+function getCompetitionResults(compId) {
+  const phases = db.prepare(
+    'SELECT id, type, phase_order, status, format_stage FROM phases WHERE competition_id=? ORDER BY phase_order'
+  ).all(compId);
+
+  const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
+  let format = null;
+  if (comp?.format_id) {
+    const Format = require('./formats');
+    try { format = Format.loadFormat(comp.format_id); } catch { /* format file missing/renamed */ }
+  }
+
+  return format ? _getResultsForFormat(compId, phases, format) : _getResultsFreeForm(compId, phases);
 }
 
 module.exports = { getCompetitionResults };

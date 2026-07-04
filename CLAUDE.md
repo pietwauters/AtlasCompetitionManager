@@ -439,10 +439,14 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Full competition results page combining DE + pool-eliminated fencers
 - Unique ranks except 3rd (shared); pool-eliminated appended in pool-rank order
 - UI: `public/results.html`, endpoint `GET /api/competitions/:id/results`
-- **Known bug (2026-07-06, unfixed):** the "pool-eliminated" merge logic doesn't account
-  for cohort members who skip pools entirely or eliminations in a non-terminal DE stage —
-  see `docs/format-system-comparison.md` §10/§8 item 15 for a concrete GP repro (89 of 100
-  entries, duplicate place numbers 60-64).
+- **Under-counting bug on multi-stage cohort-based formats — FIXED 2026-07-07** (doc §12).
+  `getCompetitionResults` now branches: format-driven competitions (`_getResultsForFormat`)
+  rank every *terminal* stage (`Format.getTerminalStages` — pool or DE) merged in
+  format-declared order, then walk every other phase in reverse pipeline order appending
+  eliminations as they're found, instead of guessing a boundary from one pool phase's
+  `advanced` count. Free-form/no-format competitions (`_getResultsFreeForm`) keep the
+  original code verbatim, untouched. Verified against the GP repro (100/100, all 11
+  previously-missing preliminary-tableau eliminees present) plus 5 regression checks.
 - **Pool-result-based independent split added 2026-07-06** (doc §10.1) — a Belgian club
   experiment ("Elite Division" / "Division 1"): one no-elimination pool round purely to
   rank the field, then split by *pool result* (not initial seed) into two independent

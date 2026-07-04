@@ -421,18 +421,11 @@ literally randomized. Not worth chasing.
     preference — see §7. `pool-standard.json` and `level-pools.json` now use
     `["nationality"]` only; `"club"` stays available for non-FIE rule files.
 14. ~~**Independent parallel tracks (Division 1/2).**~~ **DONE 2026-07-06** — see §10.
-15. **`results.js`'s "pool fencers" section under-counts multi-stage cohort-based
-    formats.** Found during §10's regression testing, not fixed (unrelated to that
-    change — confirmed via `git diff` that the affected section is untouched). For
-    `grand-prix-fie` specifically: fencers eliminated in the *preliminary* (non-terminal)
-    DE stage never appear in results at all, and the initial-exempt cohort's absence from
-    `advancedCount` produces duplicate place numbers where the final bracket's own ranks
-    overlap the pool-eliminated fencers' computed starting place. Needs `results.js` to
-    account for (a) cohort members who skip pools entirely and (b) eliminations in any
-    non-terminal DE stage, not just pool stages. **Open.**
+15. ~~**`results.js`'s "pool fencers" section under-counts multi-stage cohort-based
+    formats.**~~ **FIXED 2026-07-07** — see §12 for the full design and verification.
 
-Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12, 15. Item 5 is done for the individual side
-(team side still open, folded into item 5's text above). Items 6, 11, 13, and 14 are done.
+Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
+(team side still open, folded into item 5's text above). Items 6, 11, 13, 14, and 15 are done.
 
 ---
 
@@ -704,3 +697,51 @@ replaced three repeated inline lookups.
 
 **Verified:** `/api/formats` returns `why`/`mechanics` populated for all 24 entries (spot
 checked via a live server run, zero errors); inline script syntax checked after each edit.
+
+---
+
+## 12. Fixed: `results.js` under-counting on multi-stage cohort-based formats
+
+The bug flagged at the end of §10 (89 of 100 entries for `grand-prix-fie`, duplicate
+places 60-64) — fixed 2026-07-07. Root cause, in one sentence: the old "pool fencers"
+section located where to start numbering eliminated fencers by counting how many
+`advanced=1` out of the *single most recent pool phase* — which only equals the terminal
+DE bracket's real headcount when there's no pre-pool exempt cohort and no intermediate DE
+stage in between. GP has both (16 fencers skip pools entirely via `initial_exempt`, and
+the preliminary tableau itself eliminates 11 before the real final).
+
+**Fix: stop guessing the boundary, just keep counting what's actually been placed.**
+`services/results.js` now branches on whether the competition has a working format:
+
+- **Format-driven** (new `_getResultsForFormat`): rank every *terminal* stage (via the
+  already-existing `getTerminalStages` — nothing else depends on it; usually one DE
+  phase, one per track for Division 1/2-style formats, and can be a terminal *pool* phase
+  like `pool-level-pools.json`'s `isFinalRanking` stage), merged/offset in
+  format-declared order exactly as the parallel-tracks work already did. Then every other
+  (non-terminal) phase — pool *or* DE — gets walked in reverse pipeline order, appending
+  whoever was eliminated there, continuing the running place counter instead of
+  precomputing where to start. This is what actually closes the gap: GP's preliminary
+  tableau is just another non-terminal phase now, so its 11 eliminees get walked and
+  appended like any other elimination, instead of being invisible to every existing code
+  path.
+- **Free-form** (new `_getResultsFreeForm`, no format or format fails to load): today's
+  exact code, copied verbatim, completely untouched — free-form competitions have no
+  cohorts or multi-stage structure, so the old assumption already holds exactly there;
+  splitting the two paths means that one carries zero risk from this change.
+- Reused without modification: `rankDePhase`, `_dePhaseEntrantCount`. `fetchPoolRows` was
+  hoisted from a closure to a module-level function so both paths share one implementation.
+  New shared dispatcher `_rankPhase(phase, onlyEliminated)` — DE via `rankDePhase`, pool
+  via `fetchPoolRows` — used by both the terminal-merge step and the non-terminal walk.
+  `services/formats.js` needed no changes at all; `getTerminalStages` already handled the
+  pool-type-terminal-stage case correctly (verified: `isFinalRanking` stages get
+  `advanceN=0` from `applyPoolClose`, i.e. every row already has `advanced=0`, though the
+  fix passes `onlyEliminated=false` explicitly for terminal phases rather than relying on
+  that being incidentally true).
+
+**Verified end-to-end**, same throwaway-competition harness as the rest of this session:
+`grand-prix-fie` N=100 (the bug's own repro) — 100/100 entries, no duplicates, all 11
+previously-missing preliminary-tableau eliminees now present with a
+"Preliminary Tableau — eliminated" note. Five regression checks, all byte-correct:
+`pool-de`, `two-pool-rounds-combined`, `level-pools` (the terminal-*pool*-phase case),
+both parallel-tracks formats (`division-1-2-t16`, `pool-elite-division`), and a genuine
+free-form (no format) competition.
