@@ -1,0 +1,39 @@
+{
+  "id": "two-pool-rounds-repechage-t32-t8",
+  "description": "Two Pool Rounds (combined seeding) then DE with repechage (T32→T8)",
+  "stages": [
+    {
+      "id": "pools_1",
+      "label": "Pool Round 1",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "noElimination": true
+      }
+    },
+    {
+      "id": "pools_2",
+      "label": "Pool Round 2",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "useRule": true
+      }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination (with repechage)",
+      "phaseType": "de",
+      "rule": "de-repechage-t32-t8.json",
+      "participants": {
+        "seedingMethod": "combined"
+      }
+    }
+  ]
+}

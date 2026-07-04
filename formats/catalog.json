@@ -8,6 +8,7 @@
     "tier": "World Championships",
     "ageCategory": "senior",
     "ruleRefs": ["o.83-88"],
+    "why": "Official FIE format for Senior World Championships individual events (Mixed Formula A, FIE Organisation Rules o.83-88): a preliminary phase (pools, then a preliminary tableau) narrows the field to 64, who then fence a main tableau straight through to the final. Identical shape to Grand Prix and World Cup below — FIE's own rule text names all three together as one formula.",
     "note": "Uses the fixed 70% pool-advancement shape (same as Grand Prix). o.86.1 permits Worlds/World Cup a 70-80% range; percentage-range advancement isn't built yet (see docs/format-system-comparison.md §8)."
   },
   {
@@ -19,6 +20,7 @@
     "tier": "World Cup",
     "ageCategory": "senior",
     "ruleRefs": ["o.83-88"],
+    "why": "Official FIE format for Senior World Cup individual events (Mixed Formula A, o.83-88) — the exact same shape as World Championships and Grand Prix. Pick this one for a World Cup specifically; it exists mainly for clarity in the picker, since the underlying pipeline doesn't differ from the other two.",
     "note": "Uses the fixed 70% pool-advancement shape (same as Grand Prix). o.86.1 permits Worlds/World Cup a 70-80% range; percentage-range advancement isn't built yet (see docs/format-system-comparison.md §8)."
   },
   {
@@ -29,7 +31,8 @@
     "eventType": "individual",
     "tier": "Grand Prix",
     "ageCategory": "senior",
-    "ruleRefs": ["o.83-88"]
+    "ruleRefs": ["o.83-88"],
+    "why": "Official FIE format for Grand Prix individual events (Mixed Formula A, o.83-88). This is the one tier where the 70% pool-advancement used here is exactly what the rule mandates, not just a legal choice within a range — o.86.1 pins Grand Prix to 30% eliminated (70% advance) specifically, unlike Worlds/World Cup which permit 70-80%."
   },
   {
     "id": "fie-junior-worlds-individual",
@@ -39,7 +42,8 @@
     "eventType": "individual",
     "tier": "World Championships",
     "ageCategory": "junior",
-    "ruleRefs": ["o.89-94"]
+    "ruleRefs": ["o.89-94"],
+    "why": "Official FIE format for Junior World Championships individual events (Mixed Formula B, o.89-94): one pool round, then a single direct-elimination tableau straight through to the final — no separate preliminary/main split like Formula A above, and no bronze bout (o.94: semifinal losers share 3rd)."
   },
   {
     "id": "fie-cadet-worlds-individual",
@@ -49,7 +53,8 @@
     "eventType": "individual",
     "tier": "World Championships",
     "ageCategory": "cadet",
-    "ruleRefs": ["o.89-94"]
+    "ruleRefs": ["o.89-94"],
+    "why": "Official FIE format for Cadet World Championships individual events — FIE's rule (o.89) groups Junior and Cadet Worlds under the same Mixed Formula B; this entry and 'World Championships — Junior Individual' above use the identical shape."
   },
   {
     "id": "fie-junior-worldcup-individual",
@@ -59,7 +64,8 @@
     "eventType": "individual",
     "tier": "World Cup",
     "ageCategory": "junior",
-    "ruleRefs": ["o.89-94"]
+    "ruleRefs": ["o.89-94"],
+    "why": "Official FIE format for Junior World Cup individual events — same Mixed Formula B as the Worlds entries above (o.89 groups Cadet/Junior World Cup in with Junior/Cadet Worlds and Zonal Championships as one formula)."
   },
   {
     "id": "fie-cadet-worldcup-individual",
@@ -69,7 +75,8 @@
     "eventType": "individual",
     "tier": "World Cup",
     "ageCategory": "cadet",
-    "ruleRefs": ["o.89-94"]
+    "ruleRefs": ["o.89-94"],
+    "why": "Official FIE format for Cadet World Cup individual events — same Mixed Formula B as every other entry in this group (o.89-94)."
   },
   {
     "id": "fie-zonal-individual",
@@ -79,7 +86,8 @@
     "eventType": "individual",
     "tier": "Zonal Championships",
     "ageCategory": null,
-    "ruleRefs": ["o.89-94"]
+    "ruleRefs": ["o.89-94"],
+    "why": "Official FIE format for Zonal Championships individual events — same Mixed Formula B shape as Junior/Cadet Worlds and World Cup (o.89-94). FIE's rule text doesn't split Zonal Championships by age category the way Worlds/World Cup are split, so there's one entry here rather than a Junior/Cadet pair."
   },
   {
     "id": "fie-veterans-individual",
@@ -91,6 +99,7 @@
     "ageCategory": "veteran",
     "ruleRefs": ["o.114-118"],
     "paramOverrides": { "pool_advancement_pct": 100 },
+    "why": "Approximates FIE Veterans individual events (o.114-118): a pool round where 100% advance (o.118.7: 'no fencer is eliminated after the pools'), then a straight DE tableau with everyone. Use this instead of the generic 'Pools then DE' entry below when you specifically want the no-elimination Veterans behavior as the default.",
     "note": "100% pool advancement approximates o.118.7's 'no fencer is eliminated after the pools.' Doesn't model o.118's category-merge-below-6 or poule-unique-below-10 edge cases."
   },
   {
@@ -100,7 +109,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "General-purpose format for club/regional events where the pool-advancement percentage isn't fixed by a specific rule — you choose the cut (e.g. 70%, 80%) when applying it. Use the FIE-tier entries above instead if you need a specific official percentage guaranteed rather than a free choice."
   },
   {
     "id": "club-two-pool-rounds-combined",
@@ -109,7 +119,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Two full pool rounds; the final tableau is seeded by each fencer's COMBINED statistics ADDED TOGETHER across both pool rounds (sometimes called the 'Brazilian' format). Differs from 'round-2 seeding' below, which only uses the second round's own ranking and discards the first round's stats once it's decided who advances."
   },
   {
     "id": "club-two-pool-rounds-round2",
@@ -118,7 +129,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Two full pool rounds; the final tableau is seeded ONLY by the second pool round's own ranking — the first round only decides who advances to round 2, its stats don't carry forward into seeding at all. Differs from 'combined seeding' above, which adds both rounds' statistics together."
   },
   {
     "id": "club-level-pools",
@@ -127,7 +139,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "One pool round, then everyone is regrouped into a second round of pools formed from blocks of similarly-ranked fencers (e.g. ranks 1-6 together, 7-12 together) instead of the usual spread-out seeding. That second round of pools IS the final ranking — there is no DE tableau at all in this format."
   },
   {
     "id": "club-pool-de-repechage-t32-t8",
@@ -136,7 +149,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Pools, then a DE tableau where losers get a second chance: fencers eliminated between the round of 32 and the round of 8 fence a repechage bracket, and its winners REJOIN the main survivors to fight for the final places together. Unlike the Division/Elite-Division formats, repechage always merges back into one shared final — it never produces two separate winners. Smaller repechage cascade than the T64→T4 entry below."
   },
   {
     "id": "club-pool-de-repechage-t64-t4",
@@ -145,7 +159,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Same repechage mechanism as the T32→T8 entry above, but starting from a much larger T64 tableau and only rejoining at the final four — losers from T64, T32, T16, and T8 all feed the repechage cascade. This is the classic historical FIE épée repechage shape; use the T32→T8 entry instead for a smaller, shorter repechage."
   },
   {
     "id": "club-pool-de-apf-t16",
@@ -154,7 +169,48 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Pools, then a DE tableau where every place from 9th downward is decided by an actual bout instead of being shared — round-of-16 losers fence their own mini-bracket for 9th-16th, round-of-8 losers for 5th-8th, and so on. Use this when every competitor needs a fully individual final rank, not just the top few places."
+  },
+  {
+    "id": "club-two-pool-rounds-repechage-t32-t8",
+    "label": "Two Pool Rounds then DE with repechage (T32→T8)",
+    "shape": "two-pool-rounds-repechage-t32-t8",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Combines two ideas above: two pool rounds (combined seeding) feeding a T32→T8 repechage tableau instead of a plain DE. Use this instead of the single-pool-round repechage entry when you want a second pool round to refine seeding before the tableau."
+  },
+  {
+    "id": "club-two-pool-rounds-apf-t16",
+    "label": "Two Pool Rounds then DE, all places fenced from T16",
+    "shape": "two-pool-rounds-apf-t16",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Combines two ideas above: two pool rounds (combined seeding) feeding an all-places-fenced tableau instead of a plain DE. Use this instead of the single-pool-round all-places-fenced entry when you want a second pool round to refine seeding first."
+  },
+  {
+    "id": "club-pool-top8-de",
+    "label": "Pools (top 8 advance) then DE, bronze bout",
+    "shape": "pool-top8-de-fo3",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Pools, then only the top 8 fencers by pool ranking advance — a fixed HEADCOUNT, not a percentage, so the tableau size never changes regardless of how many entered. Use 'Pools then DE (choose advancement %)' above instead if you want the cut to scale with field size."
+  },
+  {
+    "id": "club-pool-top16-de",
+    "label": "Pools (top 16 advance) then DE, bronze bout",
+    "shape": "pool-top16-de-fo3",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Same as 'top 8 advance' above but the cut is a fixed 16 fencers instead of 8."
   },
   {
     "id": "club-de-only-bronze",
@@ -163,7 +219,8 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "No pool round at all — straight into a direct-elimination tableau seeded from initial ranking, with a bronze-medal bout between the two semifinal losers. Use 'no bronze bout' below if you'd rather the two semifinal losers simply share 3rd place."
   },
   {
     "id": "club-de-only-no-bronze",
@@ -172,6 +229,29 @@
     "scope": "club",
     "eventType": "individual",
     "tier": null,
-    "ageCategory": null
+    "ageCategory": null,
+    "why": "Same as 'bronze bout' above — no pool round, straight DE from initial ranking — except the two semifinal losers share 3rd place instead of fencing a decider."
+  },
+  {
+    "id": "club-division-1-2-t16",
+    "label": "Division 1 (top 16) / Division 2 — independent tableaux",
+    "shape": "division-1-2-t16",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Splits the field by INITIAL SEED, before anyone fences, into two fully independent competitions — Division 1 (seeds 1-16) and Division 2 (the rest) — each with its own complete DE tableau and its own separate winner. They never interact; Division 1 is simply listed ahead of Division 2 in the results. Differs from 'Pool Round then Elite Division / Division 1' below, which splits by POOL RESULT and runs a pool round first instead of skipping straight to DE.",
+    "note": "Two fully independent competitions run in parallel from one rank split. Division 1 (ranks 1-16) is reported ahead of Division 2 in the results."
+  },
+  {
+    "id": "club-pool-elite-division",
+    "label": "Pool Round then Elite Division / Division 1 — independent tableaux",
+    "shape": "pool-elite-division",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null,
+    "why": "Runs one pool round first (nobody is eliminated by it — it exists purely to rank the field), then splits into two independent tableaux by that POOL RESULT: Elite Division (top 16 by pool ranking) and Division 1 (the rest). Differs from 'Division 1 / Division 2' above, which splits by initial seed and has no pool round at all.",
+    "note": "One pool round (no elimination, used only to rank the field), then split by pool result into two fully independent tableaux — top 16 (Elite Division) and the rest (Division 1). Elite Division is reported ahead of Division 1 in the results."
   }
 ]

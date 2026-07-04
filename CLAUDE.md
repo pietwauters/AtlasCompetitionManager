@@ -353,9 +353,15 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Migration 021: `format_id` on competitions, `format_cohort` on competitors, `format_stage` on phases
 - Shapes: `grand-prix-fie.json` (3-stage GP/Worlds/WC — bronze-bout bug fixed 2026-07-05,
   see below), `mixed-formula-b.json`, `two-pool-rounds.json`, `two-pool-rounds-round2.json`,
+  `two-pool-rounds-repechage-t32-t8.json`, `two-pool-rounds-apf-t16.json`,
   `pool-level-pools.json`, `pool-de.json`, `pool-de-repechage-t32-t8.json`,
-  `pool-de-repechage-t64-t4.json`, `pool-de-apf-t16.json`, `de-only-bronze.json`,
-  `de-only-no-bronze.json` — 18 catalog entries across them (`docs/format-system-comparison.md` §9)
+  `pool-de-repechage-t64-t4.json`, `pool-de-apf-t16.json`, `pool-top8-de-fo3.json`,
+  `pool-top16-de-fo3.json`, `de-only-bronze.json`, `de-only-no-bronze.json` — 22 catalog
+  entries across them (`docs/format-system-comparison.md` §9-9.1). Audited 2026-07-05
+  against every Engarde `.fta` formula and all 35 FencingTime `EventTemplates.xml` entries
+  — fully covered except formats needing new engine capability (Division 1/2 parallel
+  competitions, repechage-to-a-specific-standalone-placement, "tableaux by levels,"
+  multi-round pool→DE→pool/APF shapes like `SUPERPOOLS`) — see doc §9.1 for the full list.
 - GP format verified against real FIE Grand Prix XML (Shanghai 2026, 233 fencers): 16 initial exempts, 70% pool advancement, 32 survivors from preliminary tableau, T=64 final
 - UI: format picker in competition detail (`public/competition-detail.html`) — "Official
   FIE formats only" checkbox (default on) + `<optgroup>` grouping by tier/age category,
@@ -399,20 +405,60 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
   a cross-event ranking authority — separate scope decision), team DE repechage/
   all-places-fenced richness, pool-sheet-position-by-lot (o.68.3), pool-size floor
   (o.67.1). **Format catalog added 2026-07-05** (doc §9): the alias mechanism above,
-  populated with every FIE individual combo buildable at full rule-accuracy today (18
-  catalog entries) plus the common non-FIE club formats already catalogued in doc §2-3.
-  Also fixed the `grand-prix-fie.json` bronze-bout bug while populating it (o.88 — no
-  bronze bout in Mixed Formula A; confirmed against real `docs/GP/` data, no separate
-  3rd-place `Tableau` exists in the actual bracket). Discovered a new, separate gap while
-  scoping team entries: team phase creation has **no format/rule picker at all** —
+  populated with every FIE individual combo buildable at full rule-accuracy today plus the
+  common non-FIE club formats already catalogued in doc §2-3. Also fixed the
+  `grand-prix-fie.json` bronze-bout bug while populating it (o.88 — no bronze bout in
+  Mixed Formula A; confirmed against real `docs/GP/` data, no separate 3rd-place `Tableau`
+  exists in the actual bracket). Discovered a new, separate gap while scoping team
+  entries: team phase creation has **no format/rule picker at all** —
   `competition-detail.html` hardcodes `rule_doc: 'team-fie-standard.json'` — so Team World
   Cup/Zonal/Worlds catalog entries were dropped from this pass rather than added as
   cosmetic-only options; distinct from the already-tracked team-DE-placement-richness gap.
+- **Independent parallel tracks added 2026-07-06** (doc §10) — the first of the two
+  "needs new engine capability" gaps from the audit above, built (scoped to exactly what
+  Engarde's Division 1/2 formulas actually need: 2 groups, straight DE per group, no pools
+  inside a division). New pieces: `resolveParticipants`'s `rank_range` source; optional
+  `dependsOn` on a stage (absent = the single preceding stage, unchanged for every prior
+  format; explicit `[]` = no prerequisite, letting two stages both be "next" at once);
+  `getFormatPlan`'s `nextStage` → `nextStages` (array); new `getTerminalStages(format)`.
+  `services/results.js` now merges every terminal DE phase (not just the single last one)
+  — offsetting each by the *actual entrant count* of tracks before it, not by how many
+  places have been decided so far (would be wrong mid-tournament). A separate,
+  format-agnostic "most recent phase must be finished" guard in
+  `services/phases.js` (`Phase.create`/`Phase.createDE`) predated and blocked this even
+  though `assertNextStage` correctly allowed it — found only during verification, fixed by
+  skipping that guard specifically once a format has already validated the real
+  dependency. `formats/division-1-2-t16.json` + 1 catalog entry. All verified end-to-end
+  including regression checks against `pool-de` and `grand-prix-fie` (unchanged behavior).
+  **Found, not fixed, unrelated to this change:** `results.js`'s "pool fencers" section has
+  a pre-existing bug on multi-stage cohort-based formats like GP — fencers eliminated in a
+  non-terminal DE stage never appear in results, causing duplicate place numbers. See doc
+  §10 and §8 item 15.
 
 ### Results
 - Full competition results page combining DE + pool-eliminated fencers
 - Unique ranks except 3rd (shared); pool-eliminated appended in pool-rank order
 - UI: `public/results.html`, endpoint `GET /api/competitions/:id/results`
+- **Known bug (2026-07-06, unfixed):** the "pool-eliminated" merge logic doesn't account
+  for cohort members who skip pools entirely or eliminations in a non-terminal DE stage —
+  see `docs/format-system-comparison.md` §10/§8 item 15 for a concrete GP repro (89 of 100
+  entries, duplicate place numbers 60-64).
+- **Pool-result-based independent split added 2026-07-06** (doc §10.1) — a Belgian club
+  experiment ("Elite Division" / "Division 1"): one no-elimination pool round purely to
+  rank the field, then split by *pool result* (not initial seed) into two independent
+  tableaux, `dependsOn: ["pools"]` on both (§10's `dependsOn` mechanism already generalized
+  to this with no further changes needed). New: `rank_range`'s optional
+  `basedOn: "last_pool"`. `formats/pool-elite-division.json` + 1 catalog entry, verified
+  end-to-end including that the split is genuinely by pool ranking, not initial seed.
+- **Per-entry descriptions added 2026-07-06** (doc §11), to stop near-duplicate catalog
+  entries from being picked by accident. Two parts: `services/formats.js`'s
+  `describePipeline(format)` computes a `mechanics` string live from stage/rule data (never
+  hand-written, can't drift stale) — including grouping independent/parallel stages into
+  "waves" so Division 1/2 shows as `[independently]` rather than a misleading `→`; and a
+  hand-written `why` field on all 24 catalog entries (`formats/catalog.json`), explicitly
+  naming the distinguishing factor for every entry with a near-duplicate sibling, plus the
+  governing article range for FIE-scoped entries. UI shows both the moment an option is
+  selected, and `why` doubles as each `<option>`'s native hover tooltip.
 
 ### Team competitions
 Built to a meaningful degree — the "Out of scope" note that used to be in this file was

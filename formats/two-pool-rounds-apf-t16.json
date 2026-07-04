@@ -1,0 +1,39 @@
+{
+  "id": "two-pool-rounds-apf-t16",
+  "description": "Two Pool Rounds (combined seeding) then DE, all places fenced from T16",
+  "stages": [
+    {
+      "id": "pools_1",
+      "label": "Pool Round 1",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "noElimination": true
+      }
+    },
+    {
+      "id": "pools_2",
+      "label": "Pool Round 2",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": {
+        "source": "initial"
+      },
+      "advancement": {
+        "useRule": true
+      }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination (all places fenced)",
+      "phaseType": "de",
+      "rule": "de-all-places-t16.json",
+      "participants": {
+        "seedingMethod": "combined"
+      }
+    }
+  ]
+}

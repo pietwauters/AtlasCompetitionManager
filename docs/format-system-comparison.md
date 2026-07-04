@@ -420,9 +420,19 @@ literally randomized. Not worth chasing.
     bout-order tables was a real, silent-deviation risk, not just a formation-time
     preference — see §7. `pool-standard.json` and `level-pools.json` now use
     `["nationality"]` only; `"club"` stays available for non-FIE rule files.
+14. ~~**Independent parallel tracks (Division 1/2).**~~ **DONE 2026-07-06** — see §10.
+15. **`results.js`'s "pool fencers" section under-counts multi-stage cohort-based
+    formats.** Found during §10's regression testing, not fixed (unrelated to that
+    change — confirmed via `git diff` that the affected section is untouched). For
+    `grand-prix-fie` specifically: fencers eliminated in the *preliminary* (non-terminal)
+    DE stage never appear in results at all, and the initial-exempt cohort's absence from
+    `advancedCount` produces duplicate place numbers where the final bracket's own ranks
+    overlap the pool-eliminated fencers' computed starting place. Needs `results.js` to
+    account for (a) cohort members who skip pools entirely and (b) eliminations in any
+    non-terminal DE stage, not just pool stages. **Open.**
 
-Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
-(team side still open, folded into item 5's text above). Items 6, 11, and 13 are done.
+Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12, 15. Item 5 is done for the individual side
+(team side still open, folded into item 5's text above). Items 6, 11, 13, and 14 are done.
 
 ---
 
@@ -514,3 +524,183 @@ tier is null, e.g. Veterans) within the filtered set; non-FIE entries group unde
 Regional." A selected entry's `note` (e.g. Grand Prix's fixed-70%-vs-70-80%-range caveat)
 displays inline. `routes/formats.js` needed no changes — it already just passes through
 `listFormats()`.
+
+### 9.1 Full Engarde/FencingTime coverage audit (2026-07-05)
+
+Re-checked every `.fta` file in `Engarde/Formules/en/` (22 files) and all 35 entries in
+FencingTime's `EventTemplates.xml` against the catalog above. Result: fully covered —
+`Direct_With/WithOUT_3rd_place`/`FIE-junior-individual`/`DE_ONLY`/`DE_FO3`,
+`FIE-senior-individual`/`SR_WC`/`SR_GP`, `All_places_from_1_to_8/16/32`,
+`Repechage_from_16/32/64_final_8`/`POOL_REP32_CUT75/80`, `BRAZILIAN`/`BRAZILIAN_UNCOMB`,
+`USFA_Y8`, `POOL_DE_CUT70/75/80/7080/8090`.
+
+**Added this pass — the "trivial" gaps identified in the audit** (same pattern as the
+existing shapes: reuse `pool-standard.json`/an existing DE rule, or a new fixed-count pool
+rule; no new engine capability needed):
+- `two-pool-rounds-repechage-t32-t8.json`, `two-pool-rounds-apf-t16.json` — covers
+  `POOLPOOL_REP32_CUT80`, `POOLPOOL_APF_CUT8090`/`_NOFO3` (two pool rounds feeding
+  repechage/APF instead of a plain DE; `two-pool-rounds.json`'s final stage was hardcoded
+  to `de-standard.json`).
+- `rules/pool-top8.json`, `rules/pool-top16.json` (new pool rules, fixed
+  `advancement: {method: "count", value: 8|16}` — the `count` method already existed in
+  `services/phases.js`, just had no rule file exposing it) + `pool-top8-de-fo3.json`,
+  `pool-top16-de-fo3.json` (format shapes wiring them to a bronze-bout DE) — covers
+  `POOL_8_DE_FO3`/`POOL_16_DE_FO3`.
+- 4 new catalog entries (`club-two-pool-rounds-repechage-t32-t8`,
+  `club-two-pool-rounds-apf-t16`, `club-pool-top8-de`, `club-pool-top16-de`), all
+  `scope: "club"`. Total now 22 catalog entries, 16 shape files.
+
+**Verified end-to-end** (same throwaway-competition pattern as §9): all 4 new shapes build
+complete, zero-stuck-bout brackets. Top-8/top-16 confirmed exact advancement counts
+(`advanced: 8`/`16` from N=40). Two-pool-rounds variants confirmed both pool closes and
+the final DE (60 and 48 bouts respectively for N=40) complete cleanly.
+
+**Not added — genuine gaps needing new engine capability, not just more catalog content**
+(unchanged from the original audit, restated for completeness): Division 1/Division 2
+(two fully independent parallel competitions from one rank split —
+`Division1_with_16/32/64_and_Division2`, `Division1_for_8/16_and_D2...`); repechage
+feeding a specific standalone placement rather than merging into the main final
+(`Repechage_from_32_for_ranks_5-8`, `Repechage_T16_for_rank_9`, `Repechage_T32_T16_for_rank_9`);
+"tableaux by levels" for DE (`Tableaux-By-Levels-4/8/16`); `SUPERPOOLS` and
+`POOL_DE_CUT80_DE_APF8` (pools → DE → a *second* pool or APF stage — mechanically
+plausible with the existing N-stage engine but each is a genuinely new multi-stage shape
+design); sharks-and-minnows (`DIVI_2024`); `minForCut`-style guards (`IWAS_SR_WC`); team
+formats (blocked on the team format/rule picker gap, §9). Excluded on purpose as bespoke,
+not generic: `FeteDesJeunes2019.fta`, `FFE_epee_hommes_2018.fta`, `quota 19.fta`.
+
+---
+
+## 10. Independent parallel tracks (Division 1 / Division 2) — 2026-07-06
+
+The first of §9.1's "needs new engine capability" gaps, built. **Scoped deliberately**:
+checked all 5 Division1/2 `.fta` files — every one is exactly 2 groups, each fencing a
+single standalone DE bracket straight from initial ranking, no pools inside a division at
+all. Built exactly that shape rather than the fully general "N independent tracks, each
+with its own arbitrary pipeline" (also needed eventually for Tableaux-by-levels' dynamic
+N-way split, deferred separately) — smaller, safer, and the design extends cleanly later.
+
+**Mechanism, four pieces:**
+1. **New participant source `rank_range`** (`services/formats.js`) — slices active
+   competitors by `initial_seed` into `[from, to]` (`to: null` = open-ended). Reads
+   `competitors.initial_seed` directly, matching Engarde's own `classement_initial N-M`
+   semantics; no schema change.
+2. **Stage `dependsOn`** — optional array on a stage definition. Absent (every format
+   shipped before this) defaults to "the single immediately-preceding stage," identical to
+   today's behavior. Explicit `dependsOn: []` means no prerequisite — two stages both
+   declaring it are both available from the start, which is exactly what two independent
+   divisions need. `assertNextStage` rewritten to check declared/defaulted dependencies
+   instead of "every stage before this array index."
+3. **`getFormatPlan`: `nextStage` → `nextStages`** — every pending stage whose
+   dependencies are satisfied, not just the first one. New `getTerminalStages(format)`
+   helper (stages nothing else depends on) added alongside.
+4. **`services/results.js`: merge multiple terminal DE phases.** Extracted the existing
+   single-phase ranking logic into `rankDePhase(phaseId)`. `getCompetitionResults` now
+   finds every terminal DE phase (via `getTerminalStages`, ordered by stage-declaration
+   order), ranks each independently, and concatenates — offsetting each track's places by
+   the *actual entrant count* of the tracks before it (not by how many places have been
+   decided so far — that would be wrong mid-tournament, e.g. if Division 1 only has 2 of
+   its 16 places decided, Division 2 must still shift by 16, not 2). Competitions with no
+   format, or whose format has only one terminal stage (every format shipped before this),
+   take the exact same single-phase path as before — verified explicitly, not assumed.
+
+**A fifth piece, found only during verification, not anticipated in the design:**
+`services/phases.js` had a separate, format-agnostic guard — "the most recently created
+phase for this competition must be finished before creating a new one" — in both
+`Phase.create` and `Phase.createDE`, predating and independent of the format-stage
+dependency system. It doesn't check *real* prerequisites, just phase-creation order, so it
+blocked creating Division 2's bracket while Division 1's was still active even though
+`assertNextStage` correctly said Division 2 had no dependency on Division 1 at all. Fixed
+by skipping that guard specifically when a format has already validated the stage's real
+dependencies (`resolvedFormat` truthy) — free-form/no-format phase creation keeps the
+original simple lock unchanged.
+
+**New content:** `formats/division-1-2-t16.json` (2 stages, `rank_range 1-16` /
+`rank_range 17-null`, both `dependsOn: []`, both `de-standard.json`) + 1 catalog entry,
+`scope: "club"`.
+
+**Verified 2026-07-06**, real throwaway-competition harness:
+- New feature (N=40): both `division1`/`division2` offered as `nextStages`
+  *simultaneously* before either exists; Division 2 remains available and creatable while
+  Division 1 is still active (confirming the phase-lock fix); correct entrant counts (16 /
+  24); merged results are 40 contiguous, non-duplicate places with every Division 1
+  entrant (seed ≤16) ranked strictly ahead of every Division 2 entrant.
+- Regression, `pool-de` (simple 2-stage, N=32): `nextStages` correctly single-valued at
+  each step, sequencing enforced, 32 contiguous non-duplicate result places — unchanged.
+- Regression, `grand-prix-fie` (3-stage, cohort merge, N=100): `nextStages` correctly
+  single-valued at each step; `assertNextStage` still correctly throws when skipping ahead
+  (tried creating "final" before anything existed); bronze bout still correctly unique.
+
+**Found, not fixed — a genuine pre-existing bug, unrelated to this feature:**
+`grand-prix-fie` regression testing surfaced that `results.js`'s "pool fencers" section
+produces 89 entries instead of 100 for N=100, with **duplicate place numbers 60-64**. Root
+cause, confirmed via `git diff` showing that section is byte-for-byte untouched by this
+change: it computes eliminated-fencer placement starting at `advancedCount + 1` (the count
+who advanced *from the pool phase*), but never accounts for (a) the 16 initial-exempt
+fencers who never entered a pool at all, or (b) fencers eliminated in a **non-terminal** DE
+stage (GP's "preliminary tableau" eliminates 11 who never reach the final and never
+appear anywhere in the results table at all). This is a real, independent problem with any
+multi-stage cohort-based format's results page — not something this session's change
+caused or fixes. Flagging as a new, separate open item.
+
+### 10.1 Pool-result-based split (2026-07-06) — "Elite Division / Division 1"
+
+Follow-up to §10, requested directly: a Belgian club experiment splitting the field into
+two independent divisions by **pool result**, not initial seed (user's own naming:
+"Elite Division" and "Division 1"). The mechanism from §10 already generalized cleanly —
+`dependsOn` was designed as an arbitrary array, not just empty-vs-single-default, so both
+division stages simply declare `dependsOn: ["pools"]` (both become available together the
+moment the pool round finishes; neither depends on the other) with no further changes to
+`assertNextStage`/`getFormatPlan`/`results.js`.
+
+**The only new piece:** `rank_range` gained an optional `basedOn: "last_pool"`. Absent
+(§10's `division-1-2-t16`, unchanged) slices by `initial_seed` directly. Present: finds
+the most recently finished pool phase and slices its `rankings.position` instead — same
+range-slicing concept, different ranking to slice. The pool stage itself uses
+`advancement.noElimination: true` (nobody is cut — the pool exists purely to rank the
+field before the split).
+
+**New content:** `formats/pool-elite-division.json` — 3 stages: `pools` (no elimination),
+`elite` (`rank_range basedOn:"last_pool" 1-16`), `division1`
+(`rank_range basedOn:"last_pool" 17-null`), both DE stages `dependsOn: ["pools"]`. One
+`scope: "club"` catalog entry.
+
+**Verified 2026-07-06** (N=40): `pools` alone offered as next stage initially; both
+`elite`/`division1` correctly offered together the instant pools finish; Elite Division's
+16 entrants independently confirmed to be the actual top 16 **by pool ranking**, not by
+initial seed (the specific property this variant exists for); merged results contiguous
+1-40, Elite Division entirely ranked ahead of Division 1.
+
+---
+
+## 11. Per-entry descriptions — mechanical + human, so near-duplicates stop being a risk
+
+24 catalog entries in, several genuinely one-word-different in meaning (combined vs.
+round-2 seeding, split-by-seed vs. split-by-pool-result divisions, T32→T8 vs. T64→T4
+repechage) — a flat label list was no longer enough to pick the right one reliably.
+Two-part fix, deliberately kept separate:
+
+1. **`mechanics` — computed, never hand-written**, so it can't drift out of sync with
+   what a format actually does. `services/formats.js`'s new `describePipeline(format)`
+   renders each stage in plain language from its live `participants`/`advancement`/`rule`
+   data (e.g. "seeded by combined stats across every finished pool round," "top 70%
+   advance," "no bronze bout — semifinal losers share 3rd"), and — the part that mattered
+   most given this session's own parallel-tracks work — groups stages into dependency
+   "waves" (`_computeWaves`) so independent/parallel stages (Division 1 / Division 2) are
+   shown joined with "•" and flagged `[independently — neither is a prerequisite of the
+   other]` instead of a misleading "→" that would imply one happens after the other.
+2. **`why` — hand-written, one per catalog entry**, added to all 24: one to three
+   sentences of director-facing context, and for every entry that has a near-duplicate
+   sibling, an explicit sentence naming the sibling and the exact distinguishing factor
+   (e.g. Division 1/2's `why` names `pool-elite-division` by its label and says precisely
+   what differs). FIE-scoped entries' `why` also states which article range governs them,
+   in addition to the existing `ruleRefs` field.
+
+**UI** (`public/competition-detail.html`): a description panel appears the moment an
+option is *selected* in the dropdown (before "Apply format" is clicked) — `ruleRefs`
+formatted as "FIE Organisation Rules o.xx-yy", then `why`, then `mechanics`. Each
+`<option>` also carries `why` as its native `title` attribute, so hovering the closed
+dropdown list gives a tooltip without opening anything. New `selectedFormatInfo()` helper
+replaced three repeated inline lookups.
+
+**Verified:** `/api/formats` returns `why`/`mechanics` populated for all 24 entries (spot
+checked via a live server run, zero errors); inline script syntax checked after each edit.

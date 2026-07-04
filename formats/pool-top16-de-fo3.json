@@ -1,0 +1,20 @@
+{
+  "id": "pool-top16-de-fo3",
+  "description": "Pools (top 16 advance) then DE, bronze bout",
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-top16.json",
+      "participants": { "source": "initial" }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "participants": { "seedingMethod": "last_pool" }
+    }
+  ]
+}

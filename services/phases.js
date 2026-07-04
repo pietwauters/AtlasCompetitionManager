@@ -134,7 +134,12 @@ const Phase = {
         'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
       ).get(compId).m;
 
-      if (maxOrder > 0) {
+      // Legacy "at most one active phase" lock — skipped when a format has
+      // already validated this stage's real prerequisites via assertNextStage
+      // above (independent parallel tracks, e.g. Division 1 / Division 2, can
+      // then have more than one simultaneously-active phase). Free-form
+      // (no format) creation keeps the simple sequential lock.
+      if (maxOrder > 0 && !resolvedFormat) {
         const prev = db.prepare(
           'SELECT status FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1'
         ).get(compId);
@@ -630,7 +635,10 @@ const Phase = {
         'SELECT COALESCE(MAX(phase_order), 0) AS m FROM phases WHERE competition_id = ?'
       ).get(compId).m;
 
-      if (maxOrder > 0) {
+      // See the matching comment in Phase.create — skipped once a format has
+      // already validated this stage's real prerequisites (assertNextStage
+      // above), so independent parallel tracks can both be active at once.
+      if (maxOrder > 0 && !resolvedFormat) {
         const prev = db.prepare(
           'SELECT status FROM phases WHERE competition_id = ? ORDER BY phase_order DESC LIMIT 1'
         ).get(compId);

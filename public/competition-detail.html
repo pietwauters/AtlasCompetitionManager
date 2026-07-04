@@ -83,12 +83,13 @@
       <button class="primary"
               x-show="comp?.status!=='finished' && (!comp?.format_id || comp?.is_team)"
               @click="phaseFormOpen=!phaseFormOpen">+ New round</button>
-      <!-- Format-guided next stage -->
-      <button class="primary"
-              x-show="comp?.status!=='finished' && comp?.format_id && !comp?.is_team && formatPlan?.nextStageId"
-              @click="openNextFormatStage()">
-        + <span x-text="formatPlan ? formatStageLabel(formatPlan.nextStageId) : 'Next stage'"></span>
-      </button>
+      <!-- Format-guided next stage(s) — usually one, but independent parallel
+           tracks (e.g. Division 1 / Division 2) can offer several at once. -->
+      <template x-for="stage in ((comp?.status!=='finished' && comp?.format_id && !comp?.is_team) ? (formatPlan?.nextStages||[]) : [])" :key="stage.id">
+        <button class="primary" @click="openFormatStage(stage.id)">
+          + <span x-text="stage.label"></span>
+        </button>
+      </template>
     </div>
 
     <!-- ── Format picker (shown only when no phases exist and no format set) ── -->
@@ -108,17 +109,26 @@
         <template x-for="group in groupedFormats()" :key="group.label">
           <optgroup :label="group.label">
             <template x-for="f in group.items" :key="f.id">
-              <option :value="f.id" x-text="f.description"></option>
+              <option :value="f.id" :title="f.why||''" x-text="f.description"></option>
             </template>
           </optgroup>
         </template>
       </select>
-      <div x-show="availableFormats.find(f=>f.id===selectedFormat)?.note"
+
+      <div x-show="selectedFormatInfo()"
+           style="font-size:.83rem;background:#fff;border:1px solid #dde;border-radius:4px;padding:.6rem .7rem;margin-bottom:.5rem">
+        <div x-show="selectedFormatInfo()?.ruleRefs?.length" style="font-weight:600;color:#1a6bab;margin-bottom:.35rem"
+             x-text="'FIE Organisation Rules ' + (selectedFormatInfo()?.ruleRefs||[]).join(', ')"></div>
+        <div x-show="selectedFormatInfo()?.why" style="color:#333;margin-bottom:.45rem" x-text="selectedFormatInfo()?.why"></div>
+        <div x-show="selectedFormatInfo()?.mechanics" style="color:#666;font-size:.8rem;line-height:1.5"
+             x-text="selectedFormatInfo()?.mechanics"></div>
+      </div>
+      <div x-show="selectedFormatInfo()?.note"
            style="font-size:.78rem;color:#a15c00;background:#fff8ea;border:1px solid #f0dca0;border-radius:4px;padding:.4rem .6rem;margin-bottom:.5rem"
-           x-text="availableFormats.find(f=>f.id===selectedFormat)?.note"></div>
-      <template x-if="availableFormats.find(f=>f.id===selectedFormat)?.params?.length">
+           x-text="selectedFormatInfo()?.note"></div>
+      <template x-if="selectedFormatInfo()?.params?.length">
         <div style="margin-bottom:.5rem">
-          <template x-for="p in availableFormats.find(f=>f.id===selectedFormat)?.params||[]" :key="p.id">
+          <template x-for="p in selectedFormatInfo()?.params||[]" :key="p.id">
             <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
               <label style="font-size:.83rem;min-width:200px" x-text="p.label+':'"></label>
               <input type="number" class="inline" :min="p.min" :max="p.max"
@@ -280,10 +290,10 @@
     </div>
 
     <!-- Format-guided new stage form -->
-    <div x-show="formatStageFormOpen && formatPlan?.nextStageId"
+    <div x-show="formatStageFormOpenId"
          style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
       <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem"
-           x-text="'Create: '+formatStageLabel(formatPlan?.nextStageId)"></div>
+           x-text="'Create: '+formatStageLabel(formatStageFormOpenId)"></div>
 
       <template x-if="nextFormatStage()?.phaseType==='pool'">
         <div>
@@ -504,7 +514,7 @@ function app() {
     addMemberSel:{}, addMemberRole:{},
     // Format
     availableFormats:[], selectedFormat:'', formatParams:{}, fieOnly:true,
-    formatPlan:null, formatStageFormOpen:false,
+    formatPlan:null, formatStageFormOpenId:'',
     formatPoolLoading:false, formatDeInfo:null,
 
     get eligClubs() {
@@ -666,6 +676,9 @@ function app() {
       for(const s of opt) counts[s]=(counts[s]||0)+1;
       return Object.entries(counts).map(([s,n])=>n+'×'+s).join(' + ');
     },
+    selectedFormatInfo() {
+      return this.availableFormats.find(f => f.id === this.selectedFormat) || null;
+    },
     groupedFormats() {
       const list = this.availableFormats.filter(f => !this.fieOnly || f.scope === 'fie');
       const groups = new Map();
@@ -801,16 +814,16 @@ function app() {
       return this.formatPlan.stages.find(s=>s.id===stageId)||null;
     },
     nextFormatStage() {
-      if(!this.formatPlan?.nextStageId) return null;
-      return this.getFormatStage(this.formatPlan.nextStageId);
+      if(!this.formatStageFormOpenId) return null;
+      return this.getFormatStage(this.formatStageFormOpenId);
     },
     isFormatPrelimDE(ph) {
       const stage = this.getFormatStage(ph.format_stage);
       return !!(stage?.survivorTarget);
     },
-    openNextFormatStage() {
-      this.formatStageFormOpen = !this.formatStageFormOpen;
-      if(!this.formatStageFormOpen) return;
+    openFormatStage(stageId) {
+      this.formatStageFormOpenId = (this.formatStageFormOpenId === stageId) ? '' : stageId;
+      if(!this.formatStageFormOpenId) return;
       this.poolOptions = null; this.chosenSizes = null; this.formatDeInfo = null;
       const next = this.nextFormatStage();
       if(next?.phaseType === 'de') this.fetchFormatDeInfo();
@@ -846,7 +859,7 @@ function app() {
       const data = await r.json();
       if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
       this.showNotice('Round created');
-      this.formatStageFormOpen = false; this.poolOptions = null; this.chosenSizes = null;
+      this.formatStageFormOpenId = ''; this.poolOptions = null; this.chosenSizes = null;
       await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
     async createFormatDE() {
@@ -858,7 +871,7 @@ function app() {
       const data = await r.json();
       if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
       this.showNotice('Tableau created');
-      this.formatStageFormOpen = false; this.formatDeInfo = null;
+      this.formatStageFormOpenId = ''; this.formatDeInfo = null;
       await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
     async closeFormatDE(ph) {

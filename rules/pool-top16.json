@@ -1,0 +1,37 @@
+{
+  "$schema": "../rules/rule-schema.json",
+  "id": "pool-top16",
+  "description": "Pool phase, top 16 advance",
+  "type": "pool",
+  "poolFormation": {
+    "algorithm": "serpentine-seeding",
+    "allowedSizes": [
+      7,
+      6,
+      5
+    ],
+    "singlePoolMaxN": 10,
+    "separation": [
+      "nationality"
+    ]
+  },
+  "advancement": {
+    "method": "count",
+    "value": 16,
+    "minimumVictories": null,
+    "eliminateAfterPhase": true
+  },
+  "seeding": {
+    "criteria": [
+      "victory_ratio_desc",
+      "indicator_desc",
+      "touches_scored_desc",
+      "touches_received_asc",
+      "initial_seed_asc"
+    ]
+  },
+  "bout": {
+    "touchTarget": 5,
+    "timeLimitMinutes": 3
+  }
+}

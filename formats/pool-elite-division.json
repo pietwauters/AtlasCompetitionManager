@@ -1,0 +1,30 @@
+{
+  "id": "pool-elite-division",
+  "description": "Pool Round then split by pool result into Elite Division (top 16) / Division 1 (rest), each an independent tableau",
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "noElimination": true }
+    },
+    {
+      "id": "elite",
+      "label": "Elite Division Tableau",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "dependsOn": ["pools"],
+      "participants": { "source": "rank_range", "basedOn": "last_pool", "from": 1, "to": 16 }
+    },
+    {
+      "id": "division1",
+      "label": "Division 1 Tableau",
+      "phaseType": "de",
+      "rule": "de-standard.json",
+      "dependsOn": ["pools"],
+      "participants": { "source": "rank_range", "basedOn": "last_pool", "from": 17, "to": null }
+    }
+  ]
+}
