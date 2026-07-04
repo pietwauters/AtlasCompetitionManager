@@ -16,7 +16,6 @@
     "advancement": {
         "method": "percentage",
         "value": 100,
-        "minimumVictories": null,
         "eliminateAfterPhase": true
     },
     "seeding": {

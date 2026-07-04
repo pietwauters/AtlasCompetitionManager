@@ -108,8 +108,8 @@ Alongside the formula catalog, FencingTime's `Data/` folder also has:
 | All-places-fenced | ✓ via classification groups | ✓ `type="APF" from="N"` | ✓ `placement.allPlacesFenced` |
 | Percentage-range cut (`fromPercent`–`toPercent`) | n/a | ✓ | ✗ — `advancement.method: "percentage"` is a single value |
 | `minForCut` guard | n/a | ✓ | ✗ — not implemented |
-| `top_per_pool` / `minimumVictories` cut methods | n/a | partial | **documented in `rules/RULES.md` but not implemented** in `services/phases.js:408-426` — dead documentation |
-| User-chosen advancement at phase-creation time | n/a | n/a (baked into formula) | **stubbed, unwired**: `rules/pool-advancement-choices.json` has literal `"?"` placeholder values; nothing in `services/formats.js` reads `choices`/`prompt` |
+| `top_per_pool` / `minimumVictories` cut methods | n/a | partial | ~~**FIXED 2026-07-08**~~ — dead documentation removed from `rules/RULES.md` and all 4 rule files; never implemented in `services/phases.js`, never actually needed |
+| User-chosen advancement at phase-close time | n/a | n/a (baked into formula) | ✓ already covered generically by `phase.html`'s always-available "Advance:" override (any rule, any phase) — **`roundTo` exposed in that UI 2026-07-08**, closing the one real gap; the unwired `rules/pool-advancement-choices.json` stub was removed as fully redundant with it |
 | "Tableaux by levels" / parallel same-size brackets | ✓ `tableaux_par_niveau` | ✓ `subtype="grouped"` | partial — `pool-level-pools.json` does this for **pools**, nothing does it for **DE** |
 | Sharks-and-minnows pools | n/a | ✓ | ✗ |
 | Named external seeding strategies (rating lists, protect-top-N) | n/a | ✓ `SeedingRules.xml` | ✗ — Atlas seeds purely from `initial_seed` |
@@ -118,7 +118,7 @@ Alongside the formula catalog, FencingTime's `Data/` folder also has:
 | Pairwise lot-draw seeding at bracket merge (FIE o.87/o.102 — see §5) | ✓ `hasard_par_2` | ✓ `randomizeTop` | ✗ — Atlas's `buildSeedPositions` is always fully deterministic |
 | Engarde/FencingTime file import or export | — | — | ✗ — only FIE start-list XML import exists (`services/fieImport.js`); zero export capability |
 
-**Where Atlas is already ahead:** the DE rule schema (`rules/RULES-DE.md`) is more legible
+**Where Atlas is already ahead:** the DE rule schema (`docs/format-authoring-guide.md` §4) is more legible
 than either competitor — `repechage`/`placement` as small orthogonal JSON blocks vs.
 Engarde's dozen hand-authored `description_tableau` blocks per formula — and cohort-based
 multi-source seeding (`formats/grand-prix-fie.json`'s `cohorts` array) is cleaner than
@@ -209,7 +209,7 @@ each against both "can the engine represent this" and "is there a ready-made pre
 | **Mixed Formula A** (Senior Worlds/World Cup/GP: pools → prelim DE → main DE) | o.83-88 | ✓ | ✓ `formats/grand-prix-fie.json` |
 | **Mixed Formula B** (Junior/Cadet Worlds, Cadet/Junior WC, Zonals: pools → single DE straight through, **no bronze bout**, shared 3rd) | o.89-94 | ✓ (`formats/pool-de.json` + `rules/de-no-bronze.json` both exist) | was ✗, now ✓ `formats/mixed-formula-b.json` (added 2026-07-03) — `pool-de.json` itself still wires to `de-standard.json` (bronze bout) and is left as-is since it's used elsewhere as a generic pool+DE preset |
 | **Formula C** (Olympic Games) | o.95 | n/a | n/a — ad hoc, set by Executive Committee/IOC per Games, not a generic rule to encode. Correctly out of scope. |
-| **Team World Championships** (straight DE by team ranking, no pools; places 1-16 all fought for; 17+ by initial bracket position) | o.97-98 | Partially — bracket seeding and "17th+ ranked by initial position" default already match (`services/results.js`'s "others by seed" behavior is exactly o.98.3) | ✗ — `rules/team-fie-standard.json` has no `repechage`/`allPlacesFenced`-equivalent field; individual DE has that richness (`rules/RULES-DE.md`), team DE doesn't |
+| **Team World Championships** (straight DE by team ranking, no pools; places 1-16 all fought for; 17+ by initial bracket position) | o.97-98 | Partially — bracket seeding and "17th+ ranked by initial position" default already match (`services/results.js`'s "others by seed" behavior is exactly o.98.3) | ✗ — `rules/team-fie-standard.json` has no `repechage`/`allPlacesFenced`-equivalent field; individual DE has that richness (`docs/format-authoring-guide.md` §4), team DE doesn't |
 | **Team World Cup/Zonal** (relay match, top 4 by ranking + rest by paired lot draw) | o.99-102 | Relay bout order ✓ **verified byte-exact** against o.99.3 (`rules/team-fie-standard.json`'s `relays` array reproduces the o.99.3 table pair for pair) | pairwise lot-draw seeding not yet implemented for teams — see §7 |
 | **Veterans individual** (100% pool advancement — "no fencer is eliminated after pools"; poule-unique below 10; merge into next age category below 6; two-championship cumulative ranking-points seeding) | o.114-118 | Not modeled | ✗ — low priority unless veterans events become a target |
 | **Veterans team** (own placement-table structure, similar in spirit to individual repechage) | o.119 | Same gap as Team Worlds above | ✗ |
@@ -342,7 +342,7 @@ FIE-sanctioned event would produce, of exactly the kind that made the Fencing Ti
 inconsistency above hard to fully explain. `rules/pool-standard.json` and
 `rules/level-pools.json` (the two shipped rule files with a `separation` field) were both
 `["nationality", "club"]` and are now `["nationality"]`. `"club"` remains a supported,
-documented option (`rules/RULES.md`) for genuinely non-FIE domestic/club-level rule files
+documented option (`docs/format-authoring-guide.md` §3) for genuinely non-FIE domestic/club-level rule files
 that want it deliberately.
 
 **Pool sheet position "decided by lots" (o.68.3) — minor, not done.** The rule says the
@@ -371,11 +371,17 @@ literally randomized. Not worth chasing.
 
 ## 8. Proposed improvements, prioritized
 
-1. **Fix the two documentation/implementation mismatches.** Either implement
-   `minimumVictories` and `top_per_pool` in `services/phases.js`, or strike them from
-   `rules/RULES.md`. Either delete `rules/pool-advancement-choices.json` (dead stub with
-   `"?"` placeholders) or wire `choices`/`prompt` into phase creation. Not a new feature —
-   existing docs currently promise behavior that silently doesn't happen.
+1. ~~**Fix the two documentation/implementation mismatches.**~~ **FIXED 2026-07-08.**
+   `minimumVictories` and `top_per_pool` struck from `rules/RULES.md` and the 4 rule
+   files that carried a dead `"minimumVictories": null` — neither was ever read by
+   `services/phases.js`, and no format needs them. `rules/pool-advancement-choices.json`
+   deleted rather than wired up: tracing what it actually offered (top-n, top-x%, top-x%
+   rounded to a multiple, multiple-of-i) showed all four were already reachable through
+   `phase.html`'s existing, always-on "Advance:" director override at close time — the
+   one missing piece was a `roundTo` input in that UI when `percentage` is selected
+   (the backend already read `adv.roundTo`, `phases.js:425-428`, just nothing sent it).
+   Added that field instead of building a second, rule-file-specific `choices`/`prompt`
+   system that would have duplicated it.
 2. **Add `minForCut` to the pool `advancement` schema.** Small, low-risk, matches
    FencingTime's guard exactly, prevents a degenerate all-or-nothing cut on a small field.
 3. **Percentage range (`fromPercent`/`toPercent`).** FIE rules often specify a range
@@ -424,8 +430,8 @@ literally randomized. Not worth chasing.
 15. ~~**`results.js`'s "pool fencers" section under-counts multi-stage cohort-based
     formats.**~~ **FIXED 2026-07-07** — see §12 for the full design and verification.
 
-Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
-(team side still open, folded into item 5's text above). Items 6, 11, 13, 14, and 15 are done.
+Remaining open items: 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
+(team side still open, folded into item 5's text above). Items 1, 6, 11, 13, 14, and 15 are done.
 
 ---
 
@@ -745,3 +751,23 @@ previously-missing preliminary-tableau eliminees now present with a
 `pool-de`, `two-pool-rounds-combined`, `level-pools` (the terminal-*pool*-phase case),
 both parallel-tracks formats (`division-1-2-t16`, `pool-elite-division`), and a genuine
 free-form (no format) competition.
+
+---
+
+## 13. Combined authoring guide (2026-07-08)
+
+`rules/RULES.md` and `rules/RULES-DE.md` — the pool and DE rule-file field references —
+were the only authoring docs that existed for any of this. The format-shape layer
+(`formats/*.json`) and the catalog layer (`formats/catalog.json`) had **no reference doc
+at all**: someone writing a new multi-stage format had to reverse-engineer `dependsOn`,
+`rank_range`/`basedOn`, cohorts, `survivorTarget`, `pairedLotDraw`, and `paramOverrides`
+from reading existing shape files and scattered `CLAUDE.md` prose. Fixed by writing
+`docs/format-authoring-guide.md`: one document covering all three layers (rule file →
+format shape → catalog entry) with a full worked example (§2 of that doc — a
+club-level pool-then-split-by-result format with repechage on one branch, touching all
+three layers), followed by the complete field reference for each. `rules/RULES.md` and
+`rules/RULES-DE.md` are deleted — their content is folded in verbatim, not duplicated
+alongside a fourth document. This doc (`format-system-comparison.md`) remains what it
+always was: a chronological investigation/comparison log, not an authoring guide — the
+two are now clearly separated rather than a director/format-author having to guess which
+of three files has the answer they need.

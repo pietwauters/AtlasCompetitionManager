@@ -207,7 +207,8 @@ Tournament      — named series of competitions
 
 ### Pool formation
 - FIE serpentine seeding across pools
-- Separation: configured per rule file's `poolFormation.separation` array (`rules/RULES.md`).
+- Separation: configured per rule file's `poolFormation.separation` array
+  (`docs/format-authoring-guide.md` §3).
   **FIE-format rule files must use `["nationality"]` only** — the same array also drives
   which pools get FIE's special nationality-conflict bout-order tables (o.70) in
   `lib/boutOrder.js`, and those are officially nationality-only; including `"club"` risks a
@@ -297,6 +298,26 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Phase chaining: previous pool rankings seed the next phase
 - Combined seeding: aggregate stats across multiple pool phases
 - UI: `public/phase.html`, `public/pool.html`
+- **Advancement dead-doc/dead-code cleanup — FIXED 2026-07-08** (doc §8 item 1).
+  `minimumVictories` and `top_per_pool` were documented in the (now-removed) `rules/RULES.md` and (the
+  former) cargo-culted as `null` into all 4 shipped rule files, but never read by
+  `services/phases.js`'s `close()` — struck from the docs and rule files rather than
+  implemented, since nothing needs them. `rules/pool-advancement-choices.json` (an
+  unwired stub meant to let a rule file offer a director a curated menu of advancement
+  methods at close time) deleted rather than wired up: `phase.html` already has a
+  generic, always-available "Advance:" override at close time for any pool phase
+  (documented in the domain model above as "the competition manager can always manually
+  override the proposed advancement list"), and it already covered 3 of the stub's 4
+  methods (count/percentage/multiple). The one real gap — `percentage` + "rounded up to
+  a multiple of N" — was a genuine miss: `services/phases.js` already read `adv.roundTo`
+  (line ~425) but no UI ever sent it. Fixed by adding a `roundTo` input next to that
+  override, shown only when `percentage` is selected.
+- **Combined authoring guide added 2026-07-08.** `rules/RULES.md` and `rules/RULES-DE.md`
+  (pool/DE rule-file field references) removed and folded, verbatim content plus a new
+  end-to-end worked example and the format-shape/catalog schema (previously undocumented
+  anywhere — see "Competition formats" below), into a single
+  `docs/format-authoring-guide.md` — one place to read to build a whole dedicated
+  competition format (rule file → format shape → catalog entry), not three.
 
 ### DE phase (complete)
 - FIE serpentine tableau seeding
@@ -371,10 +392,12 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
   `docs/format-system-comparison.md` for the full analysis. Summary: Atlas's
   `formats/*.json` shape matches FencingTime's linear `Round`-list model closely (and
   already covers Engarde's GP-shape, Brazilian, repechage, and all-places-fenced
-  patterns). Confirmed real gaps, prioritized: (1) **fix dead docs/code** —
-  `rules/RULES.md` documents `minimumVictories`/`top_per_pool` advancement methods that
+  patterns). Confirmed real gaps, prioritized: (1) **fix dead docs/code** — (then)
+  `rules/RULES.md` documented `minimumVictories`/`top_per_pool` advancement methods that
   `services/phases.js:408-426` never implements, and `rules/pool-advancement-choices.json`
-  is an unwired stub with literal `"?"` placeholders; (2) add a `minForCut` guard to pool
+  was an unwired stub with literal `"?"` placeholders — **fixed 2026-07-08**, see the
+  Pool phase section below; `rules/RULES.md` no longer exists, folded into
+  `docs/format-authoring-guide.md` (2) add a `minForCut` guard to pool
   `advancement` (don't cut a small field); (3) percentage-range advancement
   (`fromPercent`/`toPercent`, FIE rules often specify a range e.g. o.86.1's 20–30%); (4)
   "tableaux by levels" for DE (parallel same-size brackets by rank block — pools already
@@ -696,7 +719,9 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
 | `db/migrator.js` | Runs pending `.sql` files on start |
 | `db/migrations/` | Numbered schema migrations (001–026) |
-| `rules/` | JSON rule documents (pool-standard, de-standard, …) |
+| `rules/` | JSON rule documents (pool-standard, de-standard, …) — see `docs/format-authoring-guide.md` for the full field reference |
+| `formats/` | Format shape files + `catalog.json` — see `docs/format-authoring-guide.md` |
+| `docs/format-authoring-guide.md` | Complete authoring reference: rule files → format shapes → catalog entries, with a worked end-to-end example |
 | `lib/poolFormation.js` | FIE pool seeding + calcPoolOptions |
 | `lib/boutOrder.js` | FIE official bout order tables |
 | `lib/deFormation.js` | FIE DE tableau seeding (buildSeedPositions, buildDE) |

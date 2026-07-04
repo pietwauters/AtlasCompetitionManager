@@ -73,6 +73,11 @@
           <input x-show="closeMethod!=='rule'" type="number" min="0" x-model="closeValue"
                  style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
                  :placeholder="closeMethod==='percentage'?'%':'N'">
+          <label x-show="closeMethod==='percentage'" style="font-size:.85rem">rounded up to multiple of
+            <input type="number" min="0" x-model="closeRoundTo"
+                   style="width:3.5rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
+                   placeholder="none">
+          </label>
           <button class="success" :disabled="!allBoutsComplete" @click="closePhase()"
                   :title="allBoutsComplete?'':'Complete all bouts first'">✓ Close round</button>
         </span>
@@ -179,7 +184,7 @@ function app() {
     phaseId, phase:null, comp:null, pools:[], rankings:[],
     strips:[], referees:[],
     notice:{text:'',error:false},
-    closeMethod:'rule', closeValue:'',
+    closeMethod:'rule', closeValue:'', closeRoundTo:'',
     assignOpen:false, assignPool:null, assignStripId:'', assignRefId:'',
     manualTieBreak: false,
 
@@ -262,6 +267,9 @@ function app() {
       if(this.closeMethod!=='rule') {
         body = { method: this.closeMethod, value: Number(this.closeValue)||0,
                  multipleOf: Number(this.closeValue)||0 };
+        if(this.closeMethod==='percentage' && Number(this.closeRoundTo)>0) {
+          body.roundTo = Number(this.closeRoundTo);
+        }
       }
       const r = await fetch('/api/phases/'+phaseId+'/close',{
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})
