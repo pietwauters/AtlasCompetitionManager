@@ -312,6 +312,13 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
   a multiple of N" — was a genuine miss: `services/phases.js` already read `adv.roundTo`
   (line ~425) but no UI ever sent it. Fixed by adding a `roundTo` input next to that
   override, shown only when `percentage` is selected.
+- **`minForCut` guard added 2026-07-08** (doc §8 item 2). New optional
+  `advancement.minForCut` field in pool rule files: if the active fencer count in a
+  phase is below it, `services/phases.js`'s `close()` advances everyone instead of
+  applying `method`/`value` — matches FencingTime's own guard. Only applies to the
+  rule's own automatic cut; a director's explicit close-time override always still
+  applies regardless of field size. Not set on any shipped rule file — opt-in, not a new
+  default (FencingTime itself leaves it disabled on all but one of its 35 templates).
 - **Combined authoring guide added 2026-07-08.** `rules/RULES.md` and `rules/RULES-DE.md`
   (pool/DE rule-file field references) removed and folded, verbatim content plus a new
   end-to-end worked example and the format-shape/catalog schema (previously undocumented

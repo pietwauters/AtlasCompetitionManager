@@ -382,8 +382,15 @@ literally randomized. Not worth chasing.
    (the backend already read `adv.roundTo`, `phases.js:425-428`, just nothing sent it).
    Added that field instead of building a second, rule-file-specific `choices`/`prompt`
    system that would have duplicated it.
-2. **Add `minForCut` to the pool `advancement` schema.** Small, low-risk, matches
-   FencingTime's guard exactly, prevents a degenerate all-or-nothing cut on a small field.
+2. ~~**Add `minForCut` to the pool `advancement` schema.**~~ **DONE 2026-07-08.** New
+   optional `advancement.minForCut` field (`rules/*.json`): if the active fencer count is
+   below it, `services/phases.js`'s `close()` advances everyone instead of applying
+   `method`/`value` — matches FencingTime's own `minForCut` guard exactly
+   (`Engarde/Data/EventTemplates.xml`). Only guards the rule's own automatic cut; an
+   explicit director override at close time still always applies. Not set on any shipped
+   rule file (FencingTime itself leaves it `0`/disabled on all but one of its own 35
+   templates) — it's opt-in per rule file, not a new default. See
+   `docs/format-authoring-guide.md` §3 for the field reference.
 3. **Percentage range (`fromPercent`/`toPercent`).** FIE rules often specify a range
    (e.g. o.86.1: "20%–30%"); letting the director land on a round number within the legal
    range is a real, moderate-effort win.
@@ -430,8 +437,8 @@ literally randomized. Not worth chasing.
 15. ~~**`results.js`'s "pool fencers" section under-counts multi-stage cohort-based
     formats.**~~ **FIXED 2026-07-07** — see §12 for the full design and verification.
 
-Remaining open items: 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
-(team side still open, folded into item 5's text above). Items 1, 6, 11, 13, 14, and 15 are done.
+Remaining open items: 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
+(team side still open, folded into item 5's text above). Items 1, 2, 6, 11, 13, 14, and 15 are done.
 
 ---
 

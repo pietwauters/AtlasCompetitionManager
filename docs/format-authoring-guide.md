@@ -266,6 +266,7 @@ see below).
 | `method` | string | yes | How the cutoff is calculated. See below. |
 | `value` | number | yes | The threshold value. Meaning depends on `method`. |
 | `roundTo` | number | no | Only used with `"percentage"`. Rounds the computed cutoff up to the next multiple of this value. E.g. `value: 70, roundTo: 8` with 45 fencers advances the next multiple of 8 at or above 70% of 45. |
+| `minForCut` | number | no | Guard against cutting a small field, matching FencingTime's own `minForCut` (`Engarde/Data/EventTemplates.xml`). If the number of active fencers in this phase is below this value, `method`/`value` are ignored entirely and **everyone advances** — no elimination happens for that close. Most FencingTime templates leave this at `0` (disabled); it's an opt-in safety net, not a default behavior. Only guards the rule's own automatic cut — an explicit director override at close time (below) is always respected regardless of field size. |
 | `eliminateAfterPhase` | boolean | yes | `true` = only the advancing fencers continue. `false` = all fencers continue (e.g. a ranking-only round used before a full DE). |
 
 **`method` values:**

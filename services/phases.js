@@ -408,6 +408,11 @@ const Phase = {
     let advanceN;
     if (formatAdvanceN !== null) {
       advanceN = formatAdvanceN;
+    } else if (!advancementOverride && rule.advancement?.minForCut && N < Number(rule.advancement.minForCut)) {
+      // Field too small for this rule's cut to make sense — advance everyone.
+      // Only guards the rule's own automatic cut; an explicit director override
+      // at close time is always respected regardless of field size.
+      advanceN = N;
     } else {
       advanceN = N;
       switch (adv.method) {
