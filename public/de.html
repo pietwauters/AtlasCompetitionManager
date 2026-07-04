@@ -295,6 +295,8 @@
         <div style="display:flex;gap:.5rem;justify-content:center">
           <button class="success" @click="saveScore()"
                   :disabled="scoreLeft===''||scoreLeft===null||scoreRight===''||scoreRight===null">Save score</button>
+          <button @click="swapSides()" x-show="selected?.status!=='finished'"
+                  title="Swap which side each fencer is on (FIE t.22)">⇄ Swap sides</button>
           <button @click="undoScore()" x-show="selected?.status==='finished'">↩ Undo</button>
           <button @click="selected=null">Cancel</button>
         </div>
@@ -655,6 +657,22 @@ function app() {
       this.showNotice('Score saved');
       this.selected = null;
       await this.loadSections();
+    },
+
+    async swapSides() {
+      const boutId = this.selected?.id;
+      if (!boutId) return;
+      const r = await fetch('/api/bouts/' + boutId + '/swap-sides', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Swap failed', true); return; }
+      this.showNotice('Sides swapped');
+      await this.loadSections();
+      outer: for (const section of this.sections) {
+        for (const round of section.rounds) {
+          const b = round.bouts.find(x => x.id === boutId);
+          if (b) { this.selectBout(b); break outer; }
+        }
+      }
     },
 
     async undoScore() {

@@ -165,10 +165,11 @@ const Phase = {
         });
 
         pool.bouts.forEach((bout, i) => {
-          db.prepare(`
+          const { lastInsertRowid: boutId } = db.prepare(`
             INSERT INTO bouts (phase_id, pool_id, left_id, right_id, status, bout_order)
             VALUES (?, ?, ?, ?, 'pending', ?)
           `).run(phaseId, poolId, bout.left.competitor_id, bout.right.competitor_id, i + 1);
+          require('./bouts').normalizeHandedness(boutId);
         });
       }
 
@@ -689,6 +690,15 @@ const Phase = {
         n.dbId = lastInsertRowid;
       }
 
+      // Real (non-bye) round-1 pairs already have both competitors known at
+      // insert time — normalize left/right by handedness now, same as pools.
+      // Later rounds get the same treatment as their pairings fill in, via
+      // routeBoutResult's cascade (services/bouts.js).
+      const Bout = require('./bouts');
+      for (const n of nodes) {
+        Bout.normalizeHandedness(n.dbId);
+      }
+
       // Pass 2 — set routing pointers now that all DB ids are known.
       const updateRouting = db.prepare(`
         UPDATE bouts
@@ -728,7 +738,6 @@ const Phase = {
       // would otherwise sit pending forever and stall everything downstream.
       // routeBoutResult's cascade check (services/bouts.js) already detects
       // this; byes just need to actually go through it once.
-      const Bout = require('./bouts');
       for (const n of nodes) {
         if (n.status === 'finished') Bout.routeBoutResult(n.dbId);
       }

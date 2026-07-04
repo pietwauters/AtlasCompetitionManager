@@ -174,6 +174,8 @@
           </select>
         </span>
 
+        <button class="btn-undo" @click="swapSides(bout)" x-show="bout.status !== 'finished'"
+                title="Swap which side each fencer is on (FIE t.22)">⇄</button>
         <button class="btn-undo" @click="undo(bout)" title="Undo last score entry">↩</button>
       </div>
     </template>
@@ -298,6 +300,15 @@ function app() {
       const updated = await r.json();
       this.bouts = this.bouts.map(b => b.id === bout.id ? { ...b, ...updated } : b);
       this.showNotice('Undone', false);
+    },
+
+    // Referee override — FIE t.22: swap which side each fencer stands on.
+    async swapSides(bout) {
+      const r = await fetch('/api/bouts/' + bout.id + '/swap-sides', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Swap failed', true); return; }
+      this.bouts = this.bouts.map(b => b.id === bout.id ? { ...b, ...data } : b);
+      this.showNotice('Sides swapped', false);
     },
 
     async _patch(boutId, ls, rs, winnerId) {

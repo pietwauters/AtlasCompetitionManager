@@ -3,6 +3,7 @@ const express        = require('express');
 const Bout           = require('../services/bouts');
 const Event          = require('../services/events');
 const { emitBoutUpdated } = require('../lib/notifications');
+const OPP2                = require('../lib/opp2Client');
 
 const router = express.Router();
 
@@ -60,6 +61,22 @@ router.post('/:id/undo', (req, res) => {
   const { bout: b, next } = result;
   emitBoutUpdated(b, next);
   res.json(b);
+});
+
+// Swap which side each fencer stands on — referee override (FIE t.22).
+// Refused once the bout is finished; undo it first.
+router.post('/:id/swap-sides', (req, res) => {
+  try {
+    const b = Bout.swapSides(req.params.id);
+    emitBoutUpdated(b, null);
+    // Keep a connected apparatus in sync — same requirement as an
+    // apparatus-initiated swap, just the other direction (docs/level2.md §15).
+    try { OPP2.notifyBoutSwapped(b.id); }
+    catch (err) { console.error('[bouts] OPP2 notifyBoutSwapped error:', err.message); }
+    res.json(b);
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
 });
 
 module.exports = router;

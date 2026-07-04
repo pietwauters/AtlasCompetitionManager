@@ -129,6 +129,9 @@
             <template x-if="!p.bout">
               <span style="color:#aaa">idle</span>
             </template>
+            <span x-show="p.fencersMismatch" class="badge badge-error"
+                  style="margin-left:.4rem;cursor:help"
+                  :title="p.fencersMismatch ? p.fencersMismatch.detail : ''">⚠ fencer mismatch</span>
           </div>
         </template>
       </div>

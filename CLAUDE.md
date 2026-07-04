@@ -366,6 +366,123 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
   `services/pipeline.js` above — now match on `de_round` when available.
 - Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
 
+### Handedness-aware strip-side placement (added 2026-07-08)
+`bouts.left_id`/`right_id` isn't just a scoresheet column label — it's the physical
+strip side, and it's genuinely load-bearing: FIE pool bout-order tables
+(`lib/boutOrder.js`) assign it by pool-slot position, DE's advancement cascade
+(`services/bouts.js`) assigns it by bracket structure (`tableau_position % 2`,
+precomputed `winner_next_side`/`loser_next_side`), and OPP2's `software/fencers`/score
+messages are wired to real apparatus lamps/connectors (`docs/level2.md`: "Red light:
+left fencer scored"). None of that ever considered fencer handedness — which it must:
+**FIE Technical Rules t.22** ("Coming on guard and placing of the fencers") specifies
+that the fencer called first stands on the referee's right, *except* in a right-vs-left
+bout, where the left-hander is placed on the referee's left regardless of call order
+(t.22.2 covers the team version — greater right-hander count takes the referee's right,
+tied broken by call order — not yet implemented; team relays go through a completely
+separate code path, `services/teamMatches.js`/`teamPhases.js`, with no cohort/rule
+resolution at all).
+
+Two parts, both individual bouts only (pool + DE; team relays untouched):
+
+1. **Automatic default — always on, not a rule-file setting.** `Bout.normalizeHandedness(boutId)`
+   (`services/bouts.js`) swaps `left_id`/`right_id` so a left-handed fencer occupies
+   `left_id` (mapped to the referee's left) whenever paired against a known
+   right-hander, for every pool and DE bout unconditionally; no swap when both share a
+   hand or either's handedness is unknown — the table/bracket-driven default is left
+   untouched in both cases. (An earlier version of this gated the behavior behind an
+   opt-in `bout.handednessAware` rule field — removed 2026-07-08 per direction that this
+   must always apply whenever handedness is known, not be something a rule file can
+   silently leave off.) Wired at every point a bout's two sides become concretely known:
+   pool bout creation (`services/phases.js`'s `create()`, immediately after each bout
+   insert); DE bracket creation for real (non-bye) round-1 pairs (`createDE()`, right
+   after Pass 1's insert loop); and every dynamic routing write inside
+   `services/bouts.js`'s `routeBoutResult` cascade (winner-forward, loser-forward, and
+   the bronze-bout write) — called defensively after each write since the helper itself
+   no-ops unless both sides are filled and the bout hasn't been scored yet, so a bracket
+   where a bout's second side isn't known until several rounds later still gets
+   normalized the moment it is. Reads handedness fresh from `competitors.handedness` by
+   id — no need to thread it through `lib/poolFormation.js`/`lib/deFormation.js`'s
+   existing (unmodified) pairing/seeding logic at all.
+2. **Manual referee override — not optional, per t.22's "if it is not forced upfront by
+   the CMS, the referee needs the possibility to swap the fencers."** `Bout.swapSides(boutId)`
+   (`services/bouts.js`) is available regardless of how the current sides were assigned —
+   a general safety valve, not tied to the automatic feature above. Swaps
+   `left_id`/`right_id`, `left_score`/`right_score` (so each fencer's own score stays
+   attached to them, not to whichever column they used to occupy), every `bout_history`
+   snapshot's scores (so a later `undo()` doesn't misattribute a pre-swap snapshot), and
+   every `card_reasons.side` for that bout (cards are keyed by side —
+   `card_reasons.side TEXT CHECK(side IN ('left','right'))` — not by `competitor_id`, so
+   they'd otherwise silently reattach to the wrong fencer after a swap). Refused once the
+   bout is `finished` — `undo()` first, same as any other post-result correction. Exposed
+   as `POST /api/bouts/:id/swap-sides` (`routes/bouts.js`, gated by the existing
+   `writeOnly('director')` mount on `/api/bouts`) and a "⇄" button in both score-entry
+   UIs: `public/pool.html`'s scoresheet grid (per bout row, hidden once finished) and
+   `public/de.html`'s score modal ("⇄ Swap sides", shown instead of "↩ Undo" while a bout
+   is still open).
+
+**OPP2 integration — FIXED 2026-07-08.** The gap above (manual override was
+Atlas-web-UI-only, no apparatus integration) is closed. Design settled on **not** a new
+`control` command — that would have required apparatus state-machine changes (waiting
+for corrected match data, re-pressing BEGIN) the user explicitly rejected as needless
+complexity, and doesn't match how Cyrano actually does this. Instead, `fencers`
+(`docs/level2.md` §15) is now bidirectional, mirroring the existing `score` precedent
+(`apparatus/score` vs `software/score`): the apparatus can publish `apparatus/fencers`
+with the `left`/`right` fencer objects exchanged, verbatim, whenever the referee
+corrects the assignment locally (button or remote — the trigger itself stays entirely
+outside OPP2, per the user's steer: "no-one will see a button, or an IR remote control,
+only commands exchanged via MQTT are seen"). No new control command, no apparatus
+state-machine change. Spec change is upstream at
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) (opened, not yet
+merged) — also documents `apparatus/fencers` as retained (matching `apparatus/score`,
+not the `software/fencers` carve-out), the scoresheet-side reaction (§18 "Fencer swap
+mid-bout" — same `slot_id`/bout id but changed `left`/`right` means flip `side` on
+existing annotations, not a slot change), and the NAK-gating extension (§25.4 — an
+unresolved mismatch blocks END regardless of score/priority correctness).
+
+Atlas-side implementation, `lib/opp2Client.js`:
+- New `handleApparatusFencers(pisteId, payload)`, wired to a new
+  `openpiste/+/apparatus/fencers` subscription. Compares the received ids against the
+  active, not-yet-finished bout on file. **Clean swap** (same two ids exchanged): calls
+  `Bout.swapSides`, then `_republishSwappedFencers` re-sends `software/fencers`
+  (`identifyingOnly`, so it never resets score/clock/uw2f) and `software/record`.
+  **Anything else** (not a clean exchange, no active bout, or the bout already has a
+  result): `_flagFencersMismatch` logs it, stores `state.fencersMismatch` (surfaced via
+  `emitPisteState`/SSE to `public/index.html`'s "Live pistes" pills and
+  `public/strips.html`'s table — a `badge-error` "⚠ fencer mismatch" tooltip naming the
+  detail), and `handleEnd` NAKs unconditionally while it's set. Cleared whenever
+  `state.boutId` changes (`handleNext`/`handlePrev`), since a mismatch is scoped to one
+  bout.
+- The existing web-UI swap (`Bout.swapSides` via `POST /api/bouts/:id/swap-sides`) had
+  the same desync risk in the *other* direction — a director swapping via the web page
+  while an apparatus already had that bout loaded would leave the apparatus with a
+  stale mapping. Fixed by extracting `_republishSwappedFencers` as a shared helper and
+  exposing `OPP2.notifyBoutSwapped(boutId)` (`routes/bouts.js` calls it right after
+  `Bout.swapSides`) — finds whichever piste currently has that bout active and pushes
+  the same re-publish, regardless of which direction triggered the swap. Safe no-op
+  when OPP2 isn't connected or no piste matches.
+
+**Verified:** `Bout.swapSides` end-to-end (pool bout, pre-existing card follows the
+fencer to its new side, rejected on a finished bout, `undo()`→swap→re-score recovers);
+`OPP2.notifyBoutSwapped` no-ops safely with no live connection and with no matching
+piste; all touched modules (`lib/opp2Client.js`, `routes/bouts.js`, plus every route
+mounted alongside it in `server.js`) load with no circular-dependency issues. **Not
+verified against a live or simulated MQTT broker** in this environment — same
+documented limitation as `bout_duration_standards`' adaptive average (OPP2 section
+above) — the actual `apparatus/fencers` message routing, the mismatch NAK-gating, and
+the SSE-driven UI warnings are code-reviewed but not exercised end-to-end over real
+MQTT traffic yet.
+
+Verified end-to-end with a throwaway competition: a 6-fencer pool with alternating R/L
+handedness produced zero R-left/L-right pairs; the same setup with the shipped
+`pool-standard.json` (before the always-on change, using the then-existing opt-in flag
+off) reproduced several unswapped R-L pairs, confirming the gate worked as designed at
+the time. An 8-fencer DE (including one fencer with unknown handedness) showed zero
+violations in round 1 (created) and rounds 2-3 (filled in dynamically via `simulate()`),
+confirming the cascade hook fires correctly as later rounds' pairings become known.
+`swapSides` verified separately: a card recorded pre-swap correctly followed its fencer to the new
+side; swapping a finished bout was correctly rejected; `undo()` → swap → re-score
+correctly recovered from an already-finished bout.
+
 ### Competition formats (complete)
 - Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged
   since before the catalog existed) define multi-phase flows with cohorts and exemptions
@@ -684,7 +801,10 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
   store the spec `ts` field instead of server datetime, and the match clock value
   (from `apparatus/clock`) at card time
 - Manual appendices B and C
-- Fencer handedness (`hand`: R/L) — not yet in `fencers` table; Engarde stores `Lateralite` (D/G); relevant for scoresheet display and OPP2 `software/fencers` payload
+- ~~Fencer handedness (`hand`: R/L)~~ — **stale line, corrected 2026-07-08**: the data
+  field already existed (`fencers.handedness`/`competitors.handedness`, CSV + FIE XML
+  import, people/fencers UI — all predate this note). What was actually missing —
+  strip-side placement — is now built; see "Handedness-aware strip-side placement" below.
 
 ### 2. Scoresheets
 - Pool scoresheet grid (fencer vs fencer diagonal matrix) requires each fencer's **slot position in the pool** (Engarde: `NoDansLaPoule` 1–N). Currently derivable from seeding order but not stored. If a fencer is manually moved the grid breaks. Add `pool_slot` to the pool-fencer join table via migration.

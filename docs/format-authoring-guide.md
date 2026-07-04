@@ -328,6 +328,15 @@ Parameters for individual pool bouts.
 | `touchTarget` | number | yes | Number of touches needed to win (e.g. `5` for pools, `15` for individual DE, `45` for team). |
 | `timeLimitMinutes` | number | yes | Time limit per bout in minutes. `3` is standard for pools. |
 
+**Handedness-aware strip-side placement is always on**, not a field you set here. Per
+FIE Technical Rules t.22, `Bout.normalizeHandedness` (`services/bouts.js`) automatically
+places a left-handed fencer on `left_id` whenever paired against a fencer with known
+right-handedness — no rule-file opt-in, applies to every pool (and DE) bout. No effect
+when both fencers share a hand or either's handedness is unknown. Individual bouts only
+— team relays live in a separate table and are never affected. See `CLAUDE.md`'s
+"Handedness-aware strip-side placement" section for the full design, including the
+separate (currently Atlas-web-UI-only) manual swap override.
+
 ### Creating a new pool rule file
 
 1. Copy `pool-standard.json` to a new file, e.g. `pool-veterans.json`.
@@ -401,6 +410,9 @@ Elimination** dropdown on the competition detail page.
 | `timeLimitMinutes` | number | yes | Time limit per bout. `3` pools · `6` 10-touch DE · `9` 15-touch DE. |
 | `overtime.enabled` | boolean | no | Default `true`. When scores are tied at time, fence sudden-death with random priority. Always `false` in pools (ties are allowed). |
 | `overtime.durationSeconds` | number | no | Default `60`. Duration of the overtime period. |
+
+Handedness-aware strip-side placement (FIE t.22) applies automatically here too, same
+as pools (§3) — not a field on this schema, always on when handedness is known.
 
 ### `tableau`
 

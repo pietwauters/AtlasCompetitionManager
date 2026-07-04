@@ -62,8 +62,12 @@
             </td>
             <td data-label="Status"><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
             <td data-label="Network"><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
-            <td data-label="Current bout" style="font-size:.85rem;color:#555"
-                x-text="s.bout ? '#'+s.bout.bout_order+': '+s.bout.left+' — '+s.bout.right : '—'"></td>
+            <td data-label="Current bout" style="font-size:.85rem;color:#555">
+              <span x-text="s.bout ? '#'+s.bout.bout_order+': '+s.bout.left+' — '+s.bout.right : '—'"></span>
+              <span x-show="s.fencersMismatch" class="badge badge-error"
+                    style="margin-left:.4rem;cursor:help"
+                    :title="s.fencersMismatch ? s.fencersMismatch.detail : ''">⚠ fencer mismatch</span>
+            </td>
             <td data-label="">
               <button class="danger" @click="deleteStrip(s)">Delete</button>
             </td>
@@ -103,7 +107,8 @@ function app() {
         const p = JSON.parse(e.data);
         this.strips = this.strips.map(s => s.name === p.pisteId
           ? { ...s, network_state: p.apparatusOnline ? 'online' : 'offline',
-                    boutId: p.boutId, slotId: p.slotId, bout: p.bout }
+                    boutId: p.boutId, slotId: p.slotId, bout: p.bout,
+                    fencersMismatch: p.fencersMismatch }
           : s);
       });
     },

@@ -53,10 +53,78 @@ const stmtUndoBout   = db.prepare(`
 const stmtDERouteId  = db.prepare(
   `SELECT id FROM bouts WHERE phase_id=? AND bracket='main' AND de_round=? AND tableau_position=?`
 );
+const stmtGetCompHandedness = db.prepare('SELECT handedness FROM competitors WHERE id = ?');
+const stmtNormalizeSwap = db.prepare('UPDATE bouts SET left_id = @right_id, right_id = @left_id WHERE id = @id');
+const stmtSwapBoutSides = db.prepare(`
+  UPDATE bouts
+  SET left_id = @right_id, right_id = @left_id,
+      left_score = @right_score, right_score = @left_score
+  WHERE id = @id
+`);
+const stmtSwapBoutHistory = db.prepare(
+  'UPDATE bout_history SET left_score = right_score, right_score = left_score WHERE bout_id = ?'
+);
+const stmtSwapCardSides = db.prepare(
+  "UPDATE card_reasons SET side = CASE side WHEN 'left' THEN 'right' ELSE 'left' END WHERE bout_id = ?"
+);
 
 const Bout = {
   findById(id) {
     return stmtFindByIdFull.get(id);
+  },
+
+  // FIE Technical Rules t.22: in a right-vs-left bout, the left-hander stands
+  // on the referee's left regardless of call order. Always applied whenever
+  // both fencers' handedness is known and they differ — not an opt-in rule
+  // setting; individual bouts only (pool/DE — team relays live in a separate
+  // `relays` table and never reach this function at all). Never touches an
+  // already-scored bout, and only acts once both sides of the pairing are
+  // actually known; safe to call defensively any time a side is written,
+  // since it no-ops otherwise.
+  normalizeHandedness(boutId) {
+    if (!boutId) return;
+    const bout = stmtGetRaw.get(boutId);
+    if (!bout || bout.status !== 'pending' || !bout.left_id || !bout.right_id) return;
+
+    const leftHand  = stmtGetCompHandedness.get(bout.left_id)?.handedness;
+    const rightHand = stmtGetCompHandedness.get(bout.right_id)?.handedness;
+    if (leftHand === 'R' && rightHand === 'L') {
+      stmtNormalizeSwap.run({ id: boutId, left_id: bout.left_id, right_id: bout.right_id });
+    }
+  },
+
+  // Manual referee override — FIE Technical Rules t.22: whatever side Atlas
+  // proposes (via normalizeHandedness above, or the plain FIE table/bracket
+  // default), the referee must always be able to swap it at the strip if the
+  // CMS didn't force it correctly upfront. Unlike normalizeHandedness this is
+  // an explicit action, not gated by handednessAware. Swaps left_id/right_id,
+  // left_score/right_score (so each fencer's own score stays attached to
+  // them, not to whichever column they used to be in), every bout_history
+  // snapshot (so a later undo() doesn't misattribute a pre-swap snapshot),
+  // and every card_reasons.side for this bout (cards are keyed by side, not
+  // competitor_id). Refused once the bout is finished — undo() first, same
+  // as any other post-result correction.
+  swapSides(boutId) {
+    const bout = stmtGetRaw.get(boutId);
+    if (!bout) throw Object.assign(new Error('Bout not found.'), { status: 404 });
+    if (bout.status === 'finished') {
+      throw Object.assign(new Error('Cannot swap sides on a finished bout — undo it first.'), { status: 400 });
+    }
+    if (!bout.left_id || !bout.right_id) {
+      throw Object.assign(new Error('Both fencers must be assigned before swapping sides.'), { status: 400 });
+    }
+
+    db.transaction(() => {
+      stmtSwapBoutSides.run({
+        id: boutId,
+        left_id: bout.left_id, right_id: bout.right_id,
+        left_score: bout.left_score, right_score: bout.right_score,
+      });
+      stmtSwapBoutHistory.run(boutId);
+      stmtSwapCardSides.run(boutId);
+    })();
+
+    return this.findById(boutId);
   },
 
   findByPool(poolId) {
@@ -124,6 +192,7 @@ const Bout = {
       const col = bout.winner_next_side === 'left' ? 'left_id' : 'right_id';
       if (bout.winner_id) {
         (col === 'left_id' ? stmtSetLeft : stmtSetRight).run(bout.winner_id, bout.winner_next_bout_id);
+        this.normalizeHandedness(bout.winner_next_bout_id);
         winnerNext = this.findById(bout.winner_next_bout_id);
       }
     } else if (bout.bracket === 'main' && bout.de_round && bout.winner_id) {
@@ -134,6 +203,7 @@ const Bout = {
       if (nextBout) {
         const col = bout.tableau_position % 2 === 1 ? 'left_id' : 'right_id';
         (col === 'left_id' ? stmtSetLeft : stmtSetRight).run(bout.winner_id, nextBout.id);
+        this.normalizeHandedness(nextBout.id);
         winnerNext = this.findById(nextBout.id);
       }
     }
@@ -142,6 +212,7 @@ const Bout = {
       // Pointer-based loser routing
       const col = bout.loser_next_side === 'left' ? 'left_id' : 'right_id';
       (col === 'left_id' ? stmtSetLeft : stmtSetRight).run(loserId, bout.loser_next_bout_id);
+      this.normalizeHandedness(bout.loser_next_bout_id);
       loserNext = this.findById(bout.loser_next_bout_id);
     } else if (!bout.loser_next_bout_id && bout.bracket === 'main' && bout.de_round && loserId) {
       // Arithmetic fallback: bronze-only for pre-014 phases
@@ -151,6 +222,7 @@ const Bout = {
         if (bronzeBout && bronzeBout.status !== 'finished') {
           const col = bout.tableau_position % 2 === 1 ? 'left_id' : 'right_id';
           (col === 'left_id' ? stmtSetLeft : stmtSetRight).run(loserId, bronzeBout.id);
+          this.normalizeHandedness(bronzeBout.id);
           loserNext = this.findById(bronzeBout.id);
         }
       }
