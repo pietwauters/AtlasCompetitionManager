@@ -442,16 +442,17 @@ unresolved mismatch blocks END regardless of score/priority correctness).
 Atlas-side implementation, `lib/opp2Client.js`:
 - New `handleApparatusFencers(pisteId, payload)`, wired to a new
   `openpiste/+/apparatus/fencers` subscription. Compares the received ids against the
-  active, not-yet-finished bout on file. **Clean swap** (same two ids exchanged): calls
-  `Bout.swapSides`, then `_republishSwappedFencers` re-sends `software/fencers`
-  (`identifyingOnly`, so it never resets score/clock/uw2f) and `software/record`.
-  **Anything else** (not a clean exchange, no active bout, or the bout already has a
-  result): `_flagFencersMismatch` logs it, stores `state.fencersMismatch` (surfaced via
-  `emitPisteState`/SSE to `public/index.html`'s "Live pistes" pills and
-  `public/strips.html`'s table — a `badge-error` "⚠ fencer mismatch" tooltip naming the
-  detail), and `handleEnd` NAKs unconditionally while it's set. Cleared whenever
-  `state.boutId` changes (`handleNext`/`handlePrev`), since a mismatch is scoped to one
-  bout.
+  active bout on file, in this order: **empty** (both sides absent — normal idle
+  between bouts) → ignore; **identical to current** (same two ids, same sides — a
+  confirmation echo, not a swap) → ignore; **clean swap** (same two ids, exchanged) →
+  calls `Bout.swapSides`, then `_republishSwappedFencers` re-sends `software/fencers`
+  (`identifyingOnly`, so it never resets score/clock/uw2f) and `software/record`;
+  **anything else** (no active bout, the bout already has a result, or a pairing that's
+  neither identical nor a clean exchange) → `_flagFencersMismatch` logs it, stores
+  `state.fencersMismatch` (surfaced via `emitPisteState`/SSE to `public/index.html`'s
+  "Live pistes" pills and `public/strips.html`'s table — a `badge-error` "⚠ fencer
+  mismatch" tooltip naming the detail), and `handleEnd` NAKs unconditionally while it's
+  set. Cleared whenever `state.boutId` changes (`handleNext`/`handlePrev`).
 - The existing web-UI swap (`Bout.swapSides` via `POST /api/bouts/:id/swap-sides`) had
   the same desync risk in the *other* direction — a director swapping via the web page
   while an apparatus already had that bout loaded would leave the apparatus with a
@@ -460,6 +461,30 @@ Atlas-side implementation, `lib/opp2Client.js`:
   `Bout.swapSides`) — finds whichever piste currently has that bout active and pushes
   the same re-publish, regardless of which direction triggered the swap. Safe no-op
   when OPP2 isn't connected or no piste matches.
+
+**Cross-checked against a real implementation, 2026-07-08** — `esp32scoringdeviceMqtt`
+(`/home/piet/esp-idfProjects/esp32scoringdeviceMqtt`), an existing ESP32 scoring-device
+firmware. Its swap feature (`Opp2Handler.cpp`'s `UI_SWAP_FENCERS` handling, triggered by
+an already-implemented OPRCP remote-control command) **predates this design session by
+over a month** (implemented 2026-05-24) — it already swaps fencers/scores/cards/
+priority/lights/UW2F together, publishes under `apparatus/fencers` (`BuildTopic` always
+uses the apparatus role), and marks it retained — all independently matching what this
+session converged on. The legacy Cyrano/EFP1 path needs no separate swap code at all:
+`PushCachedStatusToCyrano()` rebuilds the EFP1 cache fresh from the already-swapped
+canonical state, leaving `EFP1Message::SwapFencersInclScoreCardsEtc()` genuine dead code
+(never called, superseded by that refactor).
+
+This comparison caught a real bug before it shipped: the firmware republishes
+`apparatus/fencers` any time its assignment changes for *any* reason (a fresh
+`software/fencers` arriving — e.g. every normal `NEXT` — MQTT reconnect, or clearing to
+empty between bouts), not only after a genuine swap. The original Atlas handler only
+recognized "clean swap" or "anomaly," so it would have flagged a false mismatch on
+every ordinary bout transition. Fixed by adding the empty/identical no-op cases above,
+verified against all five branches (empty, identical, anomaly, clean swap, no-active-
+bout) using a temporary test hook (added, exercised, then removed — no test scaffolding
+shipped). Also amended upstream: `docs/level2.md` §15 now documents that
+`apparatus/fencers` isn't always a swap, pushed as a second commit to
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7).
 
 **Verified:** `Bout.swapSides` end-to-end (pool bout, pre-existing card follows the
 fencer to its new side, rejected on a finished bout, `undo()`→swap→re-score recovers);
