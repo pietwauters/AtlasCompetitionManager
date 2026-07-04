@@ -99,12 +99,23 @@
         Choose a predefined format to guide phase creation with exemptions and multi-cohort finals.
         Leave unset for manual, round-by-round control.
       </div>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.83rem;margin-bottom:.5rem;cursor:pointer">
+        <input type="checkbox" x-model="fieOnly" @change="selectedFormat=''">
+        Official FIE formats only
+      </label>
       <select class="inline" x-model="selectedFormat" style="width:100%;margin-bottom:.5rem">
         <option value="">— no format (manual) —</option>
-        <template x-for="f in availableFormats" :key="f.id">
-          <option :value="f.id" x-text="f.description"></option>
+        <template x-for="group in groupedFormats()" :key="group.label">
+          <optgroup :label="group.label">
+            <template x-for="f in group.items" :key="f.id">
+              <option :value="f.id" x-text="f.description"></option>
+            </template>
+          </optgroup>
         </template>
       </select>
+      <div x-show="availableFormats.find(f=>f.id===selectedFormat)?.note"
+           style="font-size:.78rem;color:#a15c00;background:#fff8ea;border:1px solid #f0dca0;border-radius:4px;padding:.4rem .6rem;margin-bottom:.5rem"
+           x-text="availableFormats.find(f=>f.id===selectedFormat)?.note"></div>
       <template x-if="availableFormats.find(f=>f.id===selectedFormat)?.params?.length">
         <div style="margin-bottom:.5rem">
           <template x-for="p in availableFormats.find(f=>f.id===selectedFormat)?.params||[]" :key="p.id">
@@ -492,7 +503,7 @@ function app() {
     teams:[], newTeamName:'', addingTeam:false, expandedTeam:null,
     addMemberSel:{}, addMemberRole:{},
     // Format
-    availableFormats:[], selectedFormat:'', formatParams:{},
+    availableFormats:[], selectedFormat:'', formatParams:{}, fieOnly:true,
     formatPlan:null, formatStageFormOpen:false,
     formatPoolLoading:false, formatDeInfo:null,
 
@@ -654,6 +665,18 @@ function app() {
       const counts={};
       for(const s of opt) counts[s]=(counts[s]||0)+1;
       return Object.entries(counts).map(([s,n])=>n+'×'+s).join(' + ');
+    },
+    groupedFormats() {
+      const list = this.availableFormats.filter(f => !this.fieOnly || f.scope === 'fie');
+      const groups = new Map();
+      for (const f of list) {
+        const label = f.scope === 'fie'
+          ? (f.tier || (f.ageCategory ? f.ageCategory.charAt(0).toUpperCase()+f.ageCategory.slice(1)+' events' : 'FIE — other'))
+          : (f.scope === 'club' ? 'Club / Regional' : 'Custom');
+        if (!groups.has(label)) groups.set(label, []);
+        groups.get(label).push(f);
+      }
+      return [...groups.entries()].map(([label, items]) => ({ label, items }));
     },
 
     // ── Teams ─────────────────────────────────────────────────────────────────

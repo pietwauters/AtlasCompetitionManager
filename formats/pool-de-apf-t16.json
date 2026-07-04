@@ -1,0 +1,31 @@
+{
+  "id": "pool-de-apf-t16",
+  "description": "Pools then DE, all places fenced from T16",
+  "params": [
+    {
+      "id": "pool_advancement_pct",
+      "label": "Advancement after pools (%)",
+      "type": "integer",
+      "default": 80,
+      "min": 10,
+      "max": 100
+    }
+  ],
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "useParam": "pool_advancement_pct" }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination (all places fenced)",
+      "phaseType": "de",
+      "rule": "de-all-places-t16.json",
+      "participants": { "seedingMethod": "last_pool" }
+    }
+  ]
+}

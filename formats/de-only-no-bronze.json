@@ -1,0 +1,13 @@
+{
+  "id": "de-only-no-bronze",
+  "description": "Straight Direct Elimination, no bronze bout",
+  "stages": [
+    {
+      "id": "final",
+      "label": "Direct Elimination",
+      "phaseType": "de",
+      "rule": "de-no-bronze.json",
+      "participants": { "source": "initial" }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "pool-de-repechage-t32-t8",
+  "description": "Pools then DE with repechage (T32→T8), bronze bout",
+  "params": [
+    {
+      "id": "pool_advancement_pct",
+      "label": "Advancement after pools (%)",
+      "type": "integer",
+      "default": 75,
+      "min": 10,
+      "max": 100
+    }
+  ],
+  "stages": [
+    {
+      "id": "pools",
+      "label": "Pool Round",
+      "phaseType": "pool",
+      "rule": "pool-standard.json",
+      "participants": { "source": "initial" },
+      "advancement": { "useParam": "pool_advancement_pct" }
+    },
+    {
+      "id": "final",
+      "label": "Direct Elimination (with repechage)",
+      "phaseType": "de",
+      "rule": "de-repechage-t32-t8.json",
+      "participants": { "seedingMethod": "last_pool" }
+    }
+  ]
+}

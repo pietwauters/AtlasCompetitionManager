@@ -4,43 +4,132 @@ const fs   = require('fs');
 const path = require('path');
 const db   = require('../db');
 
-const FORMATS_DIR = path.join(__dirname, '..', 'formats');
+const FORMATS_DIR  = path.join(__dirname, '..', 'formats');
+const CATALOG_FILE = path.join(FORMATS_DIR, 'catalog.json');
 
-const formatCache    = new Map();
+const shapeCache     = new Map();
+let   catalogCache   = null;
 let   formatListCache = null;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function loadFormat(id) {
+// Load a raw formats/*.json shape file by its own id (unchanged mechanism —
+// never renamed, so any pre-existing competitions.format_id referencing a
+// shape id directly keeps working with no migration).
+function loadShape(id) {
   if (!id) return null;
-  if (formatCache.has(id)) return formatCache.get(id);
+  if (shapeCache.has(id)) return shapeCache.get(id);
   const file = path.join(FORMATS_DIR, path.basename(id) + '.json');
   if (!fs.existsSync(file)) throw Object.assign(new Error('Format not found: ' + id), { status: 404 });
   const fmt = JSON.parse(fs.readFileSync(file, 'utf8'));
-  formatCache.set(id, fmt);
+  shapeCache.set(id, fmt);
   return fmt;
+}
+
+// formats/catalog.json — named, taggable entries that alias a shape. Multiple
+// entries may point at the same shape (e.g. Worlds/World Cup/Grand Prix all
+// alias "grand-prix-fie" per FIE o.83). See docs/format-system-comparison.md §7-8.
+function loadCatalog() {
+  if (catalogCache) return catalogCache;
+  catalogCache = fs.existsSync(CATALOG_FILE)
+    ? JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'))
+    : [];
+  return catalogCache;
+}
+
+function resolveCatalogEntry(id) {
+  return loadCatalog().find(e => e.id === id) || null;
+}
+
+// Resolve a catalog entry into a full format object: the shape's stages
+// unchanged, params with paramOverrides applied to their `default`, and the
+// catalog entry's own id/label/tags in place of the shape's own.
+function resolveCatalogFormat(entry) {
+  const shape  = loadShape(entry.shape);
+  const params = (shape.params || []).map(p => {
+    const override = entry.paramOverrides && entry.paramOverrides[p.id];
+    return override === undefined ? p : { ...p, default: override };
+  });
+  return {
+    id:           entry.id,
+    description:  entry.label,
+    scope:        entry.scope,
+    eventType:    entry.eventType,
+    tier:         entry.tier,
+    ageCategory:  entry.ageCategory,
+    ruleRefs:     entry.ruleRefs,
+    note:         entry.note,
+    params,
+    stages:       shape.stages,
+  };
+}
+
+function loadFormat(id) {
+  if (!id) return null;
+  const entry = resolveCatalogEntry(id);
+  if (entry) return resolveCatalogFormat(entry);
+  // Not a catalog id — fall back to treating it as a raw shape id directly,
+  // exactly as before the catalog existed.
+  return loadShape(id);
 }
 
 function listFormats() {
   if (formatListCache) return formatListCache;
   if (!fs.existsSync(FORMATS_DIR)) return [];
-  formatListCache = fs.readdirSync(FORMATS_DIR)
-    .filter(f => f.endsWith('.json'))
-    .map(f => {
+
+  const catalog       = loadCatalog();
+  const cataloguedIds = new Set(catalog.map(e => e.shape));
+
+  const catalogueEntries = catalog.map(entry => {
+    try {
+      const fmt = resolveCatalogFormat(entry);
+      return {
+        id:          fmt.id,
+        description: fmt.description,
+        scope:       fmt.scope,
+        eventType:   fmt.eventType,
+        tier:        fmt.tier,
+        ageCategory: fmt.ageCategory,
+        ruleRefs:    fmt.ruleRefs,
+        note:        fmt.note,
+        params:      fmt.params || [],
+        stages:      fmt.stages.map(s => ({ id: s.id, label: s.label, phaseType: s.phaseType })),
+      };
+    } catch { return null; }
+  }).filter(Boolean);
+
+  // Any shape file with no catalog entry pointing at it is a self-authored,
+  // custom format — surface it automatically, same as before the catalog
+  // existed, tagged so the UI can group it separately.
+  const customEntries = fs.readdirSync(FORMATS_DIR)
+    .filter(f => f.endsWith('.json') && f !== 'catalog.json')
+    .map(f => f.slice(0, -5))
+    .filter(id => !cataloguedIds.has(id))
+    .map(id => {
       try {
-        const fmt = JSON.parse(fs.readFileSync(path.join(FORMATS_DIR, f), 'utf8'));
+        const fmt = loadShape(id);
         return {
           id:          fmt.id,
           description: fmt.description,
+          scope:       'custom',
+          eventType:   null,
+          tier:        null,
+          ageCategory: null,
+          ruleRefs:    null,
+          note:        null,
           params:      fmt.params || [],
           stages:      fmt.stages.map(s => ({ id: s.id, label: s.label, phaseType: s.phaseType })),
         };
       } catch { return null; }
     })
-    .filter(Boolean)
-    .sort((a, b) => a.description.localeCompare(b.description));
+    .filter(Boolean);
+
+  const scopeOrder = { fie: 0, club: 1, custom: 2 };
+  formatListCache = [...catalogueEntries, ...customEntries]
+    .sort((a, b) => (scopeOrder[a.scope] ?? 9) - (scopeOrder[b.scope] ?? 9)
+      || a.description.localeCompare(b.description));
   return formatListCache;
 }
 

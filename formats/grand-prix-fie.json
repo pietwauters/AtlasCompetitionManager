@@ -34,7 +34,7 @@
       "id": "final",
       "label": "Final Tableau",
       "phaseType": "de",
-      "rule": "de-standard.json",
+      "rule": "de-no-bronze.json",
       "participants": {
         "cohorts": [
           { "cohort": "initial_exempt", "sortBy": "initial_seed_asc", "pairedLotDraw": true },

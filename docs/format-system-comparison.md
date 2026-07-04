@@ -423,3 +423,94 @@ literally randomized. Not worth chasing.
 
 Remaining open items: 1, 2, 3, 4, 7, 8, 9, 10, 12. Item 5 is done for the individual side
 (team side still open, folded into item 5's text above). Items 6, 11, and 13 are done.
+
+---
+
+## 9. Format catalog: an alias mechanism, not duplicated shape files (2026-07-05)
+
+**Ask:** an entry in the format picker for every FIE competition type (Team/Individual ×
+World Cup/Grand Prix/Zonal/World Championships × Senior/Junior/Cadet/Veteran) plus the
+common Engarde/FencingTime club formats already catalogued in §2-3, navigable without a
+30-item flat dropdown, with a scope flag to filter "pure FIE" vs. everything else, and
+continued support for self-defined formats.
+
+**Mechanism — two layers, not one.** Before this, `formats/*.json` conflated two things:
+the stage-pipeline *shape* and the *identity* shown in the picker. Many named FIE
+competitions are explicitly the same shape by rule — o.83 states Mixed Formula A "is used
+for... Senior World Championships as well as... Senior World Cup... and Grand Prix,"
+three competitions, one shape — so duplicating the shape file per name would mean any
+future fix has to be applied N times. Split it instead:
+- **Shapes**: `formats/*.json`, mechanism and ids unchanged (no renames — avoids touching
+  `competitions.format_id`, a plain TEXT column with no FK, for anything already using a
+  shape id directly).
+- **Catalog**: new `formats/catalog.json`, a flat array of small tagged entries
+  (`id`, `label`, `shape`, `scope`, `eventType`, `tier`, `ageCategory`, `ruleRefs`, `note`,
+  `paramOverrides`). Multiple entries may point at the same shape — e.g. three entries
+  ("World Championships — Individual", "World Cup — Individual", "Grand Prix —
+  Individual") all alias `grand-prix-fie`. `paramOverrides` lets an entry fix a shape's
+  exposed param default without a new shape file (Veterans forces `pool_advancement_pct`
+  to 100 on the generic `pool-de` shape this way).
+
+`services/formats.js`: `loadFormat(id)` checks the catalog first; on a hit, resolves the
+shape and merges `paramOverrides` into the params' `default`. On a miss, falls back to the
+pre-catalog direct-file lookup unchanged — so every existing `format_id` (e.g.
+`"grand-prix-fie"`, `"two-pool-rounds"`) keeps resolving exactly as before, no migration.
+`listFormats()` returns catalog entries plus a synthesized `scope: "custom"` entry for any
+shape file with no catalog entry pointing at it — hand-author a new `formats/*.json` shape
+with no catalog entry and it shows up automatically, unchanged "self-defined formats" path.
+
+**Bug found and fixed while populating content:** `grand-prix-fie.json`'s final stage used
+`de-standard.json` (bronze bout), but o.88 says Mixed Formula A has none — semifinal
+losers share 3rd. Confirmed against real data already in `docs/GP/`:
+`201473-RESULTS_SRMF_2026-145.xml`'s `Tableau ID="B4"` (semifinals, 2 bouts) is followed
+directly by `Tableau ID="B2"` (final, 1 bout) — no 3rd-place bout in the real bracket at
+all. Fixed to `de-no-bronze.json`. Since three new catalog entries alias this exact shape,
+this mattered more than it would have in isolation.
+
+**Discovered while scoping team entries: team phases have no format/rule picker at all.**
+The plan called for "Team World Cup"/"Team Zonal Championships" catalog entries aliasing
+`team-fie-standard`, but team phase creation doesn't go through `services/formats.js` —
+`public/competition-detail.html` hardcodes `rule_doc: 'team-fie-standard.json'` directly
+(the multi-stage format system exists for individual pool→DE pipelines; team phases are a
+single `TeamPhase.create(competitionId, ruleDoc)` call with no stage concept, since teams
+are pre-seeded via `teams.seed`, not fenced through pools). Adding catalog entries for
+something with no selection mechanism would be cosmetic. **Dropped from this pass** —
+distinct from the already-tracked "team DE placement richness" gap (§6): this one is
+"there's no picker at all," that one is "the one rule file that exists can't express
+all-places-fenced." Both need addressing before Team World Cup/Zonal/Worlds can be
+properly catalogued.
+
+**Content shipped — 18 catalog entries, 5 new shape files** (`pool-de-repechage-t32-t8`,
+`pool-de-repechage-t64-t4`, `pool-de-apf-t16`, `de-only-bronze`, `de-only-no-bronze`; all
+follow `mixed-formula-b.json`'s existing pattern — reuse `pool-standard.json` for the pool
+stage, point the final DE stage at an existing, already-verified DE rule file):
+
+| Entries | Shape | Basis |
+|---|---|---|
+| World Championships / World Cup / Grand Prix — Senior Individual | `grand-prix-fie` (post-fix) | o.83-88 |
+| World Championships Junior/Cadet, World Cup Junior/Cadet, Zonal Championships — Individual | `mixed-formula-b` | o.89-94 |
+| Veterans — Individual | `pool-de` + `paramOverrides` | o.114-118 (approximation, see entry `note`) |
+| Pools + DE (choose %), Two Pool Rounds ×2, Level Pools, Pools+repechage ×2, Pools+APF-T16, Straight DE ×2 | existing/new shapes | non-FIE, `scope: "club"` |
+
+**Explicitly deferred, no entry added** (documented, not silently missing): Team World
+Cup/Zonal/World Championships (needs both the picker above and, for Worlds specifically,
+all-places-fenced richness in `rules/team-fie-standard.json`), Veterans Team, "tableaux by
+levels" DE (parallel same-size brackets), sharks-and-minnows pools, Olympic Formula C
+(ad hoc per Games, not a generic rule to encode).
+
+**Verified 2026-07-05:** real end-to-end bracket builds (fresh throwaway competitions,
+20 competitors, cleaned up after) for all three new pools+DE shapes plus the Veterans
+override — zero stuck bouts, full completion in every case; Veterans confirmed
+`advanced: 20, eliminated: 0`. Backward compatibility confirmed against real existing
+competitions in the dev DB using pre-catalog `format_id` values directly (`grand-prix-fie`,
+`two-pool-rounds`, `two-pool-rounds-round2`, `pool-level-pools`) — all resolve unchanged.
+The picker UI's new grouping/filter logic verified in isolation (correct groups both with
+and without the FIE-only filter) but not visually screenshotted — no headless browser
+available in this environment.
+
+**UI:** `public/competition-detail.html`'s format picker gained an "Official FIE formats
+only" checkbox (default on) and `<optgroup>` grouping by `tier` (or age category where
+tier is null, e.g. Veterans) within the filtered set; non-FIE entries group under "Club /
+Regional." A selected entry's `note` (e.g. Grand Prix's fixed-70%-vs-70-80%-range caveat)
+displays inline. `routes/formats.js` needed no changes — it already just passes through
+`listFormats()`.

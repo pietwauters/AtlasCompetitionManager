@@ -1,0 +1,177 @@
+[
+  {
+    "id": "fie-senior-worlds-individual",
+    "label": "World Championships — Individual",
+    "shape": "grand-prix-fie",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Championships",
+    "ageCategory": "senior",
+    "ruleRefs": ["o.83-88"],
+    "note": "Uses the fixed 70% pool-advancement shape (same as Grand Prix). o.86.1 permits Worlds/World Cup a 70-80% range; percentage-range advancement isn't built yet (see docs/format-system-comparison.md §8)."
+  },
+  {
+    "id": "fie-senior-worldcup-individual",
+    "label": "World Cup — Individual",
+    "shape": "grand-prix-fie",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Cup",
+    "ageCategory": "senior",
+    "ruleRefs": ["o.83-88"],
+    "note": "Uses the fixed 70% pool-advancement shape (same as Grand Prix). o.86.1 permits Worlds/World Cup a 70-80% range; percentage-range advancement isn't built yet (see docs/format-system-comparison.md §8)."
+  },
+  {
+    "id": "fie-senior-gp-individual",
+    "label": "Grand Prix — Individual",
+    "shape": "grand-prix-fie",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "Grand Prix",
+    "ageCategory": "senior",
+    "ruleRefs": ["o.83-88"]
+  },
+  {
+    "id": "fie-junior-worlds-individual",
+    "label": "World Championships — Junior Individual",
+    "shape": "mixed-formula-b",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Championships",
+    "ageCategory": "junior",
+    "ruleRefs": ["o.89-94"]
+  },
+  {
+    "id": "fie-cadet-worlds-individual",
+    "label": "World Championships — Cadet Individual",
+    "shape": "mixed-formula-b",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Championships",
+    "ageCategory": "cadet",
+    "ruleRefs": ["o.89-94"]
+  },
+  {
+    "id": "fie-junior-worldcup-individual",
+    "label": "World Cup — Junior Individual",
+    "shape": "mixed-formula-b",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Cup",
+    "ageCategory": "junior",
+    "ruleRefs": ["o.89-94"]
+  },
+  {
+    "id": "fie-cadet-worldcup-individual",
+    "label": "World Cup — Cadet Individual",
+    "shape": "mixed-formula-b",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "World Cup",
+    "ageCategory": "cadet",
+    "ruleRefs": ["o.89-94"]
+  },
+  {
+    "id": "fie-zonal-individual",
+    "label": "Zonal Championships — Individual",
+    "shape": "mixed-formula-b",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": "Zonal Championships",
+    "ageCategory": null,
+    "ruleRefs": ["o.89-94"]
+  },
+  {
+    "id": "fie-veterans-individual",
+    "label": "Veterans — Individual",
+    "shape": "pool-de",
+    "scope": "fie",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": "veteran",
+    "ruleRefs": ["o.114-118"],
+    "paramOverrides": { "pool_advancement_pct": 100 },
+    "note": "100% pool advancement approximates o.118.7's 'no fencer is eliminated after the pools.' Doesn't model o.118's category-merge-below-6 or poule-unique-below-10 edge cases."
+  },
+  {
+    "id": "club-pool-de",
+    "label": "Pools then DE (choose advancement %)",
+    "shape": "pool-de",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-two-pool-rounds-combined",
+    "label": "Two Pool Rounds (combined seeding) then DE",
+    "shape": "two-pool-rounds",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-two-pool-rounds-round2",
+    "label": "Two Pool Rounds (round-2 seeding) then DE",
+    "shape": "two-pool-rounds-round2",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-level-pools",
+    "label": "Pool Round then Level Pools",
+    "shape": "pool-level-pools",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-pool-de-repechage-t32-t8",
+    "label": "Pools then DE with repechage (T32→T8)",
+    "shape": "pool-de-repechage-t32-t8",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-pool-de-repechage-t64-t4",
+    "label": "Pools then DE with repechage (T64→T4, classic épée)",
+    "shape": "pool-de-repechage-t64-t4",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-pool-de-apf-t16",
+    "label": "Pools then DE, all places fenced from T16",
+    "shape": "pool-de-apf-t16",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-de-only-bronze",
+    "label": "Straight Direct Elimination, bronze bout",
+    "shape": "de-only-bronze",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  },
+  {
+    "id": "club-de-only-no-bronze",
+    "label": "Straight Direct Elimination, no bronze bout",
+    "shape": "de-only-no-bronze",
+    "scope": "club",
+    "eventType": "individual",
+    "tier": null,
+    "ageCategory": null
+  }
+]

@@ -339,12 +339,28 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
 
 ### Competition formats (complete)
-- Format files in `formats/*.json` define multi-phase flows with cohorts and exemptions
-- `services/formats.js` — `loadFormat`, `resolveParticipants`, `applyPoolClose`, `closeFormatDE`, `validateCounts`
+- Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged
+  since before the catalog existed) define multi-phase flows with cohorts and exemptions
+- `formats/catalog.json` (added 2026-07-05) — named, taggable entries that alias a shape;
+  multiple entries may share one shape (e.g. Worlds/World Cup/Grand Prix Senior Individual
+  all alias `grand-prix-fie`, per FIE o.83). See `docs/format-system-comparison.md` §9.
+- `services/formats.js` — `loadFormat` resolves a catalog id first, falling back to the
+  pre-catalog direct-shape-file lookup for any `format_id` that predates the catalog (no
+  migration needed); `listFormats` returns catalog entries plus a synthesized
+  `scope: "custom"` entry for any shape with no catalog entry (still how self-defined
+  formats surface); other exports (`resolveParticipants`, `applyPoolClose`,
+  `closeFormatDE`, `validateCounts`) unchanged
 - Migration 021: `format_id` on competitions, `format_cohort` on competitors, `format_stage` on phases
-- Implemented: `grand-prix-fie.json` (3-stage GP), `two-pool-rounds.json`
+- Shapes: `grand-prix-fie.json` (3-stage GP/Worlds/WC — bronze-bout bug fixed 2026-07-05,
+  see below), `mixed-formula-b.json`, `two-pool-rounds.json`, `two-pool-rounds-round2.json`,
+  `pool-level-pools.json`, `pool-de.json`, `pool-de-repechage-t32-t8.json`,
+  `pool-de-repechage-t64-t4.json`, `pool-de-apf-t16.json`, `de-only-bronze.json`,
+  `de-only-no-bronze.json` — 18 catalog entries across them (`docs/format-system-comparison.md` §9)
 - GP format verified against real FIE Grand Prix XML (Shanghai 2026, 233 fencers): 16 initial exempts, 70% pool advancement, 32 survivors from preliminary tableau, T=64 final
-- UI: format picker in competition detail, stage plan with "+ Next stage" guided creation
+- UI: format picker in competition detail (`public/competition-detail.html`) — "Official
+  FIE formats only" checkbox (default on) + `<optgroup>` grouping by tier/age category,
+  inline display of a catalog entry's `note` (caveats/approximations); stage plan with
+  "+ Next stage" guided creation unchanged
 - **Comparison study vs. Engarde and FencingTime (2026-07-03):** see
   `docs/format-system-comparison.md` for the full analysis. Summary: Atlas's
   `formats/*.json` shape matches FencingTime's linear `Round`-list model closely (and
@@ -382,7 +398,16 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
   value), external/combined seeding lists + ranking-points classification (would make Atlas
   a cross-event ranking authority — separate scope decision), team DE repechage/
   all-places-fenced richness, pool-sheet-position-by-lot (o.68.3), pool-size floor
-  (o.67.1).
+  (o.67.1). **Format catalog added 2026-07-05** (doc §9): the alias mechanism above,
+  populated with every FIE individual combo buildable at full rule-accuracy today (18
+  catalog entries) plus the common non-FIE club formats already catalogued in doc §2-3.
+  Also fixed the `grand-prix-fie.json` bronze-bout bug while populating it (o.88 — no
+  bronze bout in Mixed Formula A; confirmed against real `docs/GP/` data, no separate
+  3rd-place `Tableau` exists in the actual bracket). Discovered a new, separate gap while
+  scoping team entries: team phase creation has **no format/rule picker at all** —
+  `competition-detail.html` hardcodes `rule_doc: 'team-fie-standard.json'` — so Team World
+  Cup/Zonal/Worlds catalog entries were dropped from this pass rather than added as
+  cosmetic-only options; distinct from the already-tracked team-DE-placement-richness gap.
 
 ### Results
 - Full competition results page combining DE + pool-eliminated fencers
