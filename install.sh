@@ -157,6 +157,45 @@ else
   echo "    Warning: could not create admin account: $ADMIN_RESULT"
 fi
 
+# ---------------------------------------------------------------------------
+# 9. Scoresheet MQTT credential pool (first install only — skipped if any exist)
+# ---------------------------------------------------------------------------
+echo "==> Provisioning scoresheet MQTT credential pool"
+POOL_RESULT=$(sudo -u "$APP_USER" node -e "
+  require('./db/migrator').migrate();
+  const Pairing = require('./services/pairing');
+  const stats = Pairing.poolStats();
+  if (stats.total > 0) { console.log('SKIP'); process.exit(0); }
+  const created = Pairing.createPoolBatch(10);
+  console.log('CREATED:' + created.length);
+" 2>&1)
+
+if echo "$POOL_RESULT" | grep -q "^SKIP"; then
+  echo "    Credential pool already provisioned, skipping."
+elif echo "$POOL_RESULT" | grep -q "^CREATED:"; then
+  N=$(echo "$POOL_RESULT" | grep "^CREATED:" | cut -d: -f2)
+  echo "    Created $N scoresheet MQTT credential(s) in Atlas's own database."
+else
+  echo "    Warning: could not provision credential pool: $POOL_RESULT"
+fi
+
+# Pushing these to Mosquitto only makes sense if the broker is on this same
+# host — see scripts/install-broker-cert.sh for the separate-hardware case,
+# same reasoning applies here. Re-run is safe: the sync script fully
+# regenerates the ACL/passwd files from Atlas's DB each time.
+if command -v mosquitto &>/dev/null; then
+  echo "==> Pushing scoresheet credentials to the local Mosquitto broker"
+  bash "$APP_DIR/scripts/sync-mosquitto-scoresheet-acl.sh"
+else
+  echo ""
+  echo "  !! Mosquitto not found on this host — scoresheet MQTT credentials were"
+  echo "     generated in Atlas's own database but not pushed to any broker yet."
+  echo "     Once your broker is reachable (locally or on separate hardware, per"
+  echo "     scripts/install-broker-cert.sh), run:"
+  echo "       ./scripts/sync-mosquitto-scoresheet-acl.sh"
+  echo ""
+fi
+
 APP_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2 | tr -d ' ' || echo 3001)
 echo ""
 echo "========================================================"

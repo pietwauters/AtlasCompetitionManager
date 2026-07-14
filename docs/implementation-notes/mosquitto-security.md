@@ -36,6 +36,18 @@ it — but since it never matches any `user` block, it never gets write access t
 anything. No separate "read-only role" needs to exist; it's just the absence of a
 credential.
 
+**Confirmed the hard way, 2026-07-14 — this global `topic read #` line only reaches
+truly anonymous connections.** On Mosquitto 2.0.18, a client that authenticates with a
+username gets *only* whatever appears inside its own `user <name>` block — the global,
+unscoped lines above it are not inherited. The `SUBACK` for a disallowed subscription
+still comes back successful, which is what makes this easy to miss: nothing errors,
+messages (retained or live) just never arrive. Verified directly against a real
+deployment: an authenticated device with a correctly-provisioned password could
+subscribe successfully but received nothing, while the identical subscribe worked
+instantly anonymous. **Consequence: every `user` block below needs its own explicit
+`topic read #` line too**, not just the write line — every example in this note has
+been corrected to include it.
+
 ## 2. Tier B — username/password, one per device
 
 ```bash
@@ -44,6 +56,7 @@ mosquitto_passwd -b /etc/mosquitto/passwd apparatus_piste07 '<generated-password
 
 ```conf
 user apparatus_piste07
+topic read #
 topic write openpiste/+/apparatus/#
 ```
 
@@ -70,6 +83,7 @@ from §2 applies unchanged:
 
 ```conf
 user scoresheet-device-014
+topic read #
 topic write openpiste/+/scoresheet/#
 ```
 
@@ -230,12 +244,15 @@ acl_file /etc/mosquitto/acl.conf
 topic read #
 
 user apparatus_piste07
+topic read #
 topic write openpiste/+/apparatus/#
 
 user remote_014
+topic read #
 topic write openpiste/+/remote/#
 
 user scoresheet-device-014
+topic read #
 topic write openpiste/+/scoresheet/#
 ```
 

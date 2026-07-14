@@ -418,13 +418,22 @@ is the working direction, not a commitment.
 For **Tier B**, per the current 4.5, the QR carries the *assigned credential itself*
 (username/password), not a redeemable code — the device is already on the CMS's own
 page (already knows the broker via the same mDNS default), so nothing else needs
-conveying. Not yet fully specified — a small JSON or URI-style payload (e.g.
-`openpiste-credential://escoresheet_7:xyz...`) is the working direction. **This
-supersedes Atlas's own currently-shipped implementation**, which still uses a
-short-lived numeric ticket code redeemed via HTTP (`docs/e-scoresheet-standalone-design.md`
-§4.3, `routes/pair.js`) — that code is real and working, but reflects an earlier point
-in this same discussion, not the converged design. Updating it to match is a real,
-separate implementation task, not done as part of this document.
+conveying. Not yet fully specified as a general OPP2 payload shape — a small JSON or
+URI-style scheme (e.g. `openpiste-credential://escoresheet_7:xyz...`) would be the
+working direction for a cross-vendor standard, still open.
+
+**Atlas's own implementation rebuilt to match, 2026-07-14** — see
+`docs/e-scoresheet-standalone-design.md`'s "Rebuilt to match the converged design" note.
+The short-lived numeric ticket code redeemed via HTTP (`routes/pair.js`'s old
+`POST /redeem`) is gone; assignment is now a pure Atlas-DB action
+(`services/pairing.js`'s `assignCredential`, backed by a pre-generated
+`mqtt_credentials` pool topped up via `scripts/top-up-credential-pool.js` and pushed to
+Mosquitto via `scripts/sync-mosquitto-scoresheet-acl.sh`) and delivery is a URL whose
+**fragment** (not query string, so it never reaches Atlas's own server or its logs)
+carries the username/password — `https://openpiste.local:{port}/escoresheet/#u=...&p=...`.
+This is Atlas's own concrete choice for the "not yet fully specified" payload shape
+above, not a claim that it's the cross-vendor standard — a genuinely portable scheme
+would still need its own spec discussion if other implementers want to converge on one.
 
 ### 4.7 Capability signaling
 

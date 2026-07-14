@@ -11,6 +11,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const express  = require('express');
+const https    = require('https');
 const path     = require('path');
 const session  = require('express-session');
 const { migrate } = require('./db/migrator');
@@ -46,6 +47,18 @@ app.use(auth.attach);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Standalone e-scoresheet PWA — self-contained, no Atlas session/auth
+// dependency, deliberately kept out of public/ (see docs/e-scoresheet-standalone-design.md).
+app.use('/escoresheet', express.static(path.join(__dirname, 'escoresheet')));
+
+// Public, unauthenticated, deliberately reachable over plain HTTP: a new
+// device has no reason yet to trust the HTTPS certificate this very CA
+// signs, so the download itself can't depend on that trust existing.
+app.get('/ca.crt', (req, res) => {
+  res.set('Content-Type', 'application/x-x509-ca-cert');
+  res.sendFile(path.join(__dirname, 'data', 'tls', 'ca.crt'));
+});
+
 // Auth routes (public — no role required)
 app.use('/api/auth', require('./routes/auth'));
 
@@ -77,6 +90,11 @@ app.use('/api/opp2',     writeOnly('director'), require('./routes/opp2'));
 app.use('/api/settings', writeOnly('director'), require('./routes/settings'));
 app.use('/api/users',    auth.require('admin'), require('./routes/users'));
 app.use('/api/fie',    writeOnly('director'), require('./routes/fieImport'));
+app.use('/api/pairing', auth.require('director'), require('./routes/pairing'));
+app.use('/api/pair',    require('./routes/pair'));
+// Must come after /api/pairing and /api/pair — this mounts at the bare /api
+// prefix, so anything registered afterward would be caught (and, for
+// mutations, auth-gated) by it first.
 app.use('/api',        writeOnly('director'), require('./routes/teamMatches'));
 
 app.get('/health', (req, res) => {
@@ -86,3 +104,21 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Atlas Competition Manager — http://localhost:${PORT}`);
 });
+
+// HTTPS is additive, not a replacement — existing HTTP-based workflows on the
+// LAN are untouched. It exists because the e-scoresheet PWA's service worker
+// only registers in a secure context (see docs/e-scoresheet-standalone-design.md).
+// Run ./scripts/generate-tls-cert.sh once to create the certificate.
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+const TLS_DIR = path.join(__dirname, 'data', 'tls');
+try {
+  const httpsOptions = {
+    key:  fs.readFileSync(path.join(TLS_DIR, 'server.key')),
+    cert: fs.readFileSync(path.join(TLS_DIR, 'server.crt')),
+  };
+  https.createServer(httpsOptions, app).listen(HTTPS_PORT, () => {
+    console.log(`Atlas Competition Manager — https://openpiste.local:${HTTPS_PORT}`);
+  });
+} catch (err) {
+  console.log('[TLS] No certificate found — HTTPS not started. Run ./scripts/generate-tls-cert.sh to enable it.');
+}

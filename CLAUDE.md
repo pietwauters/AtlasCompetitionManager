@@ -432,8 +432,8 @@ corrects the assignment locally (button or remote — the trigger itself stays e
 outside OPP2, per the user's steer: "no-one will see a button, or an IR remote control,
 only commands exchanged via MQTT are seen"). No new control command, no apparatus
 state-machine change. Spec change is upstream at
-[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) (opened, not yet
-merged) — also documents `apparatus/fencers` as retained (matching `apparatus/score`,
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) (**merged
+2026-07-08**) — also documents `apparatus/fencers` as retained (matching `apparatus/score`,
 not the `software/fencers` carve-out), the scoresheet-side reaction (§18 "Fencer swap
 mid-bout" — same `slot_id`/bout id but changed `left`/`right` means flip `side` on
 existing annotations, not a slot change), and the NAK-gating extension (§25.4 — an
@@ -484,7 +484,9 @@ verified against all five branches (empty, identical, anomaly, clean swap, no-ac
 bout) using a temporary test hook (added, exercised, then removed — no test scaffolding
 shipped). Also amended upstream: `docs/level2.md` §15 now documents that
 `apparatus/fencers` isn't always a swap, pushed as a second commit to
-[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7).
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) — **merged
+2026-07-08**; `./scripts/sync-spec.sh` confirmed Atlas's local mirror is byte-identical
+to the merged version.
 
 **Verified:** `Bout.swapSides` end-to-end (pool bout, pre-existing card follows the
 fencer to its new side, rejected on a finished bout, `undo()`→swap→re-score recovers);
@@ -495,7 +497,9 @@ verified against a live or simulated MQTT broker** in this environment — same
 documented limitation as `bout_duration_standards`' adaptive average (OPP2 section
 above) — the actual `apparatus/fencers` message routing, the mismatch NAK-gating, and
 the SSE-driven UI warnings are code-reviewed but not exercised end-to-end over real
-MQTT traffic yet.
+MQTT traffic yet. **Next session:** live-MQTT testing against the real
+`esp32scoringdeviceMqtt` firmware (broker + real device, not just code review) is
+planned to close this gap.
 
 Verified end-to-end with a throwaway competition: a 6-fencer pool with alternating R/L
 handedness produced zero R-left/L-right pairs; the same setup with the shipped
@@ -507,6 +511,392 @@ confirming the cascade hook fires correctly as later rounds' pairings become kno
 `swapSides` verified separately: a card recorded pre-swap correctly followed its fencer to the new
 side; swapping a finished bout was correctly rejected; `undo()` → swap → re-score
 correctly recovered from an already-finished bout.
+
+### OPP2 roles/responsibilities discussion — ongoing (started 2026-07-08)
+
+`docs/roles-and-responsibilities-discussion.md` is a **non-normative** draft document
+(not part of the spec, not yet sent to the external friend it's intended for) working
+out a general model for which OPP2 element should originate/execute each bout function,
+rather than arguing it per-function. Core model: referee **intent** → **executor**
+(decided by the "locality principle" — whichever element already has to hold the
+resulting state for an unrelated reason; only the CMS and the apparatus ever qualify) →
+**state** → **display**. Read the file directly for the full reasoning — this entry is
+a pointer, not a substitute.
+
+### OPP2 security and provisioning discussion — started 2026-07-13
+
+`docs/security-provisioning-discussion.md` — another **non-normative** draft, same
+spirit as the roles/responsibilities one above: needs first, then a model, before any
+spec language. Complementary, not overlapping — that document assumes a message
+arrived from an already-authorized publisher and asks who executes it; this one is
+about how a publisher becomes authorized to begin with (today, none of them are —
+every Mosquitto listener in Atlas's reference deployment is `allow_anonymous true`).
+
+Surfaced concretely while building the standalone e-scoresheet PWA's pairing flow
+(`docs/e-scoresheet-standalone-design.md` §4.3/§4.8) — realized partway through that a
+fix scoped to "Atlas talking to Mosquitto" doesn't actually serve OPP2's stated
+multi-vendor interoperability goal, so this was pulled out into its own document rather
+than folded into Atlas's own implementation notes.
+
+**10 needs established** (cross-vendor interop; device-capability diversity —
+embedded/browser/native each have genuinely different capabilities, browsers
+specifically cannot select a client cert from JS or touch a platform keystore at all;
+no internet dependency; no specific-broker assumption; an explicit "not bank-grade"
+trust-model statement; authorization scoped to the existing publisher-role topic
+structure; revocation as a required *capability*, mechanism-defined; interoperability
+pinned at the MQTT/TLS protocol level, not a broker's proprietary management API — only
+the *provisioning exchange* itself is genuinely OPP2's to standardize; read stays open,
+only write is gated; additive/backward-compatible, doesn't break already-fielded
+hardware like the real ESP32 firmware).
+
+**Model, briefly:** perimeter trust (physical/network access, already assumed) vs
+component trust (what provisioning establishes) are kept separate; every provisioning
+path traces back to a human vouching for the new component, same as physically
+deploying an apparatus already does; **two device-capability tiers, both legitimate,
+neither a workaround** — Tier A (embedded/native, fully scripted, e.g. the real ESP32
+firmware's existing CSR-based enrolment) and Tier B (browsers/PWAs, requires at least
+one manual OS-level trust action — installing a CA root, entering a relayed code — an
+inherent property of the browser platform, confirmed directly against Atlas's own PWA
+build, not a defect to keep trying to engineer away); credential *shape* is standard
+MQTT/TLS, the *provisioning exchange* is what OPP2 actually defines; role-scoped
+authorization with mechanism-agnostic revocation; additive/negotiable, not a breaking
+requirement.
+
+**Fully designed and pushed upstream, 2026-07-14** — the provisioning exchange
+converged through several rounds of the user catching real gaps in each pass (a role/
+tier field conflation bug; Tier A's revocation being hand-waved as "CRLs, OCSP" with
+neither picked; an assumption that per-device Tier B credentials required a live/
+dynamic broker capability, which turned out to be false once creation and assignment
+were separated; an HTTP-based delivery design for Tier B that got replaced by
+out-of-band QR/manual delivery, which is simpler *and* closes a residual third-party-
+CORS gap the HTTP version still had). Final shape: Tier A is a scripted MQTT
+request/response exchange against the deployment's CA with CRL-based revocation; Tier
+B is a pre-generated, per-device credential pool with out-of-band (QR/manual)
+delivery — no dynamic broker capability needed for either tier. Capability signaling
+proposed as an optional `connection`-message field. Written into `docs/level2.md` §30
+(filling what was an explicit "Open item — decision required" placeholder) and pushed
+upstream as [OpenPiste/protocols#10](https://github.com/OpenPiste/protocols/pull/10)
+— **merged 2026-07-14**. `./scripts/sync-spec.sh` confirms the local mirror is
+byte-identical to the merged upstream version.
+
+Atlas's own e-scoresheet pairing flow (`docs/e-scoresheet-standalone-design.md` §4.8,
+"Option 1" — a single shared Mosquitto credential, HTTP-delivered) predated this
+converged design and has been **rebuilt to match, 2026-07-14** — see
+`docs/e-scoresheet-standalone-design.md`'s "Rebuilt to match the converged design" note
+and `docs/security-provisioning-discussion.md` §4.6. Summary: unique-per-device MQTT
+credentials, pre-generated into a `mqtt_credentials` pool (migration
+`028_scoresheet_credential_pool.sql`, `scripts/top-up-credential-pool.js`) and pushed to
+Mosquitto via `scripts/sync-mosquitto-scoresheet-acl.sh`; assignment
+(`services/pairing.js`'s `assignCredential`, `routes/pairing.js`'s `POST /assign`) is a
+pure Atlas-DB action with no network round-trip to the device; delivery is a QR/manual
+credential in a URL **fragment** (never reaches Atlas's server or its logs) that
+`escoresheet/js/app.js` reads and immediately scrubs via `history.replaceState`. The old
+ticket-code/HTTP-redeem flow (`routes/pair.js`'s `POST /redeem`, `pairing_tickets`/
+`paired_devices` tables, the dead `token` bearer concept) is fully removed, not kept
+alongside the new flow. `apparatus`/`software`/`remote`/`var` topics are untouched — Tier
+A (apparatus certs) isn't built yet; this pass was scoped to Tier B only, per
+`docs/security-provisioning-discussion.md` §3.3.1's own conclusion that the e-scoresheet
+is currently the only component that needs it. Verified end-to-end at the service layer
+and over real HTTP (full pool lifecycle, route auth gating, QR image, fragment-URL
+parsing) against a throwaway director account and a temporary credential batch on a
+second, non-default-port server instance — the real dev server was left untouched and
+all test rows were cleaned from the live DB afterward.
+
+**Real bug found on the first live run, fixed same day.** Once the user actually ran
+`sync-mosquitto-scoresheet-acl.sh` and paired a real device, the apparatus stayed
+correctly online per Atlas's own backend but the e-scoresheet saw nothing. Cause: on
+Mosquitto 2.0.18 a global/unscoped `topic read #` ACL line only reaches truly anonymous
+connections — an authenticated device only gets what's inside its own `user <name>`
+block, so every paired e-scoresheet's subscriptions silently received zero messages
+(`SUBACK` still succeeded, hiding the failure). Fixed by adding `topic read #` inside
+each generated `user` block in `sync-mosquitto-scoresheet-acl.sh`, verified against a
+disposable local Mosquitto instance before touching the real broker;
+`docs/implementation-notes/mosquitto-security.md`'s examples had the same latent bug,
+corrected the same way. Also **wired both provisioning steps into `install.sh`**
+(credential-pool seeding, always; broker sync, only if Mosquitto is found on the same
+host — otherwise printed as a manual next step) — previously both were undiscoverable
+manual steps, which is exactly what let this bug go unnoticed until a real pairing.
+
+One real spec change has come out of it so far and **is shipped**: `software/score`
+changed from `Retained: Yes` to `Retained: No` in `docs/level2.md` (§4.5, §6, §13) —
+`apparatus/score` is unaffected and stays retained. Reasoning: the apparatus is the
+executor/authority for score/cards/priority regardless of network presence, so
+`software/score` is a correction pushed to it, not a fact it should adopt unattended
+from a stale retained replay — the same reasoning already applied to
+`software/fencers`/`software/match`, just never carried back to `score` (confirmed via
+git history: `Retained: Yes` predates the whole model, it was inherited spec text, not
+a deliberate choice). No Atlas code change was needed — `lib/opp2Transport.js`'s
+`publish()` helper already defaults to `retain: false` and both `software/score` call
+sites in `opp2Composer.js` rely on that default, so Atlas was already spec-conformant
+in practice; this closed a spec/implementation mismatch. Pushed upstream as
+[OpenPiste/protocols#8](https://github.com/OpenPiste/protocols/pull/8), **merged
+2026-07-09**; `./scripts/sync-spec.sh` confirms the local mirror is byte-identical.
+
+### Standalone e-scoresheet (PWA) — architecture discussion, ongoing (started 2026-07-12)
+
+`docs/e-scoresheet-standalone-design.md` — **non-normative, nothing implemented yet.**
+Today's `public/scoresheet.html` is Atlas-rendered and SSE-driven, which means it (a)
+doesn't demonstrate multi-vendor OPP2 interop and (b) dies if Atlas's own web server is
+unreachable, even though the apparatus/referee could otherwise keep fencing. Target
+shape agreed: a standalone **PWA** (no native iOS/Android app, one codebase, installable,
+offline-capable via service worker) that talks OPP2/MQTT directly as its own ecosystem
+participant. Read the file directly for full reasoning — pointer only, not a substitute.
+
+Key conclusions so far:
+- **Transport:** browsers can't open raw TCP sockets, so a browser OPP2 client needs
+  MQTT-over-WebSockets. Purely additive on the broker side (a second Mosquitto
+  listener) — no change to Atlas's own TCP-based `lib/opp2Client.js` or the apparatus
+  firmware.
+- **TLS trust, chosen approach:** each CMS install generates its own local CA (no
+  shared ecosystem-wide root — avoids needing cross-vendor PKI governance; fine to
+  regenerate the root per competition). The CMS's own cert is issued for
+  **`openpiste.local`** (the existing mDNS hostname, not an IP) — this is what makes
+  the whole thing DHCP/subnet-agnostic with zero internet dependency, since mDNS already
+  re-resolves to whatever IP a venue's router hands out. Public-CA tricks (a
+  `plex.direct`/`sslip.io`-style IP-embedded hostname, or Atlas's own domain + DDNS) were
+  considered and rejected — they either share a published private key (weaker
+  anti-impersonation) or need a fixed/trackable IP plus a live DNS dependency, which
+  conflicts with Atlas's own "local operation needs zero internet" principle.
+- **Pairing precedent:** `~/mqtt-web/enrolment.js`'s existing ESP32 scoring-device
+  enrolment flow (local CA + operator-gated time-boxed window + CSR/HMAC challenge) is
+  the model, adapted rather than copied. Its localhost-only gating and global
+  single-pairing-slot don't work for an operator walking strip-to-strip with their own
+  phone — reworked into: reusing Atlas's existing QR+PIN director/admin session instead
+  of an IP check (`docs/security-and-roles.md` already lists "Electronic scoresheet
+  (future)" in the access matrix), per-attempt single-use PIN tickets instead of a
+  global slot (closes a real race condition and adds a human-verification step), and a
+  bearer token instead of a client cert/CSR (no crypto library needed in-browser,
+  trivial revocation).
+- **Open, unverified:** whether an installed/home-screen PWA handles a self-signed
+  cert warning the same way a normal tab does — determines whether pairing needs a real
+  CA-profile install step or a simple click-through suffices. Needs hands-on testing on
+  real iOS Safari / Android Chrome.
+- **Not yet designed:** the pairing-ticket API/payload shape, the PWA-side pairing UI,
+  and the three older scoresheet-authority sub-problems (offline bundle/pre-round
+  export, local §23.4 correct-ending enforcement when Atlas is unreachable, stale-replay
+  reconciliation) — still open, not covered by this thread either.
+- **Implemented 2026-07-13:** the PWA app shell itself — `escoresheet/` (manifest,
+  service worker with versioned app-shell caching, install/online-status page, no
+  OPP2/pairing logic yet), mounted in `server.js` at `/escoresheet` as a plain static
+  folder with no Atlas session/auth dependency. And the TLS piece: `./scripts/generate-
+  tls-cert.sh` generates the local CA + `openpiste.local` leaf cert into `data/tls/`
+  (gitignored); `server.js` now also listens on a second, additive HTTPS port
+  (`HTTPS_PORT`, default 3443) on the same Express app — existing HTTP workflows are
+  untouched. Verified via `openssl verify` + `curl --cacert` (full chain validation, no
+  `-k`) against both `localhost` and the real `openpiste.local` mDNS hostname. **Not
+  done:** the broker's MQTT-over-WebSockets listener, and any actual OPP2 client code in
+  the PWA — nothing to connect to yet.
+- **Verified 2026-07-13 on a real Android phone (Chrome), end to end:** HTTP
+  reachability → HTTPS untrusted-cert warning before pairing (expected baseline) →
+  installed `data/tls/ca.crt` via Android's certificate-install flow → HTTPS with no
+  warning, service worker active → Add to Home Screen → launched from the home-screen
+  icon in genuine standalone mode (no address bar/tabs). This resolves §4.4's open
+  question **for Android**: once the manifest/SW/cert are all valid, Chrome does launch
+  a real standalone PWA. **iOS Safari is still unverified** — its profile-install +
+  separate "enable full trust" toggle is structurally different and untested. One
+  real snag hit and fixed along the way: on a dev machine with Docker installed, avahi
+  was advertising `openpiste.local`'s IPv4 as the Docker bridge (`172.17.0.1`) instead of
+  the real LAN interface — fixed with `deny-interfaces=docker0` in
+  `/etc/avahi/avahi-daemon.conf` (not an interface allowlist, which would break under
+  Ethernet). Also found: the first "Add to Home Screen" attempt produced a plain
+  bookmark (not a real install) because it was tried before Chrome had settled on
+  installability — retrying after the service worker was confirmed active fixed it;
+  the eventual pairing UX should prompt for home-screen install only after confirming
+  SW-active + warning-free, not immediately on first load.
+- **Implemented 2026-07-13: broker WSS trust unification.** Mosquitto already had a
+  `wss://` listener (`9002`, alongside plain-`ws://` `9001`) — nothing new needed on the
+  transport side. It was presenting a cert from an unrelated pre-existing CA
+  (`openpiste-CA`, likely from `mqtt-web`'s own setup), which would have meant pairing a
+  device against two separate trust roots. Fixed via new `scripts/install-broker-cert.sh`
+  — installs Atlas's own CA-signed cert into Mosquitto's TLS listeners (`8883`, `9002`);
+  deliberately location-agnostic (works whether the broker is co-located with Atlas or
+  on separate hardware — copy `data/tls/` there and run it there). Verified: both
+  listeners now show `issuer=CN = Atlas Local CA`, chain validates (`Verify return
+  code: 0`), and Atlas's own OPP2 client (plain `1883`, untouched) reconnected cleanly
+  after the broker restart. **Not done:** no OPP2/MQTT client code in the PWA itself yet.
+- **Implemented 2026-07-13: pairing-ticket flow.** Migration `027_scoresheet_pairing.sql`
+  (`pairing_tickets`, `paired_devices`); `services/pairing.js`
+  (create/redeem/list/revoke/verifyToken — 6-digit codes, 5-min TTL, single-use, not
+  DB-uniqued forever since codes are meant to be reused over a competition's lifetime).
+  Two routers split by trust level: `routes/pairing.js` (`/api/pairing`,
+  `auth.require('director')` on everything — ticket creation, device list/revoke, a
+  ticket QR endpoint) and `routes/pair.js` (`/api/pair`, no auth — the device-facing
+  `redeem` call). `public/pairing.html` is the operator UI (code + QR + countdown +
+  device list), linked from `opp2.html`. `escoresheet/`'s pairing form now really calls
+  `/api/pair/redeem`, generates+persists its own `deviceId` via `crypto.randomUUID()`,
+  and stores the returned bearer token — assumes same-origin with Atlas's API (no
+  CMS-address field; a true third-party scoresheet would need one). Service-worker
+  cache bumped to `v2` since the app shell changed. **Real bug found and fixed:** the
+  pre-existing `app.use('/api', writeOnly('director'), require('./routes/teamMatches'))`
+  matches any `/api/*` path by prefix, so it was silently auth-gating the new public
+  `/api/pair/redeem` too — fixed by registering `/api/pairing` and `/api/pair` before
+  that catch-all. **General lesson: a bare `app.use('/api', ...)` mount traps anything
+  registered after it — check route order whenever a new `/api/*` path is added.**
+  Verified end-to-end over real HTTP: create→redeem→verify→single-use-rejection→
+  revoke→re-verify-fails, plus `/api/pair/redeem` returns 403 (not 401) for a bad code
+  confirming it's genuinely unauthenticated. **Verified fully on real devices** the
+  same day: QR scan → e-scoresheet opens with code pre-filled → Pair → shows paired,
+  and appears in `pairing.html`'s device list. One real bug caught along the way: a
+  stale server process (predating the QR route being added — Node doesn't hot-reload
+  route files) made the QR image 404; general lesson, restart after any
+  `server.js`/`routes/*`/`services/*` edit, unlike `public/`/`escoresheet/` static
+  files which reload on every request with no restart needed.
+- **Implemented 2026-07-13: cert-onboarding friction reduction.** New `GET /ca.crt`
+  (`server.js`, public, plain HTTP — deliberately not HTTPS, since a new device has no
+  reason yet to trust what this CA signs) replaces the old ad hoc "copy into `public/`"
+  workaround. New `public/install-cert.html` — unauthenticated onboarding page with a
+  QR (`GET /api/pair/ca-qr`) + platform-detected instructions (Android/iOS/desktop
+  Chrome/Firefox, shown via user-agent sniffing so nobody reads all four), linked from
+  `pairing.html`. Also: `scripts/generate-tls-cert.sh` now **defaults to reusing the
+  existing CA** (was: fresh CA every run, opt-in reuse) — `--rotate-ca` to deliberately
+  start over. Rotating means every already-onboarded device redoes the one-time
+  OS-level install dance, for every competition — real friction, not a one-off — so
+  reuse is now the default and rotation is deliberate. After a rotation,
+  `install-broker-cert.sh` must be re-run too (broker cert would otherwise still chain
+  to the old, replaced root).
+- **Implemented 2026-07-13: live piste display — the first real OPP2 client code in
+  the PWA.** Deliberately read-only (subscribes/mirrors, never publishes) — the
+  "display" role in the roles-and-responsibilities model. `escoresheet/js/app.js` uses
+  `mqtt.js` (CDN, browser build of the same `mqtt` package Atlas's backend already
+  depends on) to connect to `wss://{hostname}:9002` and subscribe to
+  `apparatus/connection`, `apparatus/fencers`, `apparatus/score`, `apparatus/clock`,
+  `software/match` for an operator-entered piste id, rendering fencer names, score,
+  card chips, priority, clock, and an online/offline badge. Deliberately tracks only
+  `apparatus/fencers` (not `software/fencers` too) — it's retained and always reflects
+  the current correct assignment, so a passive display doesn't need to replicate the
+  CMS's swap-reconciliation logic. No MQTT auth used (broker is `allow_anonymous
+  true`, matching how apparatus already connects) — the pairing bearer token remains
+  issued but unconsumed, reserved for a possible future Atlas REST API, not broker auth.
+  **Verified without a real browser:** Node's own `mqtt` client replayed the exact
+  subscribe flow against `wss://localhost:9002` with `data/tls/ca.crt` while a second
+  connection published all 5 message types via plain `mqtt://localhost:1883` — all
+  arrived with topics parsing correctly. **Confirmed for real 2026-07-13**: connected
+  a real paired Android phone to an actual live, in-progress piste (not simulated
+  data) and watched fencer names, score, cards, and clock render correctly in real
+  time — closes the real-browser-rendering gap the Node-only test couldn't reach.
+  Confirmed working on iOS too the same day.
+- **Implemented 2026-07-13: card-reason recording — the PWA's first *publishing*
+  feature**, everything before this was read-only. Ported from the existing
+  `public/scoresheet.html` (Atlas's own Alpine.js/Paho scoresheet, which already
+  implements this exact feature over the legacy plain `ws://:9001` listener) rather
+  than designed from scratch — same card-detection logic, same `/data/reasons.json`
+  data source, same dialog flow (reason grid, "Repeated Group 1" drilldown, free-text,
+  official picker, skip), rewritten as vanilla JS/`mqtt.js`/`wss://` instead of
+  Alpine/Paho/plain `ws://`. **No server-side code needed** — `lib/opp2Client.js`
+  already subscribes to `scoresheet/event` and persists `CARD_REASON` annotations via
+  `services/cardReasons.js`, built for the existing scoresheet, works identically for
+  any compliant publisher — the ecosystem-independence principle actually paying off.
+  New: subscribes to `software/record` (slot/active_bout/officiating roster) and
+  `scoresheet/record` (retained history, for reconnect); `detectCards()` diffs
+  successive `apparatus/score` payloads (skips the very first, so reconnecting to an
+  already-carded piste doesn't false-trigger); publishes `scoresheet/event` per
+  annotation and republishes the full `scoresheet/record` after each one; slot-change
+  vs same-slot semantics per §17/§18 (new `slot_id` clears history, same `slot_id`
+  keeps it). **Known imperfection, not fixed:** `scoresheet/record`'s `bout_id` is
+  spec-mandatory but could be `null` if a card is detected before any `software/record`
+  has arrived (unset `activeBoutId`) — narrow edge case, left as a known gap.
+  **Verified:** syntax check, `/data/reasons.json` reachability, and a Node-simulated
+  `software/record` + card-triggering `apparatus/score` sequence over the real `wss://`
+  listener. **Tested on a real device — one real bug found and fixed:** the dialog
+  opened correctly but wouldn't dismiss (Skip/submit did nothing visible). Root cause
+  was CSS, not the dialog logic — `.overlay` set `display: flex` unconditionally, and
+  an *author* stylesheet rule outranks the browser's built-in `[hidden]{display:none}`
+  *user-agent* rule by cascade origin alone, regardless of specificity. The JS was
+  correctly setting `hidden = true` the whole time; the CSS just kept showing it
+  anyway. Fixed by scoping to `.overlay:not([hidden])`. Checked every other
+  `hidden`-toggled element in the stylesheet (`.card`, `.error`, `.back-btn`,
+  `.official-picker`) — none of the others set `display` at all, so this was isolated,
+  not systemic. Confirmed fixed on a real device after a full reload (to verify the
+  service worker's `skipWaiting()`/`clients.claim()` actually served the new CSS
+  rather than a stale cached copy).
+- **Implemented 2026-07-13: full feature parity with `public/scoresheet.html`.**
+  Everything before this showed only the single active bout. Ported (same
+  algorithms/data shapes, vanilla-JS/`mqtt.js` instead of Alpine/Paho): full bout list
+  from `software/record`'s `bouts[]` (collapsible, LIVE badge + auto-expand for the
+  active/unfinished bout, final result or placeholder for others, any bout
+  manually expandable via event delegation since rows regenerate via `innerHTML`);
+  pool results matrix (`computeMatrix`/`renderMatrix` — participants × participants
+  grid, V/M, indicator, ranking, ported line-for-line from `scoresheet.html`'s `matrix`
+  getter); team relay banner (relay/team/cumulative-score/target — Atlas-specific
+  `software/match` extensions, not core §16 fields, handled defensively); slot-info
+  line (label + officiating roster); manual theme toggle
+  (`:root[data-theme]` overrides alongside `prefers-color-scheme`, mirrors `nav.js`'s
+  pattern). **Deliberately carried over:** resetting `lastScoreForCards`/`lastFencers`/
+  `lastClock` to `null` on every active-bout change — without it, card detection could
+  diff the new bout's first score against the previous bout's final card state,
+  causing spurious or missed triggers. **Verified:** every DOM id cross-checked against
+  the HTML (two expected non-matches are dynamically-generated, correctly null-guarded);
+  a fuller Node-simulated pool `software/record` (3 participants, 3 bouts, one
+  finished) over the real `wss://` listener. **Tested on a real device — one real bug
+  found and fixed:** the pool matrix never appeared. `#matrix-section` (outer
+  container) was correctly shown by `renderMatrix()`, but the inner `#matrix-wrap`
+  (the actual table) had a static `hidden` attribute only the manual toggle-button
+  click handler ever cleared — stayed collapsed by default, unlike `scoresheet.html`'s
+  `matrixOpen: true` (expanded by default). Fixed by removing the static `hidden` and
+  defaulting the arrow to `open`. Bout list, team relay banner, slot info, and theme
+  toggle all worked correctly on first real-device try, no fixes needed.
+- **Tracked gap, raised 2026-07-13, not fixed: no per-piste/role scoping once
+  paired.** Confirmed by reading the code: `services/pairing.js`'s `verifyToken()` is
+  never called anywhere, `watchPiste()`'s `mqtt.connect()` sends no credentials, and
+  every Mosquitto listener has `allow_anonymous true` — so any device that can reach
+  the broker (paired or not) can watch/publish for any piste. Not unique to this
+  session's work — the same trust model the apparatus firmware and Atlas's own backend
+  already operate under. Real fix needs assigning paired devices genuine MQTT
+  credentials (username/password or per-device client cert) plus `acl_file` rules
+  scoping them to specific pistes — `%u`/`%c` substitution in Mosquitto ACLs
+  (`topic write openpiste/%u/scoresheet/#`) is the natural mechanism, but nothing
+  implemented yet. Mosquitto's `allow_anonymous`/`require_certificate` are
+  per-*listener* (already split differently across 1883/8883/9001/9002 here); ACL
+  `read`/`write` rules are independent per topic pattern, so "read stays open,
+  write gets scoped" is directly supportable on the same listener — see
+  `docs/e-scoresheet-standalone-design.md` §4.8 for the full writeup. Not decided
+  whether/when to actually build this.
+
+**Piste transfer** (moving an ongoing match, or an entire pipeline, to a different piste
+mid-competition — apparatus failure, scheduling) is raised 2026-07-09, explicitly
+CMS-executed (only the CMS has pipeline structure and an already-mirrored snapshot of
+live score/UW2F state). Moving a whole pipeline is mostly free (unstarted slots are pure
+CMS bookkeeping); moving the *currently active* bout is new territory — the first case
+requiring the executor itself (the physical apparatus instance) to change mid-bout. This
+surfaced two concrete protocol gaps (see `docs/roles-and-responsibilities-discussion.md`
+§5 and §7):
+
+1. **DONE 2026-07-10 — software→apparatus seeding message for clock and UW2F.**
+   `software/clock` and `software/uw2f` are now spec'd (`docs/level2.md` §11/§19),
+   non-retained, QoS 1, symmetric to `software/score` — pushed upstream as
+   [OpenPiste/protocols#9](https://github.com/OpenPiste/protocols/pull/9) (**merged
+   2026-07-14**). Atlas-side: `lib/opp2Composer.js`'s two duplicated `isFresh` blocks
+   (in `sendMatchData`/`_sendRelayData`) were extracted into a shared
+   `sendFreshClockAndUw2f()` that publishes both through the standard envelope helper —
+   `software/clock` previously wrote an undocumented, off-spec QoS-0 `rawPublish`
+   mirroring `apparatus/clock`'s own QoS instead of the spec's QoS-1 requirement for the
+   software side. `software/uw2f` needed no code change; it already published through
+   the standard helper and was already spec-conformant, just undocumented.
+
+   Cross-checked against the real `esp32scoringdeviceMqtt` firmware
+   (`opp2-library`'s `Dispatcher.onClock`/`onUW2F`, wired in `Opp2Handler.cpp` — the
+   library's initial commit is 2026-05-20 and the handler wiring hasn't been touched
+   since 2026-07-01, both predating this whole discussion) — found the receiving side
+   already implemented and correctly gated: `updateClockExternal` refuses an incoming
+   `software/clock` unless the apparatus's *own* clock is currently stopped, exactly the
+   invariant this design assumes. That check surfaced a real gap, though: it applies the
+   incoming message's `running` field verbatim rather than forcing it false, so a
+   `"running": true"` `software/clock` payload would start the apparatus's clock from a
+   network command alone, bypassing the physical interlock. Spec tightened same-day to a
+   hard MUST/MUST NOT on this (`software/clock`'s `running` MUST be `false`; an
+   apparatus receiving `true` MUST NOT start its clock from it), same PR #9. **Low-
+   priority TODO, not yet actioned:** `esp32scoringdeviceMqtt`'s `updateClockExternal`
+   (`Opp2Handler.cpp:2062`) doesn't yet enforce this — it would currently honor a stray
+   `running: true`. Nothing in Atlas exploits this today (`sendFreshClockAndUw2f`
+   always sends `running: false`), so it isn't blocking anything; flagged for whenever
+   the firmware repo is next touched, not scheduled.
+
+2. **Still open:** no `control` value meaning "relinquish this bout, no result" — every
+   existing value (BEGIN/NEXT/PREV/END) assumes normal completion. Also still open:
+   Atlas doesn't mirror the clock into `pisteState` at all (`lib/opp2Client.js` tracks
+   `lastScore`/`lastUw2f`, no `apparatus/clock` handler). Both block the actual
+   mid-bout piste-transfer feature — 2026-07-10 only closed the messaging-format
+   prerequisite (item 1), not the feature itself.
 
 ### Competition formats (complete)
 - Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged

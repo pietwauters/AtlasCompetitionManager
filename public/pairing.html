@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Pair a Scoresheet</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
+  <style>
+    .ticket-card{background:var(--clr-surface);border:1px solid var(--clr-border);
+                 border-radius:12px;padding:1.5rem;max-width:340px;text-align:center;
+                 display:flex;flex-direction:column;align-items:center;gap:.75rem}
+    .ticket-code{font-size:1.1rem;font-weight:600;letter-spacing:.03em;color:var(--clr-brand);
+                 word-break:break-all}
+    .ticket-hint{font-size:.8rem;color:var(--clr-text-muted)}
+    .layout{display:flex;gap:2rem;flex-wrap:wrap;align-items:flex-start}
+    .pool-banner{font-size:.85rem;margin-bottom:.75rem}
+    .pool-banner.low{color:var(--clr-danger)}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+  </template>
+  <div class="nav-right">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/referee-schedule.html">Referees</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main class="layout-data">
+
+  <div class="notice-bar" style="margin-bottom:1rem">
+    First time on this device? <a href="http://openpiste.local:3001/install-cert.html" target="_blank">Install the CMS certificate</a>
+    first (one-time, then never again on this device) before pairing below.
+  </div>
+
+  <template x-if="poolStats">
+    <div class="pool-banner" :class="{low: poolStats.free <= 2}">
+      <span x-text="poolStats.free"></span> credential(s) available in the pool
+      (<span x-text="poolStats.assigned"></span> assigned, <span x-text="poolStats.revoked"></span> revoked).
+      <span x-show="poolStats.free <= 2">
+        Running low — run <code>node scripts/top-up-credential-pool.js</code> then
+        <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> on the broker host.
+      </span>
+    </div>
+  </template>
+
+  <div class="layout">
+    <section class="card">
+      <h2 style="margin-top:0">Pair a scoresheet</h2>
+      <p style="color:var(--clr-text-muted);font-size:.9rem;max-width:26rem">
+        Each device gets its own unique credential — assigning one picks the next unused
+        entry from the pool, no code to type in. Walk to the new device, tap "Assign a
+        credential" below, then let them scan the QR with their camera (opens the
+        e-scoresheet app already paired), or read the username/password aloud for manual
+        entry. Dismiss this screen once the device has it — the credential doesn't expire
+        on its own the way a short-lived code would.
+      </p>
+
+      <template x-if="!assigning">
+        <div>
+          <input x-model="deviceLabel" placeholder="Label (e.g. Referee's phone, strip 3)" style="margin-bottom:.5rem">
+          <button class="primary" @click="assign()">Assign a credential</button>
+          <p class="error" x-show="assignError" x-text="assignError"></p>
+        </div>
+      </template>
+
+      <template x-if="assigning">
+        <div class="ticket-card">
+          <img :src="'/api/pairing/devices/' + assigning.id + '/qr'" width="180" height="180" alt="Pairing QR code">
+          <div class="ticket-code" x-text="assigning.username"></div>
+          <div class="ticket-code" x-text="assigning.password"></div>
+          <div class="ticket-hint">Manual entry, if scanning isn't possible</div>
+          <button @click="dismiss()">Done — dismiss</button>
+        </div>
+      </template>
+    </section>
+
+    <section class="card" style="flex:1;min-width:20rem">
+      <h2 style="margin-top:0">Paired devices</h2>
+      <template x-if="loaded && devices.length === 0">
+        <div style="color:var(--clr-text-muted);font-size:.9rem">No devices paired yet.</div>
+      </template>
+      <table class="table-responsive" x-show="devices.length">
+        <thead><tr><th>Device</th><th>Assigned</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <template x-for="d in devices" :key="d.id">
+            <tr>
+              <td data-label="Device" x-text="d.device_label || d.username"></td>
+              <td data-label="Assigned" x-text="d.assigned_at || '—'"></td>
+              <td data-label="Status">
+                <span x-show="!d.assigned_at" style="color:var(--clr-text-muted)">unassigned</span>
+                <span x-show="d.assigned_at && !d.revoked_at" style="color:var(--clr-success)">active</span>
+                <span x-show="d.revoked_at" style="color:var(--clr-text-muted)">revoked</span>
+              </td>
+              <td data-label="">
+                <button x-show="d.assigned_at && !d.revoked_at" @click="showQr(d)">Show QR again</button>
+                <button x-show="d.assigned_at && !d.revoked_at" class="danger" @click="revoke(d)">Revoke</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="ticket-hint" x-show="devices.some(d => d.revoked_at)">
+        Revoking here stops future pairing and marks the device revoked, but the
+        credential stays valid at the broker until an admin runs
+        <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> to push the change.
+      </p>
+    </section>
+  </div>
+
+</main>
+<script src="/js/nav.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    deviceLabel: '',
+    assigning: null,
+    assignError: '',
+    devices: [],
+    poolStats: null,
+    loaded: false,
+
+    async init() {
+      await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+    },
+
+    async loadDevices() {
+      this.devices = await fetch('/api/pairing/devices').then(r => r.json()).catch(() => []);
+      this.loaded = true;
+    },
+
+    async loadPoolStats() {
+      this.poolStats = await fetch('/api/pairing/pool-stats').then(r => r.json()).catch(() => null);
+    },
+
+    async assign() {
+      this.assignError = '';
+      const res = await fetch('/api/pairing/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceLabel: this.deviceLabel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        this.assignError = data.error || 'Assignment failed';
+        return;
+      }
+      this.assigning = data;
+      this.deviceLabel = '';
+    },
+
+    async showQr(device) {
+      const data = await fetch(`/api/pairing/devices/${device.id}/reveal`).then(r => r.json()).catch(() => null);
+      if (data) this.assigning = data;
+    },
+
+    async dismiss() {
+      this.assigning = null;
+      await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+    },
+
+    async revoke(device) {
+      await fetch(`/api/pairing/devices/${device.id}/revoke`, { method: 'POST' });
+      await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+    },
+  };
+}
+</script>
+</body>
+</html>

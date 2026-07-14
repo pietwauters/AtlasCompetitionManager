@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>e-Scoresheet</title>
+<meta name="description" content="Standalone OPP2 electronic scoresheet — works with any compliant apparatus or CMS.">
+<meta name="theme-color" content="#1a1a2e">
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="e-Scoresheet">
+
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon-192.png" alt="" class="logo">
+    <h1>e-Scoresheet</h1>
+  </header>
+
+  <main>
+    <section class="card" id="pair-card">
+      <h2>Pair with a CMS</h2>
+      <p>Scan the QR code shown on the CMS's "Pair a scoresheet" screen with your
+         camera app — it fills this in and pairs automatically. If scanning isn't
+         possible, enter the MQTT username and password shown there instead.</p>
+      <input id="pair-username" placeholder="MQTT username" autocomplete="off">
+      <input id="pair-password" type="password" placeholder="MQTT password" autocomplete="off">
+      <button id="pair-button">Pair</button>
+      <p id="pair-error" class="error" hidden></p>
+    </section>
+
+    <section class="card" id="paired-card" hidden>
+      <h2>Paired</h2>
+      <p>This device is paired as <strong id="paired-label"></strong>.</p>
+      <button id="forget-button">Forget this pairing</button>
+
+      <div style="margin-top:1rem">
+        <label for="piste-input">Piste</label>
+        <input id="piste-input" placeholder="e.g. 7, Podium, Rouge" autocomplete="off">
+        <button id="watch-button">Watch this piste</button>
+        <p id="watch-error" class="error" hidden></p>
+      </div>
+    </section>
+
+    <section class="card" id="live-card" hidden>
+      <div class="live-header">
+        <h2>Piste <span id="live-piste-label"></span></h2>
+        <span id="conn-badge" class="badge">–</span>
+        <button id="theme-toggle" class="ghost">&#9789;</button>
+        <button id="change-piste-button" class="ghost">Change piste</button>
+      </div>
+      <div id="match-info"></div>
+      <div id="slot-info" class="slot-info"></div>
+
+      <div id="team-relay-banner" class="team-relay-banner" hidden></div>
+
+      <div id="matrix-section" hidden>
+        <button id="matrix-toggle" class="section-toggle">
+          <span id="matrix-arrow" class="toggle-arrow open">&#9656;</span> Results matrix
+        </button>
+        <div id="matrix-wrap" class="matrix-wrap"></div>
+      </div>
+
+      <div id="bout-list" class="bout-list"></div>
+      <div id="no-bouts-msg" class="idle-msg">Waiting for bout data&hellip;</div>
+    </section>
+
+    <section class="card" id="status-card">
+      <h2>Status</h2>
+      <dl>
+        <dt>App install</dt><dd id="status-installed">checking&hellip;</dd>
+        <dt>Service worker</dt><dd id="status-sw">checking&hellip;</dd>
+        <dt>Network</dt><dd id="status-online">checking&hellip;</dd>
+        <dt>Paired CMS</dt><dd id="status-pairing">not paired</dd>
+      </dl>
+    </section>
+  </main>
+
+  <!-- Card reason dialog -->
+  <div class="overlay" id="reason-overlay" hidden>
+    <div class="dialog">
+      <button class="back-btn" id="dialog-back" hidden>&larr; Back</button>
+      <div class="dialog-header">
+        <span class="card-badge" id="dialog-card-badge"></span>
+        <span id="dialog-side-label"></span>
+      </div>
+      <div class="dialog-fencer" id="dialog-fencer-name"></div>
+
+      <div id="official-picker" class="official-picker" hidden>
+        <div class="section-label">Recorded by</div>
+        <div id="official-chips"></div>
+      </div>
+
+      <div id="reason-grid" class="reason-grid"></div>
+
+      <div class="freetext-row">
+        <input id="reason-custom" placeholder="Other reason&hellip;" autocomplete="off">
+        <button id="reason-submit" class="ghost-fill">Submit</button>
+      </div>
+      <button id="reason-skip" class="ghost">Skip &mdash; no reason recorded</button>
+    </div>
+  </div>
+
+  <footer>
+    <p>Part of the <a href="https://openpiste.org" target="_blank" rel="noopener">OpenPiste</a>
+       ecosystem — designed to work with any compliant apparatus or CMS, not just Atlas.</p>
+  </footer>
+
+  <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

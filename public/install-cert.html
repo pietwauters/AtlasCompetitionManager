@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install the CMS certificate</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
+  <style>
+    main.setup { max-width: 480px; margin: 0 auto; padding: 1rem; }
+    .setup-card { background: var(--clr-surface); border: 1px solid var(--clr-border);
+                  border-radius: 12px; padding: 1.5rem; text-align: center; }
+    .setup-card img { width: 200px; height: 200px; margin: 1rem 0; }
+    .steps { text-align: left; margin-top: 1.5rem; }
+    .steps ol { padding-left: 1.3rem; }
+    .steps li { margin-bottom: 0.6rem; }
+    .platform-note { font-size: 0.85rem; color: var(--clr-text-muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+<main class="setup">
+  <div class="setup-card">
+    <h1 style="font-size:1.2rem">Install the CMS certificate</h1>
+    <p style="color:var(--clr-text-muted);font-size:0.9rem">
+      One-time setup for this device. After this, it'll connect to this CMS
+      with no security warnings — for this competition and any future one
+      run from the same installation.
+    </p>
+
+    <a href="/ca.crt"><img src="/api/pair/ca-qr" alt="QR code for the CA certificate"></a>
+    <p><a href="/ca.crt" id="download-link">Download certificate</a></p>
+
+    <div class="steps" id="steps-android" hidden>
+      <strong>Android:</strong>
+      <ol>
+        <li>Tap "Download certificate" above (or scan the QR with your camera).</li>
+        <li>Open the downloaded file from the notification, or from the Files app's
+            Downloads folder.</li>
+        <li>If nothing happens: open <strong>Settings</strong>, tap the search icon,
+            type "certificate", and choose <strong>Install a certificate → CA
+            certificate</strong>.</li>
+        <li>Confirm the warning — this is expected for a locally-issued certificate.</li>
+      </ol>
+    </div>
+
+    <div class="steps" id="steps-ios" hidden>
+      <strong>iPhone / iPad:</strong>
+      <ol>
+        <li>Tap "Download certificate" above (or scan the QR with your camera).</li>
+        <li>Safari will offer to open a profile — go to <strong>Settings</strong>,
+            tap "Profile Downloaded" at the top, then <strong>Install</strong>.</li>
+        <li>This step is easy to miss: go to <strong>Settings → General → About →
+            Certificate Trust Settings</strong> and turn on full trust for
+            "Atlas Local CA." Without this, iOS won't trust it for websites yet.</li>
+      </ol>
+    </div>
+
+    <div class="steps" id="steps-desktop" hidden>
+      <strong>Desktop Chrome:</strong>
+      <ol>
+        <li>Open <code>chrome://settings/certificates</code> → <strong>Authorities</strong>
+            tab → <strong>Import</strong>.</li>
+        <li>Select the downloaded <code>ca.crt</code> file.</li>
+        <li>Check "Trust this certificate for identifying websites."</li>
+      </ol>
+      <strong>Desktop Firefox:</strong>
+      <ol>
+        <li>Settings → Privacy &amp; Security → Certificates → View Certificates →
+            Authorities tab → Import.</li>
+        <li>Select the downloaded <code>ca.crt</code> file and check "Trust this CA
+            to identify websites."</li>
+      </ol>
+    </div>
+
+    <p class="platform-note">Once installed, ask the operator for a pairing code —
+       or scan their QR — to finish setting up the e-scoresheet.</p>
+  </div>
+</main>
+<script>
+  const ua = navigator.userAgent;
+  const id = /Android/i.test(ua) ? 'steps-android'
+           : /iPhone|iPad|iPod/i.test(ua) ? 'steps-ios'
+           : 'steps-desktop';
+  document.getElementById(id).hidden = false;
+</script>
+</body>
+</html>
