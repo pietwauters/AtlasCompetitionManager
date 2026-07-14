@@ -1634,10 +1634,9 @@ New values for `command`, `phase_type`, and the `{publisher}` topic segment are 
 
 ## 30. Security and provisioning
 
-> **Draft normative text.** Worked out in `docs/security-provisioning-discussion.md`
-> (non-normative — read it for the full reasoning behind every decision below) and
-> not yet submitted upstream to `OpenPiste/protocols` (see CLAUDE.md's mirror-file
-> rule). Recorded here as the converged design, not a first sketch.
+> **Draft.** This section replaces the previous placeholder with a fully worked
+> design. See the accompanying pull request description for the reasoning trail
+> behind each decision below.
 
 ### 30.1 Trust model
 
