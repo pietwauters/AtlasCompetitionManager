@@ -1108,6 +1108,40 @@ failed primary without every device needing to re-pair. Two scripts:
   existing session cookie, so a relogin (not a bug, not a re-pair) is needed to see
   the restored data. Worth calling out to whoever runs a real failover so it isn't
   mistaken for the restore having failed.
+- **Two more real bugs found finishing that same test, both fixed same day.**
+  - The e-scoresheet PWA still couldn't see its piste as online after the restore even
+    though the CMS could. Root cause: `install-broker-cert.sh` only *creates* a TLS
+    listener stanza if one doesn't already exist at all — it never normalizes an
+    *already-existing* one's `cafile`/`certfile`/`keyfile` paths. Listener `8883` had
+    always been Atlas-only so this never mattered; listener `9002` (wss) on the real
+    standby predated Atlas (inherited from `mqtt-web`'s original setup) and pointed at
+    `/etc/mosquitto/certs-web/server.cert`, not `/etc/mosquitto/certs/server.crt` —
+    so the script kept installing fresh cert bytes at a path nothing read from, `9002`
+    kept serving a year-old unrelated self-signed cert, and the e-scoresheet's own TLS
+    chain validation correctly refused to trust it (the CMS, on the correctly-configured
+    `8883`, had no such problem — which is what made "CMS sees it online, e-scoresheet
+    doesn't" so confusing at first). Fixed: `install-broker-cert.sh` now rewrites just
+    the three cert-path directives inside an existing listener's own stanza, leaving
+    every other directive (`protocol`, `allow_anonymous`, `require_certificate`, …)
+    untouched. Caught a `set -e` footgun while testing the fix itself:
+    `[[ -z "$file" ]] && return 0` aborts the *whole script* when the condition is
+    false (the bare `&&`'s left side exits non-zero as a statement) — switched to an
+    explicit `if`. Also used portable `awk` throughout (no GNU-only `\y`), since
+    Raspberry Pi OS ships `mawk`, not `gawk`, as the default `awk`.
+  - Separately, `git pull`/`update.sh` failed on the standby with "insufficient
+    permission for adding an object to repository database .git/objects" — unrelated
+    to the failover bundle itself, but found in the course of pulling these very
+    fixes. Root cause: the box's original clone had been done as root, leaving a large
+    fraction of `.git/objects`/`.git/refs/tags` root-owned while newer objects were
+    `atlas`-owned; whether any given `git pull` hits this is a coin flip (only fails
+    if a new object's hash lands in an existing root-owned bucket directory). Gone
+    unnoticed until now partly because the *old* `update.sh` ran `git pull` unwrapped,
+    so under `sudo bash update.sh` it always ran as root — masking the problem (and
+    likely growing it, since root-run pulls create their new objects as root too).
+    Same root-cause shape as the `node_modules` ownership bug found earlier the same
+    day (`install.sh`'s initial `npm ci` also ran as root instead of `APP_USER`).
+    `sudo bash update.sh` now self-heals both `node_modules` and `.git` ownership
+    before touching them.
 
 ### Hostname provisioning — complete, 2026-07-15
 `install.sh` never actually set the hostname to `openpiste` anywhere — that had been
