@@ -1000,6 +1000,28 @@ matching show/clear-revoked controls added to both. `public/admin.html`'s card
 retitled "Device pairing" (was "Scoresheets" — no longer accurate once this covered
 more than the e-scoresheet).
 
+**Pairing vs. e-scoresheet installation fully separated, 2026-07-15 (later pass).**
+An initial attempt at this UI baked e-scoresheet-specific QR/link generation directly
+into the Tier B "assign a credential" flow — confusing (per user feedback: "everything
+still smells escoresheet mixed with pairing"), and wrong in principle: Tier B is a
+generic browser-credential mechanism, and a future Tier B device that isn't the
+e-scoresheet (has a camera, is browser-based, but isn't a scoresheet) shouldn't be
+steered through escoresheet-flavored UI at all. Fixed by fully separating the two into
+independent steps:
+- `pairing.html` is pure credential issuance again (Tier A tickets, Tier B
+  username/password) — zero e-scoresheet awareness, identical UI for any device type.
+- New `public/install-escoresheet.html` — picks an already-paired, active Tier B
+  device from a dropdown and shows its e-scoresheet QR code plus a plain clickable
+  link (`escoresheetPairingUrl`, for testing on the same machine or when there's no
+  camera to scan with — a real gap in the first attempt, which only ever offered a QR
+  image). This is now the *only* place any e-scoresheet-specific logic lives.
+- `admin.html` gained a separate "Install e-scoresheet" card alongside "Device
+  pairing", linking to the new page.
+- `routes/pairing.js`: `/devices/:id/reveal` now also returns `escoresheetPairingUrl`
+  as data (cheap to compute, harmless to include) but `pairing.html` never renders it
+  — only `install-escoresheet.html` does. `/devices/:id/qr` renamed to the explicitly
+  e-scoresheet-scoped `/devices/:id/escoresheet-qr`.
+
 **Verified end-to-end against real hardware**, not just compiled: ticket issue → code
 typed on the device's own `/provision` page → CSR generated and never leaves the
 device → signed certificate received → persisted to NVS → clean mTLS reconnect on
