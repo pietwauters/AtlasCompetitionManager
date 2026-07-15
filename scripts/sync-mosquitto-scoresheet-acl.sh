@@ -21,11 +21,20 @@
 # even start provisioning: openpiste/_provision/request (docs/level2.md §30.5) — must
 # stay anonymous-writable, since a brand-new device has no credential yet by definition.
 #
-# Read access, and apparatus/software/remote/var publishing, stay exactly as open to
-# anonymous connections as before — this only gates scoresheet/* (Tier B) and grants
-# Tier A devices their own scoped read+write. Full per-piste scoping is still a real,
-# separate follow-up (see docs/implementation-notes/mosquitto-security.md's "what this
-# note doesn't cover").
+# Read access, and apparatus/remote/var publishing, stay exactly as open to anonymous
+# connections as before — this only gates scoresheet/* (Tier B) and grants Tier A
+# devices their own scoped read+write. Full per-piste scoping is still a real, separate
+# follow-up (see docs/implementation-notes/mosquitto-security.md's "what this note
+# doesn't cover").
+#
+# software is the one exception, as of 2026-07-15: it is NOT in the anonymous
+# backward-compat block below. Only Atlas's own CMS ever publishes as software, and it
+# now authenticates via its own Tier A client certificate (CN software-cms — see
+# scripts/provision-cms-client-cert.sh) instead of connecting anonymously. Leaving
+# software/# anonymously writable after that would have meant any other anonymous
+# client on the network could spoof software/* messages the apparatus is
+# spec-required to trust unconditionally (e.g. software/clock's running:false
+# invariant) — closed once the CMS's own certificate was confirmed working over mTLS.
 #
 # Usage:
 #   ./scripts/sync-mosquitto-scoresheet-acl.sh
@@ -114,14 +123,17 @@ echo "Rebuilding ACL file..."
   echo "pattern write openpiste/_provision/request"
   echo "pattern write openpiste/_provision/response/+"
   echo ""
-  echo "# apparatus/software/remote/var keep publishing exactly as before — this is"
-  echo "# the anonymous backward-compat fallback (Tier A provisioning for these"
-  echo "# roles is optional, not required); deliberately NOT \"pattern\", since an"
+  echo "# apparatus/remote/var keep publishing exactly as before — this is the"
+  echo "# anonymous backward-compat fallback (Tier A provisioning for these roles"
+  echo "# is optional, not required); deliberately NOT \"pattern\", since an"
   echo "# authenticated-but-wrong-role identity must not inherit this."
   echo "topic write openpiste/+/apparatus/#"
-  echo "topic write openpiste/+/software/#"
   echo "topic write openpiste/+/remote/#"
   echo "topic write openpiste/+/var/#"
+  echo ""
+  echo "# software is deliberately absent above — see the header comment. Atlas's own"
+  echo "# CMS certificate (role=software, device_id=cms) picks up its write grant"
+  echo "# below via the same per-user Tier A loop as any other certificate."
   echo ""
   echo "# ── Tier B (username/password) — role-scoped write only; read/provisioning"
   echo "# already come from the \"pattern\" lines above ──"

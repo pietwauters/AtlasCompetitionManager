@@ -126,6 +126,69 @@ function parseOpensslDate(str) {
   return new Date(`20${yy}-${mo}-${dd}T${hh}:${mi}:${ss}Z`);
 }
 
+// Signs a CSR against Atlas's own CA. No ticket/ROLES check here — callers decide
+// who's allowed to reach this (signCertificate gates external Tier A devices to
+// ROLES via a redeemed ticket; issueCmsCertificate is the one caller allowed to pass
+// role: 'software', since it never goes through the ticket flow at all).
+function _signCsr({ role, deviceId, csrPem }) {
+  ensureCaDb();
+  const tmpDir = fs.mkdtempSync('/tmp/atlas-tier-a-');
+  const csrPath = path.join(tmpDir, 'req.csr');
+  const certPath = path.join(tmpDir, 'cert.pem');
+  const extPath = path.join(tmpDir, 'ext.cnf');
+  try {
+    fs.writeFileSync(csrPath, csrPem);
+
+    // Reject a malformed/tampered CSR before it ever reaches the CA key.
+    execFileSync('openssl', ['req', '-in', csrPath, '-verify', '-noout'], { stdio: 'pipe' });
+
+    const serial = nextSerialHex();
+    // CN is Atlas-controlled ({role}-{deviceId}) and maps directly to a Mosquitto
+    // `user <CN>` ACL stanza — the CSR's own embedded subject is discarded; only
+    // its public key is used.
+    const cn = `${role}-${deviceId}`;
+    fs.writeFileSync(extPath,
+      'basicConstraints=CA:FALSE\n' +
+      'keyUsage=digitalSignature,keyEncipherment\n' +
+      'extendedKeyUsage=clientAuth\n');
+
+    execFileSync('openssl', [
+      'x509', '-req',
+      '-in', csrPath,
+      '-CA', CA_CERT, '-CAkey', CA_KEY,
+      '-set_serial', `0x${serial}`,
+      '-out', certPath,
+      '-days', String(CERT_DAYS),
+      '-subj', `/O=OpenPiste/CN=${cn}`,
+      '-extfile', extPath,
+    ], { stdio: 'pipe' });
+
+    const certPem = fs.readFileSync(certPath, 'utf8');
+    const caCertPem = fs.readFileSync(CA_CERT, 'utf8');
+
+    const expiry = opensslDate(new Date(Date.now() + CERT_DAYS * 86400000));
+    fs.appendFileSync(INDEX_FILE, `V\t${expiry}\t\t${serial}\tunknown\t/O=OpenPiste/CN=${cn}\n`);
+
+    return { certPem, caCertPem, serial };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// Records a freshly-issued certificate and revokes whatever it supersedes. A
+// device/CN can only ever hold one live certificate at a time (a fresh grant
+// overwrites its own storage — NVS on the firmware side, data/tls/software-client.*
+// for the CMS itself) — so any previous certificate for this exact device+role is
+// now provably unused and should stop being trusted, not linger as a separate
+// "active" row indefinitely. Re-provisioning/re-issuance is meant to supersede, not
+// accumulate.
+function _recordAndSupersede({ serial, deviceId, role, deviceLabel, certPem }) {
+  const { lastInsertRowid } = stmtInsertCert.run({ serial, deviceId, role, deviceLabel, certPem });
+  for (const row of stmtFindActiveCertsForDevice.all(deviceId, role, lastInsertRowid)) {
+    Provisioning.revokeCertificate(row.id);
+  }
+}
+
 const Provisioning = {
   // Operator side — mirrors services/pairing.js's old ticket-code shape, scoped to a
   // single publisher role per docs/level2.md §30.5 ("role" field, never "software").
@@ -156,62 +219,59 @@ const Provisioning = {
     const ticket = stmtFindLiveByCode.get(code);
     if (!ticket || ticket.role !== role) return null;
 
+    const { certPem, caCertPem, serial } = _signCsr({ role, deviceId, csrPem });
+
+    stmtRedeemTicket.run(ticket.id);
+    // The device itself never sends a label in practice (the firmware's
+    // /provision form only asks for the ticket code and role) — fall back to
+    // whatever the operator typed when issuing the ticket, since that's already
+    // the meaningful name for this device and shouldn't need re-entering.
+    const label = deviceLabel || ticket.device_label || null;
+    _recordAndSupersede({ serial, deviceId, role, deviceLabel: label, certPem });
+
+    return { certPem, caCertPem, serial };
+  },
+
+  // Self-issuance for Atlas's own OPP2 client — the "shouldn't the CMS itself
+  // authenticate to the broker" gap. Today lib/opp2Transport.js connects
+  // anonymously and relies on the backward-compat anonymous
+  // `topic write openpiste/+/software/#` grant, which also means any other
+  // anonymous client on the network can spoof software/* messages the apparatus is
+  // spec-required to trust unconditionally (e.g. software/clock's running:false
+  // invariant). Unlike every other Tier A device, the CMS doesn't need the
+  // ticket/MQTT request-response exchange at all — it already holds the CA's own
+  // private key locally, so keypair generation, CSR, and signing all happen in one
+  // local step. CN is fixed (software-cms): there is exactly one CMS per
+  // deployment, so no per-instance device id is needed the way real external
+  // hardware needs one. Writes the private key + cert straight to
+  // data/tls/software-client.{key,crt} (the key never touches the DB, same as the
+  // CA's own key) and records the cert in tier_a_certificates for the same
+  // CRL/revocation/pruning machinery every other Tier A cert already gets.
+  issueCmsCertificate() {
     ensureCaDb();
-
-    const tmpDir = fs.mkdtempSync('/tmp/atlas-tier-a-');
-    const csrPath = path.join(tmpDir, 'req.csr');
-    const certPath = path.join(tmpDir, 'cert.pem');
-    const extPath = path.join(tmpDir, 'ext.cnf');
+    const tmpDir = fs.mkdtempSync('/tmp/atlas-cms-cert-');
+    const keyPath = path.join(tmpDir, 'cms.key');
+    const csrPath = path.join(tmpDir, 'cms.csr');
     try {
-      fs.writeFileSync(csrPath, csrPem);
-
-      // Reject a malformed/tampered CSR before it ever reaches the CA key.
-      execFileSync('openssl', ['req', '-in', csrPath, '-verify', '-noout'], { stdio: 'pipe' });
-
-      const serial = nextSerialHex();
-      // CN is Atlas-controlled ({role}-{deviceId}, both already validated above) and
-      // maps directly to a Mosquitto `user <CN>` ACL stanza — the CSR's own embedded
-      // subject is discarded; only its public key is used.
-      const cn = `${role}-${deviceId}`;
-      fs.writeFileSync(extPath,
-        'basicConstraints=CA:FALSE\n' +
-        'keyUsage=digitalSignature,keyEncipherment\n' +
-        'extendedKeyUsage=clientAuth\n');
-
       execFileSync('openssl', [
-        'x509', '-req',
-        '-in', csrPath,
-        '-CA', CA_CERT, '-CAkey', CA_KEY,
-        '-set_serial', `0x${serial}`,
-        '-out', certPath,
-        '-days', String(CERT_DAYS),
-        '-subj', `/O=OpenPiste/CN=${cn}`,
-        '-extfile', extPath,
+        'req', '-new', '-nodes',
+        '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
+        '-keyout', keyPath, '-out', csrPath,
+        '-subj', '/O=OpenPiste/CN=software-cms',
       ], { stdio: 'pipe' });
 
-      const certPem = fs.readFileSync(certPath, 'utf8');
-      const caCertPem = fs.readFileSync(CA_CERT, 'utf8');
+      const keyPem = fs.readFileSync(keyPath, 'utf8');
+      const csrPem = fs.readFileSync(csrPath, 'utf8');
 
-      const expiry = opensslDate(new Date(Date.now() + CERT_DAYS * 86400000));
-      fs.appendFileSync(INDEX_FILE, `V\t${expiry}\t\t${serial}\tunknown\t/O=OpenPiste/CN=${cn}\n`);
+      const { certPem, caCertPem, serial } = _signCsr({
+        role: 'software', deviceId: 'cms', csrPem,
+      });
+      _recordAndSupersede({
+        serial, deviceId: 'cms', role: 'software', deviceLabel: 'Atlas CMS (self)', certPem,
+      });
 
-      stmtRedeemTicket.run(ticket.id);
-      // The device itself never sends a label in practice (the firmware's
-      // /provision form only asks for the ticket code and role) — fall back to
-      // whatever the operator typed when issuing the ticket, since that's already
-      // the meaningful name for this device and shouldn't need re-entering.
-      const label = deviceLabel || ticket.device_label || null;
-      const { lastInsertRowid } = stmtInsertCert.run({ serial, deviceId, role, deviceLabel: label, certPem });
-
-      // A device can only ever hold one certificate at a time (a fresh grant
-      // overwrites its NVS storage, per TierAProvisioning::HandleResponse on the
-      // firmware side) — so any previous certificate for this exact device+role
-      // is now provably unused and should stop being trusted, not linger as a
-      // separate "active" row indefinitely. Re-provisioning is meant to
-      // supersede, not accumulate.
-      for (const row of stmtFindActiveCertsForDevice.all(deviceId, role, lastInsertRowid)) {
-        Provisioning.revokeCertificate(row.id);
-      }
+      fs.writeFileSync(path.join(TLS_DIR, 'software-client.key'), keyPem, { mode: 0o600 });
+      fs.writeFileSync(path.join(TLS_DIR, 'software-client.crt'), certPem);
 
       return { certPem, caCertPem, serial };
     } finally {

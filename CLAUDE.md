@@ -593,10 +593,12 @@ credential in a URL **fragment** (never reaches Atlas's server or its logs) that
 `escoresheet/js/app.js` reads and immediately scrubs via `history.replaceState`. The old
 ticket-code/HTTP-redeem flow (`routes/pair.js`'s `POST /redeem`, `pairing_tickets`/
 `paired_devices` tables, the dead `token` bearer concept) is fully removed, not kept
-alongside the new flow. `apparatus`/`software`/`remote`/`var` topics are untouched — Tier
-A (apparatus certs) isn't built yet; this pass was scoped to Tier B only, per
-`docs/security-provisioning-discussion.md` §3.3.1's own conclusion that the e-scoresheet
-is currently the only component that needs it. Verified end-to-end at the service layer
+alongside the new flow. `apparatus`/`software`/`remote`/`var` topics were left untouched
+in this pass — Tier A (apparatus certs) wasn't built yet at the time; this pass was
+scoped to Tier B only, per `docs/security-provisioning-discussion.md` §3.3.1's own
+conclusion that the e-scoresheet was, at the time, the only component that needed it.
+**Tier A is now built too** — see "Tier A (certificate-based) device provisioning"
+below. Verified end-to-end at the service layer
 and over real HTTP (full pool lifecycle, route auth gating, QR image, fragment-URL
 parsing) against a throwaway director account and a temporary credential batch on a
 second, non-default-port server instance — the real dev server was left untouched and
@@ -608,11 +610,16 @@ correctly online per Atlas's own backend but the e-scoresheet saw nothing. Cause
 Mosquitto 2.0.18 a global/unscoped `topic read #` ACL line only reaches truly anonymous
 connections — an authenticated device only gets what's inside its own `user <name>`
 block, so every paired e-scoresheet's subscriptions silently received zero messages
-(`SUBACK` still succeeded, hiding the failure). Fixed by adding `topic read #` inside
-each generated `user` block in `sync-mosquitto-scoresheet-acl.sh`, verified against a
-disposable local Mosquitto instance before touching the real broker;
+(`SUBACK` still succeeded, hiding the failure). Fixed at the time by adding
+`topic read #` inside each generated `user` block in `sync-mosquitto-scoresheet-acl.sh`
+— **later superseded, 2026-07-15, by a more robust fix found while building Tier A**:
+every genuinely universal grant now uses Mosquitto's `pattern` directive instead of
+`topic`, which reaches every client regardless of auth state with no per-user
+repetition at all — see "Tier A (certificate-based) device provisioning" below for the
+full story (this same per-user-repetition gap turned out to also block Tier A device
+re-provisioning, which is what prompted finding the better fix).
 `docs/implementation-notes/mosquitto-security.md`'s examples had the same latent bug,
-corrected the same way. Also **wired both provisioning steps into `install.sh`**
+corrected the same way both times. Also **wired both provisioning steps into `install.sh`**
 (credential-pool seeding, always; broker sync, only if Mosquitto is found on the same
 host — otherwise printed as a manual next step) — previously both were undiscoverable
 manual steps, which is exactly what let this bug go unnoticed until a real pairing.
@@ -897,6 +904,174 @@ surfaced two concrete protocol gaps (see `docs/roles-and-responsibilities-discus
    `lastScore`/`lastUw2f`, no `apparatus/clock` handler). Both block the actual
    mid-bout piste-transfer feature — 2026-07-10 only closed the messaging-format
    prerequisite (item 1), not the feature itself.
+
+### Tier A (certificate-based) device provisioning — complete, 2026-07-14/15
+
+Implements `docs/level2.md` §30.5 for real: embedded/native components (the scoring
+apparatus firmware, and by extension anything else that can't run in a browser) prove
+themselves with a TLS client certificate instead of a Tier B username/password —
+generated locally, private key never transmitted, exchanged for a signed cert over the
+reserved `openpiste/_provision/request` / `openpiste/_provision/response/{device_id}`
+topics. Built across **both** repos this project depends on: this one (the CMS/signing
+authority) and `esp32scoringdeviceMqtt` (the real device — see
+[[reference_scoring_device_firmware]]), and paired against **actual hardware**, not
+just simulated — the first Atlas feature verified that way end-to-end.
+
+**Atlas side:** migration `029_tier_a_provisioning.sql` (`tier_a_tickets`,
+`tier_a_certificates`); `services/provisioning.js` — ticket issuance,
+`signCertificate` (shells to `openssl x509 -req` against `data/tls/ca.{key,crt}`,
+overriding the CSR's own subject with an Atlas-controlled `{role}-{deviceId}` CN so it
+maps directly to a Mosquitto ACL identity), `revokeCertificate`
+(CRL regen via a minimal bootstrapped OpenSSL CA database at `data/tls/ca-db/`),
+`purgeRevokedCertificates` (operator-list cleanup only, never touches the CRL);
+`lib/opp2Provisioning.js` — the MQTT-side handler, wired into `lib/opp2Client.js`
+ahead of the normal piste-scoped message parsing (the `_provision/*` topics are a
+reserved 3-segment shape the opp2-library-style parsing can't handle); new
+`routes/pairing.js` endpoints and a "Pair a scoring device" ticket-issuing flow.
+`scripts/sync-mosquitto-tier-a.sh` (new) handles the broker-listener half:
+`require_certificate`/`use_identity_as_username`/`crlfile` on 8883, CRL pushing.
+
+**Firmware side:** new `TierAProvisioning` singleton — mbedtls EC keypair + CSR
+generation, NVS persistence (`"tier_a"` namespace), the MQTT exchange, and a new
+`/provision` page on the existing calibration web server (the device has no camera to
+scan a Tier B–style QR with, so the operator-relayed ticket code is typed in there).
+Filled in `AtlasAsyncMqttClient`'s previously-unimplemented `setTlsCerts()` stub.
+
+**Real bugs found only by pairing an actual device — this is the valuable part, not
+just "it compiled":**
+- **MQTT message fragmentation.** esp-mqtt delivers any message over its internal
+  buffer (default 1024 bytes) across multiple `MQTT_EVENT_DATA` callbacks;
+  `AtlasAsyncMqttClient::handleEvent` treated every fragment as a complete message.
+  Invisible until now because every prior OPP2 message (score, clock, control) was
+  small enough to arrive whole — Tier A's response (two PEM certificates) was the
+  first payload big enough to fragment. Fixed with proper
+  `current_data_offset`/`total_data_len` reassembly.
+- **Broker ACL let the device publish its request but never let Atlas publish the
+  response.** Atlas's own OPP2 client connects anonymously (by design); the ACL only
+  ever granted the request-topic write to anonymous connections, so every exchange
+  died silently on the response leg — no error either side, `SUBACK`/`PUBACK` both
+  looked fine.
+- **Crash on the first successful grant.** `esp_mqtt_client_stop()`/`_destroy()`
+  (needed to switch the device onto mTLS) must never be called from inside the MQTT
+  client's own event-handler task — doing so crashed the device with a FreeRTOS mutex
+  assertion. Fixed by deferring the actual reconnect to
+  `Opp2Handler::CheckConnection()` (the main loop task) via a staged
+  "reconnect pending" flag rather than doing it synchronously in the response handler.
+- **TLS handshake failed even with a valid, correctly-signed cert.** The device
+  connects via a resolved IP; the broker's cert SAN only covers the mDNS hostname.
+  Fixed with `skip_cert_common_name_check` (the certificate *chain* is still fully
+  verified against Atlas's CA — only the hostname/CN match is skipped). Documented as
+  a deliberate, revisitable tradeoff in the firmware repo's `TECHNICAL_NOTES.md`, not
+  silently patched over.
+- **Re-provisioning was permanently impossible after the first successful pairing.**
+  Confirmed the hard way, with a real device: once authenticated (via its own
+  certificate), a client no longer inherits *any* global/unscoped ACL rule on this
+  Mosquitto version — only what's in its own per-user stanza. The provisioning-request
+  grant had only ever been added globally (for first-time anonymous devices), so an
+  already-provisioned device could never request a renewal. Root-fixed, not patched
+  per-instance: every genuinely universal grant (`read #`, both `_provision/*` topics)
+  now uses Mosquitto's `pattern` directive instead of `topic` — confirmed empirically
+  (disposable broker, several angles) to reach *every* client regardless of auth
+  state, closing this entire bug class rather than the one symptom.
+- **Certificates accumulated instead of superseding.** Every re-pair left the previous
+  certificate for the same device+role sitting around as a separate "active" row
+  forever. `signCertificate` now auto-revokes any prior active certificate for the
+  same device+role on each new issuance.
+- **`openssl ca -gencrl` failed outright the first time that supersession logic ran.**
+  OpenSSL enforces unique certificate subjects by default; Tier A deliberately reuses
+  the same CN across re-provisioning (that's what makes "find and revoke the old one"
+  possible). Fixed with the standard `index.txt.attr` → `unique_subject = no`
+  override.
+- **Device label never appeared in the certificate list.** The label typed at
+  ticket-issue time was stored on the *ticket*; the certificate's own label came only
+  from a `device_label` field in the device's MQTT request, which the firmware never
+  actually sends. `signCertificate` now falls back to the ticket's label when the
+  device doesn't send one.
+- **Unbounded CRL/index.txt growth.** A revoked entry only needs to stay listed until
+  its own original expiry passes — after that the TLS handshake already rejects it
+  for being expired, CRL or not. New `pruneExpiredRevocations()`, wired into
+  `scripts/sync-mosquitto-tier-a.sh` (the same script already re-run after every
+  revocation, not a separate thing to remember).
+
+**UI:** `public/pairing.html` rebuilt as two consistently-styled, collapsible sections
+— "Device-locked credentials" (Tier A, expanded by default — the common case) and
+"Username & password" (Tier B, collapsed) — replacing four mismatched cards, with
+matching show/clear-revoked controls added to both. `public/admin.html`'s card
+retitled "Device pairing" (was "Scoresheets" — no longer accurate once this covered
+more than the e-scoresheet).
+
+**Verified end-to-end against real hardware**, not just compiled: ticket issue → code
+typed on the device's own `/provision` page → CSR generated and never leaves the
+device → signed certificate received → persisted to NVS → clean mTLS reconnect on
+8883 → re-provisioning without manual intervention → correct label and
+single-active-row bookkeeping in `pairing.html`. `docs/implementation-notes/mosquitto-security.md`
+updated to document the `pattern`-vs-`topic` finding for future implementers (not the
+spec itself — this is Mosquitto-specific, deliberately out of `docs/level2.md`'s
+scope per its own vendor-neutrality principle). Committed to both repos: Atlas
+`1547f03`, `esp32scoringdeviceMqtt` `714250d`.
+
+**Not done:** flashing/testing a *second* physical device (only one has been paired
+so far); per-piste/per-instance scoping beyond role (tracked, longstanding, not
+specific to Tier A); OCSP (CRL was always the intended mechanism, per spec).
+
+**CMS self-authentication — complete, 2026-07-15.** A real gap surfaced once Tier A
+was working against real hardware: Atlas's own OPP2 client (`lib/opp2Transport.js`)
+still connected to the broker anonymously, relying on a backward-compat, anonymous-only
+`topic write openpiste/+/software/#` ACL grant to publish at all. Since Tier B/Tier A
+had already scoped `scoresheet`/`apparatus`/etc to their own authenticated identities,
+`software` was the one role left wide open — any other anonymous client on the network
+could spoof `software/*` messages the apparatus is spec-required to trust
+unconditionally (e.g. `software/clock`'s `running:false` invariant). Fixed by giving the
+CMS its own Tier A client certificate, CN `software-cms`:
+- `services/provisioning.js`'s `signCertificate` was refactored into two shared
+  helpers (`_signCsr`, `_recordAndSupersede`) plus a new `issueCmsCertificate()` —
+  unlike every other Tier A device, the CMS doesn't need the ticket/MQTT
+  request-response exchange at all, since it already holds the CA's own private key
+  locally; keypair, CSR, and signing happen in one local `openssl` step. Writes
+  `data/tls/software-client.{key,crt}` and records the cert in `tier_a_certificates`
+  (role `software`, device_id `cms`) for the same CRL/revocation/pruning machinery
+  every other Tier A cert gets.
+- Migration `030_cms_self_certificate.sql` — `tier_a_certificates.role`'s CHECK
+  constraint gained `'software'` (table rebuild, SQLite has no ALTER for CHECK
+  constraints). Deliberately did **not** touch `tier_a_tickets.role`'s CHECK, which
+  still excludes `'software'` — that's the real invariant (no operator-issued ticket
+  can ever grant an external device the software role); the CMS's self-issuance
+  bypasses the ticket flow entirely, so only the certificate *record* needed the
+  schema change.
+- `lib/opp2Transport.js`'s `connect()` now checks for
+  `data/tls/software-client.{key,crt}` + `ca.crt`; if present, upgrades to
+  `mqtts://host:8883` with the client cert. If absent, behaves exactly as before
+  (anonymous) — fully additive/opt-in, can't break an install that hasn't issued the
+  cert yet.
+- New `scripts/provision-cms-client-cert.sh` — issues the cert and prints the
+  sequenced next steps (restart Atlas, re-run `sync-mosquitto-scoresheet-acl.sh`,
+  re-run `sync-mosquitto-tier-a.sh` if 8883 doesn't already require a client cert).
+  The sequencing matters: `sync-mosquitto-scoresheet-acl.sh` already read
+  `tier_a_certificates` generically (no script change needed to pick up
+  `software-cms`), but if Atlas reconnects via mTLS *before* that script re-runs, it
+  authenticates successfully yet has no ACL stanza yet — same "an authenticated
+  client inherits nothing from an old anonymous grant" lesson as everywhere else in
+  Tier A/B, this time biting Atlas's own connection instead of a device's.
+- Once the certificate was confirmed working live (server log showed `(mTLS, cert CN
+  software-cms)`, existing piste state kept publishing normally), the anonymous
+  `topic write openpiste/+/software/#` line was removed from
+  `sync-mosquitto-scoresheet-acl.sh`'s generated ACL — closing the spoofing gap for
+  real, not just adding a redundant authenticated path alongside the open one.
+  `apparatus`/`remote`/`var` deliberately keep their anonymous fallback (Tier A is
+  still optional for those roles; `software` is different because only Atlas itself
+  ever legitimately publishes it).
+- `install.sh` updated to issue the CMS certificate at install time (same
+  skip-if-already-provisioned pattern as the Tier B credential pool) and to print a
+  reminder that `sync-mosquitto-tier-a.sh` (listener 8883's
+  `require_certificate`/`use_identity_as_username`/`crlfile`) is a separate, more
+  invasive step (full broker restart, not a reload) left manual rather than run
+  automatically on every install.
+
+**Verified against the real, already-live deployment** (not simulated): cert issued,
+chain-verified against `data/tls/ca.crt`, key/cert match confirmed; ACL regenerated and
+pushed with the operator's own broker (`sudo grep` confirmed `software` absent from the
+anonymous block and present under a `user software-cms` stanza); Atlas reconnected over
+mTLS with no disruption to already-live piste state.
 
 ### Competition formats (complete)
 - Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged

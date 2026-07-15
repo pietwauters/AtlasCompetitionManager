@@ -18,10 +18,17 @@ unless stated otherwise.
 | Reset a lost admin PIN | `node scripts/reset_admin_pin.js` | no |
 | Generate/renew HTTPS certs | `./scripts/generate-tls-cert.sh [--rotate-ca]` | no |
 | Push certs to the MQTT broker | `./scripts/install-broker-cert.sh` | yes |
+| Give the CMS itself a broker certificate | `./scripts/provision-cms-client-cert.sh` | no |
+| Push Tier A certs/CRL to the broker (incl. after a revoke) | `./scripts/sync-mosquitto-tier-a.sh` | yes |
 | Add more scoresheet pairing credentials | `node scripts/top-up-credential-pool.js [count]` | no |
 | Push credential pool to the broker (incl. after a revoke) | `./scripts/sync-mosquitto-scoresheet-acl.sh` | yes |
 | Check/update the OPP2 spec mirror | `./scripts/sync-spec.sh [--update]` | no |
 | Wipe the database (irreversible) | `node scripts/reset_database.js` | no |
+| Bundle everything a standby server needs | `./scripts/create-failover-bundle.sh` | no |
+| Take over on a standby server | `./scripts/restore-failover-bundle.sh <bundle>` | no* |
+
+\* `restore-failover-bundle.sh` itself needs no sudo, but if Mosquitto is on the same
+host it shells out to `install-broker-cert.sh`/`sync-mosquitto-*.sh`, which do.
 
 ---
 
@@ -42,12 +49,17 @@ Safe to re-run: every step is idempotent (skips the admin account if one already
 exists, skips `.env` if present, skips the credential pool if one already exists — see
 §5). Re-running is the normal way to pick up a fresh `git pull`'s new dependencies.
 
-**Also provisions the e-scoresheet credential pool** (10 credentials) and, if Mosquitto
-is installed on the same host, pushes them to the broker automatically. If your broker
-runs on separate hardware, it prints the manual command instead — see §5.
+**Also provisions the e-scoresheet credential pool** (10 credentials) and the CMS's own
+Tier A broker certificate (see §5.3), and, if Mosquitto is installed on the same host,
+pushes both to the broker automatically. If your broker runs on separate hardware, it
+prints the manual commands instead — see §5.
 
-**Not done by `install.sh`:** HTTPS certificates (§2) and pushing them to the broker.
-Run those separately once, or whenever you rotate the CA.
+**Not done by `install.sh`:** generating the HTTPS/CA certificates in the first place
+(§4 — needed before either of the above can do anything, since both depend on
+`data/tls/ca.key` already existing) and flipping listener 8883 to actually require a
+Tier A certificate (`./scripts/sync-mosquitto-tier-a.sh`, §5.1/§5.3 — left manual since
+it's a heavier, full-broker-restart change). Run those separately once, or whenever you
+rotate the CA.
 
 ## 2. Starting, stopping, and auto-start on boot
 
@@ -122,16 +134,49 @@ by the now-replaced root and every device's TLS connection to it breaks.
 New device onboarding (installing the CA root so a browser stops warning) is a
 self-service page, not a script: `http://openpiste.local:<PORT>/install-cert.html`.
 
-## 5. E-scoresheet pairing / MQTT credential pool
+## 5. Device pairing: Tier A (certificates) and Tier B (username/password)
 
-The standalone e-scoresheet PWA authenticates to the broker with a unique
-username/password per device, drawn from a pool. See
-`docs/e-scoresheet-standalone-design.md` and `docs/security-provisioning-discussion.md`
-§4.5 for the design; this section is just the operational loop.
+Two ways a device authenticates to the broker, per `docs/level2.md` §30 — see
+`docs/security-provisioning-discussion.md` for the design and
+`docs/e-scoresheet-standalone-design.md` for the e-scoresheet specifically; this section
+is just the operational loop. **Tier A ("device-locked credentials")** is preferred and
+shown expanded by default on `/pairing.html`: the device generates its own keypair
+locally and the private key never leaves it. **Tier B ("username & password")** is the
+fallback for devices that structurally can't do that — browsers/PWAs, i.e. the
+e-scoresheet, since a browser can't touch a platform keystore or select a client cert
+from JS.
 
-**Day-to-day pairing a device:** no script — use the web UI at `/pairing.html`
-(Admin → "Pair a scoresheet"), enter a label, show the QR to the new device. This only
-touches Atlas's own database, not the broker.
+### 5.1 Tier A — pairing a scoring device
+
+**Day-to-day pairing:** no script — `/pairing.html`'s "Device-locked credentials"
+section. Pick a role (`apparatus`/`scoresheet`/`remote`/`var`), enter a label, and
+you'll get a short ticket code. Type that into the device's own `/provision` page (it
+has no camera to scan a QR with, unlike the e-scoresheet). The same section lists every
+certificate issued so far, with a revoke button.
+
+**Revoking:** revoking in `/pairing.html` marks it revoked in Atlas's DB and
+regenerates `data/tls/ca.crl` immediately — but, same caveat as Tier B below, **this
+alone does not cut the device off at the broker**:
+
+```bash
+./scripts/sync-mosquitto-tier-a.sh
+```
+
+Needs sudo. Pushes the current CRL to the broker, prunes CRL entries whose underlying
+certificate has already expired on its own anyway (no security benefit to keeping them,
+just unbounded growth), and — the first time it's run — flips listener 8883 to require
+a client certificate. Safe to re-run any time.
+
+**Clearing old revoked entries from the list** (cosmetic only — `/pairing.html`
+showing clutter): the "Clear revoked" button in either Tier A's or Tier B's list.
+Removes them from Atlas's own display; does not touch broker state or the CRL, since a
+revoked certificate must stay untrusted regardless of whether it's still shown.
+
+### 5.2 Tier B — e-scoresheet pairing
+
+**Day-to-day pairing a device:** no script — `/pairing.html`'s "Username & password"
+section, enter a label, show the QR to the new device. This only touches Atlas's own
+database, not the broker.
 
 **Topping up the pool** (when `/pairing.html` shows it running low, or none exists yet):
 
@@ -141,7 +186,7 @@ node scripts/top-up-credential-pool.js 25     # adds a specific count
 ```
 
 No sudo — only writes to Atlas's own DB. **This alone does not make new credentials
-usable at the broker** — you still need step 2 below.
+usable at the broker** — you still need the push step below.
 
 **Pushing the pool to the broker** — required after topping up, and required after
 revoking a device in `/pairing.html` (revoking there only marks it revoked in Atlas's
@@ -151,11 +196,11 @@ DB; the credential stays valid at the broker until this runs):
 ./scripts/sync-mosquitto-scoresheet-acl.sh
 ```
 
-Needs sudo — rewrites `/etc/mosquitto/passwd` and the scoresheet section of
-`/etc/mosquitto/acl.conf` from Atlas's current DB state (every non-revoked credential,
-whether assigned yet or not), then reloads Mosquitto. Safe to re-run any time — it
-fully regenerates rather than patches, so it's the same command whether you just
-topped up, just revoked, or just want to confirm the broker matches the DB.
+Needs sudo — rewrites `/etc/mosquitto/passwd` and `/etc/mosquitto/acl.conf` from
+Atlas's current DB state (every non-revoked Tier B credential *and* Tier A
+certificate — see §5.1), then reloads Mosquitto. Safe to re-run any time — it fully
+regenerates rather than patches, so it's the same command whether you just topped up,
+just revoked, or just want to confirm the broker matches the DB.
 
 **Two things this does *not* do**, worth knowing before you assume a revoke "worked":
 - An already-connected device is not force-disconnected by this — the reload only
@@ -165,22 +210,95 @@ topped up, just revoked, or just want to confirm the broker matches the DB.
   connecting fine, check `docs/implementation-notes/mosquitto-security.md`'s
   documented gotcha: an authenticated device only inherits ACL rules from inside its
   own `user` block, not from unscoped global rules — this script already accounts for
-  it, but if you ever hand-edit `/etc/mosquitto/acl.conf`, don't forget the per-user
-  `topic read #` line.
+  it, but if you ever hand-edit `/etc/mosquitto/acl.conf`, use `pattern` for anything
+  meant to be universal, not a bare `topic` line.
 
-## 6. Database: backup and reset
+### 5.3 The CMS's own broker certificate
+
+Atlas's own OPP2 client (this server) can authenticate to the broker with a Tier A
+certificate too, instead of connecting anonymously — closes a real gap where any
+anonymous client on the network could otherwise spoof `software/*` messages the
+apparatus is spec-required to trust unconditionally. Unlike every other Tier A device,
+it doesn't need a ticket — Atlas already holds the CA's own private key locally, so it
+signs its own certificate directly, in one step:
+
+```bash
+./scripts/provision-cms-client-cert.sh
+```
+
+No sudo — writes `data/tls/software-client.{key,crt}` and records the certificate in
+Atlas's own DB, same bookkeeping as any other Tier A certificate. `install.sh` already
+runs this automatically on a fresh install (skipped if one's already provisioned) — see
+§1. If you're adding it to an *already-running* deployment instead, follow this order
+to avoid a window where Atlas authenticates but temporarily loses `software/*` write
+access (same "an authenticated connection inherits nothing from the old anonymous
+grant" gotcha as §5.2):
+
+1. Run the command above.
+2. `./scripts/sync-mosquitto-scoresheet-acl.sh` — pushes the certificate's write grant
+   *before* Atlas ever tries to use it.
+3. `pm2 restart atlas` — picks up the certificate automatically; the server log shows
+   `(mTLS, cert CN software-cms)` on connect (vs. `(anonymous)`) to confirm it worked.
+4. `./scripts/sync-mosquitto-tier-a.sh` — only needed if listener 8883 doesn't already
+   require a client certificate (i.e. no Tier A device has ever been paired here yet).
+
+## 6. Database: backup, mid-competition failover, and reset
 
 The database is a single file: `data/atlas.db` (plus `-wal`/`-shm` sidecar files while
-the server is running). There is no dedicated backup script — back it up like any
-SQLite file:
+the server is running). For a routine ad-hoc snapshot, no script is needed — back it up
+like any SQLite file:
 
 ```bash
 # Safe to copy while the server is running (WAL mode) — quick outage-free snapshot:
 sqlite3 data/atlas.db ".backup data/atlas-backup-$(date +%F).db"
 ```
 
-**Full wipe** (only ever needed for a genuinely fresh start — e.g. resetting a demo
-install before a real competition):
+### 6.1 Mid-competition failover to a standby server
+
+If the primary server fails during a live competition and you need a pre-provisioned
+standby to take over quickly, a plain DB backup isn't enough on its own — the standby
+also needs `data/tls/` (the CA and every issued certificate) so already-paired devices
+keep trusting it without re-pairing every apparatus and e-scoresheet mid-event.
+
+**On the primary** (or its most recent backup, if the primary is already dead):
+
+```bash
+./scripts/create-failover-bundle.sh [output-path.7z]
+```
+
+No sudo. Prompts for a password twice — the archive is AES-256 encrypted (including
+filenames) because it contains the CA private key; treat the resulting `.7z` file with
+the same care as a key itself (no email, no unencrypted USB, delete it once the standby
+has it and you've confirmed the restore worked). Bundles a live, consistent DB snapshot
+(`sqlite3 .backup`, safe without stopping the server) plus all of `data/tls/`. Get the
+file onto the standby however is practical in the moment (scp, USB).
+
+**On the standby** (must already be fully provisioned — Atlas, Node, and Mosquitto
+already installed with the same listener layout; there's no time for a from-scratch
+`install.sh` during a live failover):
+
+```bash
+./scripts/restore-failover-bundle.sh <bundle.7z>
+```
+
+No sudo itself, but shells out to sudo-gated scripts if Mosquitto is on this same host.
+Prompts for the archive password, shows the bundle's manifest (created-at/source
+host/git commit) so you can confirm it's the one you think it is, then asks for
+explicit confirmation before overwriting anything. Backs up the standby's *own* current
+`data/atlas.db`/`data/tls/` first (as `.bak-<timestamp>`, so you can put them back if
+something looks wrong), installs the restored files, re-pushes broker trust/ACL/CRL
+from them if Mosquitto is local, and restarts Atlas.
+
+Not handled by either script: getting devices to actually find the standby. If it
+answers to the same `openpiste.local` mDNS name the primary used, already-paired
+devices should reconnect on their own once the primary drops off the network; if the
+standby has a different network identity, that's a networking step outside Atlas's own
+scripts.
+
+### 6.2 Full wipe
+
+Only ever needed for a genuinely fresh start — e.g. resetting a demo install before a
+real competition:
 
 ```bash
 node scripts/reset_database.js

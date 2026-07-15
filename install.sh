@@ -33,7 +33,8 @@ apt-get install -y \
   npm \
   sqlite3 \
   build-essential \
-  python3
+  python3 \
+  p7zip-full
 
 # Check Node.js version (18+ required)
 NODE_VERSION=$(node -e "console.log(parseInt(process.versions.node.split('.')[0]))")
@@ -179,20 +180,62 @@ else
   echo "    Warning: could not provision credential pool: $POOL_RESULT"
 fi
 
+# ---------------------------------------------------------------------------
+# 10. CMS's own Tier A client certificate (Atlas authenticates to the broker
+#     itself instead of connecting anonymously — see
+#     services/provisioning.js's issueCmsCertificate). Skipped if one already
+#     exists so re-running install.sh (e.g. an upgrade) doesn't needlessly
+#     reissue/supersede it. Needs the local CA (generate-tls-cert.sh) to
+#     already exist — same prerequisite as the HTTPS listener, so an install
+#     that's never generated TLS material at all just gets a printed
+#     next-step instead of failing.
+# ---------------------------------------------------------------------------
+echo "==> Provisioning Atlas's own broker client certificate"
+if [[ -f "$APP_DIR/data/tls/software-client.crt" ]]; then
+  echo "    CMS client certificate already provisioned, skipping."
+elif [[ -f "$APP_DIR/data/tls/ca.key" && -f "$APP_DIR/data/tls/ca.crt" ]]; then
+  CMS_CERT_RESULT=$(sudo -u "$APP_USER" node -e "
+    const Provisioning = require('./services/provisioning');
+    const { serial } = Provisioning.issueCmsCertificate();
+    console.log('ISSUED:' + serial);
+  " 2>&1)
+  if echo "$CMS_CERT_RESULT" | grep -q "^ISSUED:"; then
+    echo "    Issued (serial $(echo "$CMS_CERT_RESULT" | cut -d: -f2)) — Atlas will use it"
+    echo "    automatically on next start, once it's pushed to the broker below."
+  else
+    echo "    Warning: could not issue CMS client certificate: $CMS_CERT_RESULT"
+  fi
+else
+  echo "    No local CA yet — run ./scripts/generate-tls-cert.sh, then re-run this"
+  echo "    step manually: ./scripts/provision-cms-client-cert.sh"
+fi
+
 # Pushing these to Mosquitto only makes sense if the broker is on this same
 # host — see scripts/install-broker-cert.sh for the separate-hardware case,
 # same reasoning applies here. Re-run is safe: the sync script fully
-# regenerates the ACL/passwd files from Atlas's DB each time.
+# regenerates the ACL/passwd files from Atlas's DB each time (this also picks
+# up the CMS certificate above, since it reads tier_a_certificates
+# generically — no separate call needed for it).
 if command -v mosquitto &>/dev/null; then
   echo "==> Pushing scoresheet credentials to the local Mosquitto broker"
   bash "$APP_DIR/scripts/sync-mosquitto-scoresheet-acl.sh"
+  echo ""
+  echo "  Note: this pushed ACL/password entries, but does NOT itself make listener"
+  echo "  8883 require or check TLS client certificates (require_certificate,"
+  echo "  use_identity_as_username, crlfile) — that's a separate, more invasive"
+  echo "  listener config change (full mosquitto restart, not just a reload), left as"
+  echo "  a deliberate manual step rather than silently flipped on every install:"
+  echo "    ./scripts/sync-mosquitto-tier-a.sh"
+  echo "  Until that's run, any Tier A certificate (including the CMS's own, above)"
+  echo "  is issued and ACL-scoped but not yet enforced/usable at the broker."
 else
   echo ""
-  echo "  !! Mosquitto not found on this host — scoresheet MQTT credentials were"
-  echo "     generated in Atlas's own database but not pushed to any broker yet."
-  echo "     Once your broker is reachable (locally or on separate hardware, per"
-  echo "     scripts/install-broker-cert.sh), run:"
+  echo "  !! Mosquitto not found on this host — scoresheet MQTT credentials and any"
+  echo "     CMS/Tier A certificate were generated in Atlas's own database but not"
+  echo "     pushed to any broker yet. Once your broker is reachable (locally or on"
+  echo "     separate hardware, per scripts/install-broker-cert.sh), run:"
   echo "       ./scripts/sync-mosquitto-scoresheet-acl.sh"
+  echo "       ./scripts/sync-mosquitto-tier-a.sh"
   echo ""
 fi
 
