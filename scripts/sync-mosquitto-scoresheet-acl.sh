@@ -1,23 +1,38 @@
 #!/usr/bin/env bash
-# sync-mosquitto-scoresheet-acl.sh — push Atlas's current mqtt_credentials pool
-# (docs/security-provisioning-discussion.md §4.5) out to Mosquitto: one
-# username/password per device, all non-revoked pool entries valid at the broker
-# regardless of whether they've been assigned to a device yet (assignment is pure
-# Atlas-DB bookkeeping — see services/pairing.js's assignCredential — the broker
+# sync-mosquitto-scoresheet-acl.sh — regenerate Mosquitto's *entire* acl.conf (there's
+# only one) from Atlas's own DB: Tier B (docs/security-provisioning-discussion.md §4.5,
+# username/password) credentials AND Tier A (docs/level2.md §30.5, TLS client
+# certificate) issued devices both live in this one file, since Mosquitto has only one
+# acl_file — two independently-regenerating scripts would just clobber each other.
+# scripts/sync-mosquitto-tier-a.sh is the companion script for the *other* half of Tier
+# A (pushing ca.crl and the listener-8883 require_certificate/crlfile config), which
+# doesn't touch acl.conf at all and so has no clobber risk with this one.
+#
+# Tier B: one username/password per device, all non-revoked pool entries valid at the
+# broker regardless of whether they've been assigned to a device yet (assignment is
+# pure Atlas-DB bookkeeping — see services/pairing.js's assignCredential — the broker
 # doesn't distinguish "free" from "assigned", only "revoked" from "not revoked").
 #
-# Replaces the old setup-mosquitto-auth.sh (single shared credential). Read access,
-# and apparatus/software/remote/var publishing, stay exactly as open as before — this
-# only gates the scoresheet/* topics. Full per-piste scoping is still a real, separate
-# follow-up (see docs/implementation-notes/mosquitto-security.md's "what this note
-# doesn't cover").
+# Tier A: certificates authenticate via `use_identity_as_username true` on listener
+# 8883 (see scripts/sync-mosquitto-tier-a.sh) — the cert's CN becomes the ACL username,
+# same per-user stanza mechanism as Tier B, just no passwd_file entry needed.
+#
+# Also carries the one global write grant an as-yet-uncertified Tier A device needs to
+# even start provisioning: openpiste/_provision/request (docs/level2.md §30.5) — must
+# stay anonymous-writable, since a brand-new device has no credential yet by definition.
+#
+# Read access, and apparatus/software/remote/var publishing, stay exactly as open to
+# anonymous connections as before — this only gates scoresheet/* (Tier B) and grants
+# Tier A devices their own scoped read+write. Full per-piste scoping is still a real,
+# separate follow-up (see docs/implementation-notes/mosquitto-security.md's "what this
+# note doesn't cover").
 #
 # Usage:
 #   ./scripts/sync-mosquitto-scoresheet-acl.sh
 #
 # Safe to re-run — fully regenerates the passwd/ACL files from Atlas's DB each time
 # (not an incremental patch), so it's the same command whether you just topped up the
-# pool (scripts/top-up-credential-pool.js) or just revoked a device in pairing.html.
+# Tier B pool, revoked a Tier B device, or issued/revoked a Tier A certificate.
 
 set -euo pipefail
 
@@ -26,7 +41,7 @@ PASSWD_FILE="/etc/mosquitto/passwd"
 ACL_FILE="/etc/mosquitto/acl.conf"
 CONF_SNIPPET="/etc/mosquitto/conf.d/scoresheet-acl.conf"
 
-echo "Reading active credentials from Atlas's DB..."
+echo "Reading active Tier B credentials from Atlas's DB..."
 CREDENTIALS=$(node -e "
   const db = require('$DIR/db');
   const rows = db.prepare('SELECT username, password FROM mqtt_credentials WHERE revoked_at IS NULL').all();
@@ -34,7 +49,16 @@ CREDENTIALS=$(node -e "
 ")
 
 COUNT=$(echo "$CREDENTIALS" | grep -c . || true)
-echo "$COUNT active credential(s) to push."
+echo "$COUNT active Tier B credential(s) to push."
+
+echo "Reading active Tier A certificates from Atlas's DB..."
+TIER_A_DEVICES=$(node -e "
+  const db = require('$DIR/db');
+  const rows = db.prepare('SELECT role, device_id FROM tier_a_certificates WHERE revoked_at IS NULL').all();
+  rows.forEach(r => console.log(r.role + ':' + r.role + '-' + r.device_id));
+")
+TIER_A_COUNT=$(echo "$TIER_A_DEVICES" | grep -c . || true)
+echo "$TIER_A_COUNT active Tier A certificate(s) to push."
 
 echo "Rebuilding Mosquitto password file (needs sudo)..."
 TMP_PASSWD=$(mktemp)
@@ -63,28 +87,59 @@ echo "Rebuilding ACL file..."
   echo "# docs/security-provisioning-discussion.md §4.5 and"
   echo "# docs/implementation-notes/mosquitto-security.md."
   echo ""
-  echo "# Applies to every client, authenticated or anonymous — read stays universal,"
-  echo "# and apparatus/software/remote/var keep publishing exactly as before (Tier A"
-  echo "# provisioning for those roles is not yet built)."
-  echo "topic read #"
+  # CONFIRMED EMPIRICALLY (2026-07-14, re-verified 2026-07-15 against Mosquitto
+  # 2.0.18): a bare "topic ..." line outside any "user" block ONLY reaches
+  # anonymous connections — once a client authenticates (Tier B
+  # username/password, or Tier A via use_identity_as_username), it gets *only*
+  # what's inside its own "user <name>" stanza. This bit us three separate
+  # times (read access, the _provision/response delivery, and a real device
+  # being permanently unable to re-provision once its DB record was gone) before
+  # this was understood as a pattern rather than three unrelated bugs.
+  #
+  # "pattern ..." lines are different: CONFIRMED (2026-07-15, disposable broker)
+  # to apply to every client — anonymous AND authenticated — with zero per-user
+  # repetition needed, even for a user with no stanza in this file at all. Used
+  # below for every grant that's genuinely meant to be universal (read
+  # everything; the provisioning channel). Role-scoped writes
+  # (openpiste/+/{role}/#) deliberately stay as per-user "topic" lines below —
+  # that scoping is real security boundary, not incidental, and must NOT become
+  # universal via "pattern".
+  echo "pattern read #"
+  echo ""
+  echo "# The provisioning channel MUST reach every client, anonymous or"
+  echo "# authenticated — a brand-new device is anonymous (docs/level2.md §30.5),"
+  echo "# an already-provisioned device re-requesting/renewing is authenticated,"
+  echo "# and Atlas's own OPP2 client (which publishes the response) also connects"
+  echo "# anonymously (lib/opp2Transport.js sets no username)."
+  echo "pattern write openpiste/_provision/request"
+  echo "pattern write openpiste/_provision/response/+"
+  echo ""
+  echo "# apparatus/software/remote/var keep publishing exactly as before — this is"
+  echo "# the anonymous backward-compat fallback (Tier A provisioning for these"
+  echo "# roles is optional, not required); deliberately NOT \"pattern\", since an"
+  echo "# authenticated-but-wrong-role identity must not inherit this."
   echo "topic write openpiste/+/apparatus/#"
   echo "topic write openpiste/+/software/#"
   echo "topic write openpiste/+/remote/#"
   echo "topic write openpiste/+/var/#"
   echo ""
-  # NOTE: the "topic read #" above only actually reaches anonymous connections on
-  # this Mosquitto (confirmed empirically against 2.0.18, 2026-07-14) — once a
-  # client authenticates with a username, it is granted *only* whatever appears
-  # inside its own "user <name>" block below, so read has to be repeated per-user
-  # or a paired device's subscriptions silently receive nothing (SUBACK still
-  # succeeds, which makes this easy to miss without testing actual delivery).
+  echo "# ── Tier B (username/password) — role-scoped write only; read/provisioning"
+  echo "# already come from the \"pattern\" lines above ──"
   while IFS=: read -r username password; do
     [ -z "$username" ] && continue
     echo "user $username"
-    echo "topic read #"
     echo "topic write openpiste/+/scoresheet/#"
     echo ""
   done <<< "$CREDENTIALS"
+
+  echo "# ── Tier A (TLS client certificate, CN = username via use_identity_as_username)"
+  echo "# — role-scoped write only, same reasoning as Tier B above ──"
+  while IFS=: read -r role cn; do
+    [ -z "$role" ] && continue
+    echo "user $cn"
+    echo "topic write openpiste/+/${role}/#"
+    echo ""
+  done <<< "$TIER_A_DEVICES"
 } > /tmp/atlas-scoresheet-acl.conf
 sudo cp /tmp/atlas-scoresheet-acl.conf "$ACL_FILE"
 rm -f /tmp/atlas-scoresheet-acl.conf
@@ -101,4 +156,12 @@ echo "Reloading mosquitto (SIGHUP — does not drop existing connections)..."
 sudo kill -HUP "$(pidof mosquitto)" 2>/dev/null || sudo systemctl reload mosquitto
 
 echo ""
-echo "Done. $COUNT credential(s) now valid at the broker."
+echo "Done. $COUNT Tier B credential(s) and $TIER_A_COUNT Tier A certificate(s) now"
+echo "valid at the broker."
+echo ""
+echo "Note: acl.conf grants Tier A devices their topic access once identified by"
+echo "certificate — it does NOT itself make listener 8883 require a certificate, map"
+echo "its CN to a username, or check revocation. Run"
+echo "./scripts/sync-mosquitto-tier-a.sh separately for that (one-time listener"
+echo "config: use_identity_as_username, require_certificate, crlfile — plus pushing"
+echo "the current CRL, needed again after every revoke)."

@@ -23,6 +23,9 @@ const stmtList = db.prepare(`
 const stmtRevoke = db.prepare(`
   UPDATE mqtt_credentials SET revoked_at = datetime('now') WHERE id = ?
 `);
+const stmtPurgeRevoked = db.prepare(`
+  DELETE FROM mqtt_credentials WHERE revoked_at IS NOT NULL
+`);
 const stmtPoolStats = db.prepare(`
   SELECT
     COUNT(*) AS total,
@@ -80,6 +83,17 @@ const Pairing = {
   revokeCredential(id) {
     stmtRevoke.run(id);
     return stmtFindById.get(id);
+  },
+
+  // Removes revoked rows from Atlas's own operator-facing list only — a revoked
+  // row was already excluded from the broker regeneration
+  // (scripts/sync-mosquitto-scoresheet-acl.sh only pushes revoked_at IS NULL
+  // rows), so deleting it here has no effect on broker state either way. Purely
+  // a "stop showing me old clutter" cleanup, mirrors
+  // services/provisioning.js's purgeRevokedCertificates().
+  purgeRevokedCredentials() {
+    const { changes } = stmtPurgeRevoked.run();
+    return { purged: changes };
   },
 
   poolStats() {

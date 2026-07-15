@@ -3,19 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Atlas — Pair a Scoresheet</title>
+  <title>Atlas — Pair a Device</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .ticket-card{background:var(--clr-surface);border:1px solid var(--clr-border);
+    .ticket-card{background:var(--clr-bg);border:1px solid var(--clr-border);
                  border-radius:12px;padding:1.5rem;max-width:340px;text-align:center;
                  display:flex;flex-direction:column;align-items:center;gap:.75rem}
     .ticket-code{font-size:1.1rem;font-weight:600;letter-spacing:.03em;color:var(--clr-brand);
                  word-break:break-all}
     .ticket-hint{font-size:.8rem;color:var(--clr-text-muted)}
-    .layout{display:flex;gap:2rem;flex-wrap:wrap;align-items:flex-start}
-    .pool-banner{font-size:.85rem;margin-bottom:.75rem}
+    .pool-banner{font-size:.85rem;margin-bottom:1rem}
     .pool-banner.low{color:var(--clr-danger)}
+
+    .pairing-section-header{display:flex;align-items:center;justify-content:space-between;
+                             cursor:pointer;gap:1rem}
+    .pairing-section-header h2{margin:0;display:flex;align-items:center;gap:.6rem}
+    .pairing-badge{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+                    padding:.15rem .5rem;border-radius:999px}
+    .pairing-badge.preferred{background:var(--clr-success);color:#fff}
+    .pairing-badge.fallback{background:var(--clr-border);color:var(--clr-text-muted)}
+    .pairing-chevron{transition:transform .15s ease;color:var(--clr-text-muted);font-size:1.1rem}
+    .pairing-chevron.open{transform:rotate(180deg)}
+    .pairing-subtitle{color:var(--clr-text-muted);font-size:.9rem;margin:.4rem 0 0}
+    .pairing-body{margin-top:1.25rem;display:flex;gap:2rem;flex-wrap:wrap;align-items:flex-start}
+    .pairing-action{min-width:16rem}
+    .pairing-list{flex:1;min-width:20rem}
+    .pairing-list-controls{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
+    .pairing-list-controls label{font-size:.85rem;display:flex;align-items:center;gap:.35rem}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -38,80 +53,180 @@
     first (one-time, then never again on this device) before pairing below.
   </div>
 
-  <template x-if="poolStats">
-    <div class="pool-banner" :class="{low: poolStats.free <= 2}">
-      <span x-text="poolStats.free"></span> credential(s) available in the pool
-      (<span x-text="poolStats.assigned"></span> assigned, <span x-text="poolStats.revoked"></span> revoked).
-      <span x-show="poolStats.free <= 2">
-        Running low — run <code>node scripts/top-up-credential-pool.js</code> then
-        <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> on the broker host.
-      </span>
+  <!-- ── Device-locked credentials (Tier A) ─────────────────────────────────────── -->
+  <section class="card">
+    <div class="pairing-section-header" @click="tierAOpen = !tierAOpen">
+      <h2>Device-locked credentials <span class="pairing-badge preferred">Preferred</span></h2>
+      <span class="pairing-chevron" :class="{open: tierAOpen}">▾</span>
     </div>
-  </template>
+    <p class="pairing-subtitle">
+      The device generates its own key and never exposes it — enter a code on the
+      device itself to pair. Used by scoring apparatus and other hardware that runs
+      its own dedicated software.
+    </p>
 
-  <div class="layout">
-    <section class="card">
-      <h2 style="margin-top:0">Pair a scoresheet</h2>
-      <p style="color:var(--clr-text-muted);font-size:.9rem;max-width:26rem">
-        Each device gets its own unique credential — assigning one picks the next unused
-        entry from the pool, no code to type in. Walk to the new device, tap "Assign a
-        credential" below, then let them scan the QR with their camera (opens the
-        e-scoresheet app already paired), or read the username/password aloud for manual
-        entry. Dismiss this screen once the device has it — the credential doesn't expire
-        on its own the way a short-lived code would.
-      </p>
+    <div class="pairing-body" x-show="tierAOpen">
+      <div class="pairing-action">
+        <template x-if="!tierATicket">
+          <div>
+            <select x-model="tierARole" style="margin-bottom:.5rem">
+              <option value="apparatus">Apparatus (scoring device)</option>
+              <option value="scoresheet">Scoresheet (native app)</option>
+              <option value="remote">Remote control</option>
+              <option value="var">Video review</option>
+            </select>
+            <input x-model="tierALabel" placeholder="Label (e.g. Strip 3 scoring box)" style="margin-bottom:.5rem">
+            <button class="primary" @click="issueTierATicket()">Issue ticket</button>
+            <p class="error" x-show="tierATicketError" x-text="tierATicketError"></p>
+          </div>
+        </template>
 
-      <template x-if="!assigning">
-        <div>
-          <input x-model="deviceLabel" placeholder="Label (e.g. Referee's phone, strip 3)" style="margin-bottom:.5rem">
-          <button class="primary" @click="assign()">Assign a credential</button>
-          <p class="error" x-show="assignError" x-text="assignError"></p>
+        <template x-if="tierATicket">
+          <div class="ticket-card">
+            <div class="ticket-code" style="font-size:2rem" x-text="tierATicket.code"></div>
+            <div class="ticket-hint">Role: <span x-text="tierATicket.role"></span></div>
+            <div class="ticket-hint" :class="{expiring: tierASecondsLeft <= 30}"
+                 x-text="tierASecondsLeft > 0 ? ('Expires in ' + tierASecondsLeft + 's') : 'Expired'"></div>
+            <button @click="issueTierATicket()">New code</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="pairing-list">
+        <div class="pairing-list-controls">
+          <label><input type="checkbox" x-model="tierAShowRevoked"> Show revoked</label>
+          <button x-show="tierACerts.some(c => c.revoked_at)" class="danger" style="font-size:.8rem"
+                  @click="purgeTierARevoked()">Clear revoked from this list</button>
         </div>
-      </template>
 
-      <template x-if="assigning">
-        <div class="ticket-card">
-          <img :src="'/api/pairing/devices/' + assigning.id + '/qr'" width="180" height="180" alt="Pairing QR code">
-          <div class="ticket-code" x-text="assigning.username"></div>
-          <div class="ticket-code" x-text="assigning.password"></div>
-          <div class="ticket-hint">Manual entry, if scanning isn't possible</div>
-          <button @click="dismiss()">Done — dismiss</button>
+        <template x-if="tierACertsLoaded && visibleTierACerts().length === 0">
+          <div style="color:var(--clr-text-muted);font-size:.9rem">
+            <span x-show="tierACerts.length === 0">No devices provisioned yet.</span>
+            <span x-show="tierACerts.length > 0">
+              No active devices — <span x-text="tierACerts.length"></span> revoked, hidden
+              (check "Show revoked" above).
+            </span>
+          </div>
+        </template>
+        <table class="table-responsive" x-show="visibleTierACerts().length">
+          <thead><tr><th>Device</th><th>Role</th><th>Issued</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="c in visibleTierACerts()" :key="c.id">
+              <tr>
+                <td data-label="Device" x-text="c.device_label || c.device_id"></td>
+                <td data-label="Role" x-text="c.role"></td>
+                <td data-label="Issued" x-text="c.issued_at"></td>
+                <td data-label="Status">
+                  <span x-show="!c.revoked_at" style="color:var(--clr-success)">active</span>
+                  <span x-show="c.revoked_at" style="color:var(--clr-text-muted)">revoked</span>
+                </td>
+                <td data-label="">
+                  <button x-show="!c.revoked_at" class="danger" @click="revokeTierACert(c)">Revoke</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <p class="ticket-hint" x-show="tierACerts.some(c => c.revoked_at)" style="margin-top:.75rem">
+          Revoking regenerates the certificate revocation list (CRL) in Atlas's own
+          database, but the broker only enforces it once an admin runs
+          <code>scripts/sync-mosquitto-tier-a.sh</code> to push the updated CRL.
+          "Clear revoked from this list" only tidies this page — it never un-revokes
+          anything at the broker.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Username & password (Tier B) ───────────────────────────────────────────── -->
+  <section class="card">
+    <div class="pairing-section-header" @click="tierBOpen = !tierBOpen">
+      <h2>Username &amp; password <span class="pairing-badge fallback">Fallback</span></h2>
+      <span class="pairing-chevron" :class="{open: tierBOpen}">▾</span>
+    </div>
+    <p class="pairing-subtitle">
+      Fallback for browser-based apps, which can't use device-locked credentials at
+      all — no webpage can present a security certificate. Pair by scanning a QR code.
+    </p>
+
+    <div class="pairing-body" x-show="tierBOpen">
+      <div class="pairing-action">
+        <template x-if="poolStats">
+          <div class="pool-banner" :class="{low: poolStats.free <= 2}">
+            <span x-text="poolStats.free"></span> credential(s) available in the pool
+            (<span x-text="poolStats.assigned"></span> assigned, <span x-text="poolStats.revoked"></span> revoked).
+            <span x-show="poolStats.free <= 2">
+              Running low — run <code>node scripts/top-up-credential-pool.js</code> then
+              <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> on the broker host.
+            </span>
+          </div>
+        </template>
+
+        <template x-if="!assigning">
+          <div>
+            <input x-model="deviceLabel" placeholder="Label (e.g. Referee's phone, strip 3)" style="margin-bottom:.5rem">
+            <button class="primary" @click="assign()">Assign a credential</button>
+            <p class="error" x-show="assignError" x-text="assignError"></p>
+          </div>
+        </template>
+
+        <template x-if="assigning">
+          <div class="ticket-card">
+            <img :src="'/api/pairing/devices/' + assigning.id + '/qr'" width="180" height="180" alt="Pairing QR code">
+            <div class="ticket-code" x-text="assigning.username"></div>
+            <div class="ticket-code" x-text="assigning.password"></div>
+            <div class="ticket-hint">Manual entry, if scanning isn't possible</div>
+            <button @click="dismiss()">Done — dismiss</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="pairing-list">
+        <div class="pairing-list-controls">
+          <label><input type="checkbox" x-model="tierBShowRevoked"> Show revoked</label>
+          <button x-show="devices.some(d => d.revoked_at)" class="danger" style="font-size:.8rem"
+                  @click="purgeTierBRevoked()">Clear revoked from this list</button>
         </div>
-      </template>
-    </section>
 
-    <section class="card" style="flex:1;min-width:20rem">
-      <h2 style="margin-top:0">Paired devices</h2>
-      <template x-if="loaded && devices.length === 0">
-        <div style="color:var(--clr-text-muted);font-size:.9rem">No devices paired yet.</div>
-      </template>
-      <table class="table-responsive" x-show="devices.length">
-        <thead><tr><th>Device</th><th>Assigned</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          <template x-for="d in devices" :key="d.id">
-            <tr>
-              <td data-label="Device" x-text="d.device_label || d.username"></td>
-              <td data-label="Assigned" x-text="d.assigned_at || '—'"></td>
-              <td data-label="Status">
-                <span x-show="!d.assigned_at" style="color:var(--clr-text-muted)">unassigned</span>
-                <span x-show="d.assigned_at && !d.revoked_at" style="color:var(--clr-success)">active</span>
-                <span x-show="d.revoked_at" style="color:var(--clr-text-muted)">revoked</span>
-              </td>
-              <td data-label="">
-                <button x-show="d.assigned_at && !d.revoked_at" @click="showQr(d)">Show QR again</button>
-                <button x-show="d.assigned_at && !d.revoked_at" class="danger" @click="revoke(d)">Revoke</button>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <p class="ticket-hint" x-show="devices.some(d => d.revoked_at)">
-        Revoking here stops future pairing and marks the device revoked, but the
-        credential stays valid at the broker until an admin runs
-        <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> to push the change.
-      </p>
-    </section>
-  </div>
+        <template x-if="loaded && visibleDevices().length === 0">
+          <div style="color:var(--clr-text-muted);font-size:.9rem">
+            <span x-show="devices.length === 0">No devices paired yet.</span>
+            <span x-show="devices.length > 0">
+              No active devices — <span x-text="devices.length"></span> revoked, hidden
+              (check "Show revoked" above).
+            </span>
+          </div>
+        </template>
+        <table class="table-responsive" x-show="visibleDevices().length">
+          <thead><tr><th>Device</th><th>Assigned</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="d in visibleDevices()" :key="d.id">
+              <tr>
+                <td data-label="Device" x-text="d.device_label || d.username"></td>
+                <td data-label="Assigned" x-text="d.assigned_at || '—'"></td>
+                <td data-label="Status">
+                  <span x-show="!d.assigned_at" style="color:var(--clr-text-muted)">unassigned</span>
+                  <span x-show="d.assigned_at && !d.revoked_at" style="color:var(--clr-success)">active</span>
+                  <span x-show="d.revoked_at" style="color:var(--clr-text-muted)">revoked</span>
+                </td>
+                <td data-label="">
+                  <button x-show="d.assigned_at && !d.revoked_at" @click="showQr(d)">Show QR again</button>
+                  <button x-show="d.assigned_at && !d.revoked_at" class="danger" @click="revoke(d)">Revoke</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <p class="ticket-hint" x-show="devices.some(d => d.revoked_at)" style="margin-top:.75rem">
+          Revoking here stops future pairing and marks the device revoked, but the
+          credential stays valid at the broker until an admin runs
+          <code>scripts/sync-mosquitto-scoresheet-acl.sh</code> to push the change.
+          "Clear revoked from this list" only tidies this page — it never
+          re-authorizes anything at the broker.
+        </p>
+      </div>
+    </div>
+  </section>
 
 </main>
 <script src="/js/nav.js"></script>
@@ -119,15 +234,37 @@
 <script>
 function app() {
   return {
+    tierAOpen: true,
+    tierBOpen: false,
+
     deviceLabel: '',
     assigning: null,
     assignError: '',
     devices: [],
     poolStats: null,
     loaded: false,
+    tierBShowRevoked: false,
+
+    tierARole: 'apparatus',
+    tierALabel: '',
+    tierATicket: null,
+    tierATicketError: '',
+    tierASecondsLeft: 0,
+    tierACerts: [],
+    tierACertsLoaded: false,
+    tierAShowRevoked: false,
+    _tierATimer: null,
+
+    visibleDevices() {
+      return this.tierBShowRevoked ? this.devices : this.devices.filter(d => !d.revoked_at);
+    },
+
+    visibleTierACerts() {
+      return this.tierAShowRevoked ? this.tierACerts : this.tierACerts.filter(c => !c.revoked_at);
+    },
 
     async init() {
-      await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+      await Promise.all([this.loadDevices(), this.loadPoolStats(), this.loadTierACerts()]);
     },
 
     async loadDevices() {
@@ -168,6 +305,51 @@ function app() {
     async revoke(device) {
       await fetch(`/api/pairing/devices/${device.id}/revoke`, { method: 'POST' });
       await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+    },
+
+    async purgeTierBRevoked() {
+      await fetch('/api/pairing/devices/purge-revoked', { method: 'POST' });
+      await Promise.all([this.loadDevices(), this.loadPoolStats()]);
+    },
+
+    async loadTierACerts() {
+      this.tierACerts = await fetch('/api/pairing/tier-a/certificates').then(r => r.json()).catch(() => []);
+      this.tierACertsLoaded = true;
+    },
+
+    async issueTierATicket() {
+      this.tierATicketError = '';
+      const res = await fetch('/api/pairing/tier-a/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: this.tierARole, deviceLabel: this.tierALabel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        this.tierATicketError = data.error || 'Could not issue ticket';
+        return;
+      }
+      this.tierATicket = data;
+      this.tierASecondsLeft = data.ttlMinutes * 60;
+      clearInterval(this._tierATimer);
+      this._tierATimer = setInterval(() => {
+        this.tierASecondsLeft--;
+        if (this.tierASecondsLeft <= 0) {
+          clearInterval(this._tierATimer);
+          this.tierATicket = null;
+          this.loadTierACerts();
+        }
+      }, 1000);
+    },
+
+    async revokeTierACert(cert) {
+      await fetch(`/api/pairing/tier-a/certificates/${cert.id}/revoke`, { method: 'POST' });
+      await this.loadTierACerts();
+    },
+
+    async purgeTierARevoked() {
+      await fetch('/api/pairing/tier-a/certificates/purge-revoked', { method: 'POST' });
+      await this.loadTierACerts();
     },
   };
 }

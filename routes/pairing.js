@@ -2,6 +2,7 @@
 const express = require('express');
 const QRCode  = require('qrcode');
 const Pairing = require('../services/pairing');
+const Provisioning = require('../services/provisioning');
 
 const router = express.Router();
 
@@ -57,6 +58,49 @@ router.post('/devices/:id/revoke', (req, res) => {
 
 router.get('/pool-stats', (req, res) => {
   res.json(Pairing.poolStats());
+});
+
+// Clears revoked rows from the operator-facing list only — a revoked credential
+// was already excluded from the broker regeneration, so this has no effect on
+// broker state either way.
+router.post('/devices/purge-revoked', (req, res) => {
+  res.json(Pairing.purgeRevokedCredentials());
+});
+
+// ── Tier A (certificate-based) provisioning, docs/level2.md §30.5 ──────────────────
+// Unlike Tier B's assign-a-pooled-credential flow, this issues a short-lived ticket
+// code the operator relays to the device by whatever input mechanism it has (the
+// real scoring-device firmware exposes a small web form for this, since it has no
+// camera to scan a QR with) — the device itself performs the CSR/MQTT exchange.
+
+router.post('/tier-a/tickets', (req, res) => {
+  const { role, deviceLabel } = req.body || {};
+  try {
+    const ticket = Provisioning.createTicket(role, deviceLabel, req.session.user.id);
+    res.json(ticket);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/tier-a/tickets', (req, res) => {
+  res.json(Provisioning.listTickets());
+});
+
+router.get('/tier-a/certificates', (req, res) => {
+  res.json(Provisioning.listCertificates());
+});
+
+router.post('/tier-a/certificates/:id/revoke', (req, res) => {
+  const cert = Provisioning.revokeCertificate(req.params.id);
+  if (!cert) return res.status(404).json({ error: 'Certificate not found' });
+  res.json(cert);
+});
+
+// Clears revoked rows from the operator-facing list only — does not affect the
+// CRL or broker-side revocation, which stays permanent regardless.
+router.post('/tier-a/certificates/purge-revoked', (req, res) => {
+  res.json(Provisioning.purgeRevokedCertificates());
 });
 
 module.exports = router;

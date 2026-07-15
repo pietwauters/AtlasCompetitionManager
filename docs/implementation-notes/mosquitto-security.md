@@ -19,34 +19,48 @@ roles (`apparatus`, `software`, `remote`, `var`, `scoresheet`) into ACL stanzas 
 whichever credential a given device holds. Mosquitto does the enforcement; OPP2's role
 model exists only in how the ACL file is written.
 
-## 1. Keep reads global, put every write inside a credential
+## 1. Keep reads (and the provisioning channel) universal with `pattern`, not `topic`
 
 ```conf
 # /etc/mosquitto/acl.conf
 
-# global — applies to every connection, authenticated or anonymous
-topic read #
+# universal — applies to EVERY connection, anonymous or authenticated, with no
+# per-user repetition needed anywhere below
+pattern read #
+pattern write openpiste/_provision/request
+pattern write openpiste/_provision/response/+
 ```
 
-No `topic write` line goes here. Every `topic write` rule from here on lives inside a
-`user <name>` block. This is what makes §30.2's asymmetry fall out for free:
-`allow_anonymous true` still lets a pure read-only client (a live piste display with no
-credentials at all) connect and subscribe to anything, because the global block covers
-it — but since it never matches any `user` block, it never gets write access to
-anything. No separate "read-only role" needs to exist; it's just the absence of a
-credential.
+**Confirmed the hard way, 2026-07-14 — a bare `topic ...` line outside any `user` block
+only reaches truly anonymous connections.** On Mosquitto 2.0.18, a client that
+authenticates (username/password, or a certificate CN via `use_identity_as_username`)
+gets *only* whatever appears inside its own `user <name>` block — unscoped `topic`
+lines above it are not inherited. The `SUBACK`/`PUBACK` for a disallowed
+subscribe/publish still comes back successful, which is what makes this easy to miss:
+nothing errors, messages just never arrive or get delivered. This bit a real deployment
+three separate times before the pattern (no pun intended) was recognized: read access
+silently missing, a `_provision/response` never reaching the requesting device, and —
+worst — **a device that had already been issued a certificate could never re-provision
+or renew, because once authenticated it stopped inheriting the anonymous-only
+provisioning grant it needed to request a new one.** Deleting that device's tracking
+record (to "clean up" the operator-facing list) made this concrete: the device was
+still cryptographically valid and still connected, but had silently lost the ability to
+ever prove that to Mosquitto's ACL again.
 
-**Confirmed the hard way, 2026-07-14 — this global `topic read #` line only reaches
-truly anonymous connections.** On Mosquitto 2.0.18, a client that authenticates with a
-username gets *only* whatever appears inside its own `user <name>` block — the global,
-unscoped lines above it are not inherited. The `SUBACK` for a disallowed subscription
-still comes back successful, which is what makes this easy to miss: nothing errors,
-messages (retained or live) just never arrive. Verified directly against a real
-deployment: an authenticated device with a correctly-provisioned password could
-subscribe successfully but received nothing, while the identical subscribe worked
-instantly anonymous. **Consequence: every `user` block below needs its own explicit
-`topic read #` line too**, not just the write line — every example in this note has
-been corrected to include it.
+**The fix, confirmed 2026-07-15: `pattern` lines are different.** Unlike `topic`,
+a bare `pattern ...` line reaches *every* client — anonymous and authenticated alike —
+with zero per-user repetition, even for a user with no `user` stanza in the file at
+all. Verified directly: an authenticated client with literally no mention anywhere else
+in `acl.conf` still received `pattern read #` and could publish to a `pattern write`
+topic; the same client correctly got nothing for a topic *only* granted per-user
+elsewhere, confirming this doesn't quietly widen anything else. Use `pattern` for
+every grant that's genuinely meant to be universal (read everything; the provisioning
+channel — a device that already holds a certificate legitimately needs to reach that
+channel too, to re-provision or renew, not just a brand-new anonymous device
+requesting its first one). Role-scoped writes (§2/§3 below) deliberately stay as
+per-user `topic` lines — that scoping is a real security boundary (a scoresheet
+credential must not get apparatus-write), not incidental, and must **not** become
+universal via `pattern`.
 
 ## 2. Tier B — username/password, one per device
 
@@ -56,12 +70,13 @@ mosquitto_passwd -b /etc/mosquitto/passwd apparatus_piste07 '<generated-password
 
 ```conf
 user apparatus_piste07
-topic read #
 topic write openpiste/+/apparatus/#
 ```
 
-One stanza per device credential, matching §30.6's pre-generated pool. There is no
-prefix/wildcard matching on usernames in an ACL file — you cannot write a single rule
+One stanza per device credential, matching §30.6's pre-generated pool — read and the
+provisioning channel already come from §1's `pattern` lines, so this stanza only needs
+the one thing that's genuinely specific to this device: its role-scoped write. There is
+no prefix/wildcard matching on usernames in an ACL file — you cannot write a single rule
 that says "anyone named `apparatus_*` gets apparatus write access." Whatever creates the
 credential (the pool-generation script) has to also emit the matching ACL stanza at the
 same time; the two are generated together, not derived from each other later.
@@ -83,9 +98,12 @@ from §2 applies unchanged:
 
 ```conf
 user scoresheet-device-014
-topic read #
 topic write openpiste/+/scoresheet/#
 ```
+
+Same reasoning as §2: read and the provisioning channel (needed again if this device
+ever re-provisions or renews — see §1) already come from the universal `pattern`
+lines, so this stanza carries only the role-scoped write.
 
 Atlas's own CA at `data/tls/` (`scripts/generate-tls-cert.sh`,
 `scripts/install-broker-cert.sh`) is already the right shape to issue these — a
@@ -129,6 +147,12 @@ management.
   this alone; if immediate disconnection matters, follow with a targeted
   `mosquitto_ctrl` kick or a broker restart.
 
+Removing a stanza only removes that device's *role-scoped write* (§1's `pattern` lines
+are unaffected, by design — a revoked device keeps read and provisioning-channel access).
+This isn't a gap: reaching the provisioning channel doesn't grant anything on its own,
+since a request still needs a currently-live, operator-issued ticket code to succeed —
+the same check that already stops anyone else from provisioning without one.
+
 ## 7. An alternative: Mosquitto's Dynamic Security plugin
 
 > **Mosquitto-specific.** Everything in §1–§6 works against any broker that implements
@@ -162,11 +186,11 @@ mosquitto_ctrl dynsec addGroupRole apparatus-devices apparatus-publisher
 stanzas require. Two more genuine advantages over §1–§6's plain-file approach,
 confirmed from Mosquitto's documentation:
 
-- **Anonymous read is a first-class concept, not a global-ACL-file trick.** A built-in
+- **Anonymous read is a first-class concept, not an ACL-file convention.** A built-in
   `unauthenticated` group exists, and `mosquitto_ctrl dynsec setAnonymousGroup
   <groupname>` assigns it whatever role anonymous connections should have — a direct,
-  explicit match for §30.2's "read is always open," instead of relying on §1's "just
-  don't put a `user` block around it" convention.
+  explicit match for §30.2's "read is always open," instead of relying on §1's
+  `pattern` lines to reach every client uniformly.
 - **Changes are live and immediate, including for already-connected sessions.**
   Disabling or deleting a client disconnects any session currently using those
   credentials right away — closing the exact gap §6 flags above (`SIGHUP` alone does
@@ -241,18 +265,17 @@ acl_file /etc/mosquitto/acl.conf
 
 ```conf
 # /etc/mosquitto/acl.conf
-topic read #
+pattern read #
+pattern write openpiste/_provision/request
+pattern write openpiste/_provision/response/+
 
 user apparatus_piste07
-topic read #
 topic write openpiste/+/apparatus/#
 
 user remote_014
-topic read #
 topic write openpiste/+/remote/#
 
 user scoresheet-device-014
-topic read #
 topic write openpiste/+/scoresheet/#
 ```
 
