@@ -77,6 +77,61 @@ if ! has_listener 8883 || ! has_listener 9002; then
   rm -f "$TMP"
 fi
 
+# Normalize cafile/certfile/keyfile inside each TLS listener's own stanza to the
+# canonical $MOSQ_CERTS paths below — not just skip listeners that already existed.
+# A listener created fresh above already has the right paths, so this is a no-op for
+# it; but a listener inherited from something other than this project (e.g. a prior
+# mqtt-web setup) can reference a completely different cert path (found in practice:
+# listener 9002 pointing at /etc/mosquitto/certs-web/server.cert), and installing new
+# cert bytes at $MOSQ_CERTS/server.crt is silently pointless if nothing reads it from
+# there. Rewrites only cafile/certfile/keyfile lines within a listener's own block
+# (up to the next `listener` line or EOF) — every other directive (protocol,
+# allow_anonymous, tls_version, require_certificate, ...) is left untouched. Portable
+# awk (no GNU-only \y) since Raspberry Pi OS's default `awk` is mawk, not gawk.
+normalize_listener_certs() {
+  local port="$1" file
+  file=$(grep -rl "^listener $port\b" "$MOSQ_CONF" "$MOSQ_CONF_D"/*.conf 2>/dev/null | head -1) || true
+  if [[ -z "$file" ]]; then return 0; fi
+  local tmp
+  tmp=$(mktemp)
+  awk -v port="$port" -v cafile="$MOSQ_CERTS/ca.crt" -v certfile="$MOSQ_CERTS/server.crt" -v keyfile="$MOSQ_CERTS/server.key" '
+    BEGIN { in_block=0; had_cafile=0; had_certfile=0; had_keyfile=0 }
+    function flush_missing() {
+      if (!had_cafile)   print "cafile " cafile
+      if (!had_certfile) print "certfile " certfile
+      if (!had_keyfile)  print "keyfile " keyfile
+    }
+    {
+      if ($0 ~ ("^listener " port "($|[ \t])")) {
+        in_block = 1
+        had_cafile = 0; had_certfile = 0; had_keyfile = 0
+        print $0
+        next
+      }
+      if (in_block && $0 ~ /^listener /) {
+        flush_missing()
+        in_block = 0
+        print $0
+        next
+      }
+      if (in_block && $0 ~ /^cafile /)   { print "cafile " cafile;     had_cafile = 1;   next }
+      if (in_block && $0 ~ /^certfile /) { print "certfile " certfile; had_certfile = 1; next }
+      if (in_block && $0 ~ /^keyfile /)  { print "keyfile " keyfile;   had_keyfile = 1;  next }
+      print $0
+    }
+    END { if (in_block) flush_missing() }
+  ' "$file" > "$tmp"
+  if ! diff -q "$file" "$tmp" >/dev/null 2>&1; then
+    STAMP=$(date +%Y%m%d%H%M%S)
+    echo "Normalizing listener $port's cert paths in $file (backup: .bak-cert-$STAMP)..."
+    sudo cp -a "$file" "$file.bak-cert-$STAMP"
+    sudo install -o root -g root -m 644 "$tmp" "$file"
+  fi
+  rm -f "$tmp"
+}
+normalize_listener_certs 8883
+normalize_listener_certs 9002
+
 echo "Installing certificate into $MOSQ_CERTS (needs sudo)..."
 sudo install -o root -g mosquitto -m 640 "$TLS_DIR/ca.crt"     "$MOSQ_CERTS/ca.crt"
 sudo install -o root -g mosquitto -m 640 "$TLS_DIR/server.crt" "$MOSQ_CERTS/server.crt"
