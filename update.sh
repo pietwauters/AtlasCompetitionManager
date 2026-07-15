@@ -42,8 +42,20 @@ cd "$APP_DIR"
 
 # ---------------------------------------------------------------------------
 # 1. Pull latest code
+#
+#    Self-heal (sudo only): boxes originally set up with `sudo git clone`
+#    (rather than cloning as APP_USER) can have .git objects/refs left
+#    root-owned from that initial clone, even after later commands started
+#    running as APP_USER — git pull then fails with "insufficient permission
+#    for adding an object to repository database .git/objects". Confirmed on
+#    a real deployment: dozens of objects/refs from the original clone were
+#    still root:root while newer ones were atlas:atlas. Reclaim before
+#    pulling, same idea as the node_modules self-heal below.
 # ---------------------------------------------------------------------------
 echo "==> Pulling latest code"
+if $IS_ROOT && [[ -d "$APP_DIR/.git" ]]; then
+  chown -R "$APP_USER":"$APP_USER" "$APP_DIR/.git"
+fi
 run_as_app_user git pull
 
 # ---------------------------------------------------------------------------
