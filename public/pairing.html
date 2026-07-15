@@ -48,11 +48,6 @@
 </header>
 <main class="layout-data">
 
-  <div class="notice-bar" style="margin-bottom:1rem">
-    First time on this device? <a href="http://openpiste.local:3001/install-cert.html" target="_blank">Install the CMS certificate</a>
-    first (one-time, then never again on this device) before pairing below.
-  </div>
-
   <!-- ── Device-locked credentials (Tier A) ─────────────────────────────────────── -->
   <section class="card">
     <div class="pairing-section-header" @click="tierAOpen = !tierAOpen">
@@ -146,7 +141,7 @@
     </div>
     <p class="pairing-subtitle">
       Fallback for browser-based apps, which can't use device-locked credentials at
-      all — no webpage can present a security certificate. Pair by scanning a QR code.
+      all — no webpage can present a security certificate.
     </p>
 
     <div class="pairing-body" x-show="tierBOpen">
@@ -172,10 +167,9 @@
 
         <template x-if="assigning">
           <div class="ticket-card">
-            <img :src="'/api/pairing/devices/' + assigning.id + '/qr'" width="180" height="180" alt="Pairing QR code">
             <div class="ticket-code" x-text="assigning.username"></div>
             <div class="ticket-code" x-text="assigning.password"></div>
-            <div class="ticket-hint">Manual entry, if scanning isn't possible</div>
+            <div class="ticket-hint">Give this username/password to the device being paired</div>
             <button @click="dismiss()">Done — dismiss</button>
           </div>
         </template>
@@ -210,7 +204,7 @@
                   <span x-show="d.revoked_at" style="color:var(--clr-text-muted)">revoked</span>
                 </td>
                 <td data-label="">
-                  <button x-show="d.assigned_at && !d.revoked_at" @click="showQr(d)">Show QR again</button>
+                  <button x-show="d.assigned_at && !d.revoked_at" @click="revealDevice(d)">Reveal credential</button>
                   <button x-show="d.assigned_at && !d.revoked_at" class="danger" @click="revoke(d)">Revoke</button>
                 </td>
               </tr>
@@ -292,7 +286,7 @@ function app() {
       this.deviceLabel = '';
     },
 
-    async showQr(device) {
+    async revealDevice(device) {
       const data = await fetch(`/api/pairing/devices/${device.id}/reveal`).then(r => r.json()).catch(() => null);
       if (data) this.assigning = data;
     },

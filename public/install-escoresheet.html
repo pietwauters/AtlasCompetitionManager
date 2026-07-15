@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Install e-scoresheet</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
+  <style>
+    .ticket-card{background:var(--clr-bg);border:1px solid var(--clr-border);
+                 border-radius:12px;padding:1.5rem;max-width:340px;text-align:center;
+                 display:flex;flex-direction:column;align-items:center;gap:.75rem;
+                 margin-top:1.25rem}
+    .ticket-hint{font-size:.8rem;color:var(--clr-text-muted)}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.phase_id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)" class="nav-comp-link"></a>
+  </template>
+  <div class="nav-right">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/referee-schedule.html">Referees</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main class="layout-form">
+
+  <div class="notice-bar" style="margin-bottom:1rem">
+    First time on this device? <a href="http://openpiste.local:3001/install-cert.html" target="_blank">Install the CMS certificate</a>
+    first (one-time, then never again on this device) before opening the e-scoresheet below.
+  </div>
+
+  <section class="card">
+    <h2 style="margin-top:0">Install e-scoresheet</h2>
+    <p style="color:var(--clr-text-muted);font-size:.9rem">
+      Pick an already-paired device to get the QR code or link that opens the
+      e-scoresheet app on it, already signed in. Need to pair a new device first?
+      <a href="/pairing.html">Pair a device</a>.
+    </p>
+
+    <template x-if="loaded && devices.length === 0">
+      <p style="color:var(--clr-text-muted);font-size:.9rem">
+        No paired devices yet — <a href="/pairing.html">pair one first</a>.
+      </p>
+    </template>
+
+    <template x-if="devices.length">
+      <div>
+        <select x-model="selectedId" @change="onSelect()" style="width:100%">
+          <option value="">Select a paired device…</option>
+          <template x-for="d in devices" :key="d.id">
+            <option :value="d.id" x-text="d.device_label || d.username"></option>
+          </template>
+        </select>
+      </div>
+    </template>
+
+    <template x-if="selected">
+      <div class="ticket-card">
+        <img :src="'/api/pairing/devices/' + selected.id + '/escoresheet-qr'" width="180" height="180" alt="e-scoresheet pairing QR code">
+        <div class="ticket-hint">Scan with the device's camera — opens the e-scoresheet app already paired</div>
+        <a :href="selected.escoresheetPairingUrl" target="_blank" style="font-size:.85rem">
+          Or open it directly on this device
+        </a>
+      </div>
+    </template>
+  </section>
+
+</main>
+<script src="/js/nav.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    devices: [],
+    loaded: false,
+    selectedId: '',
+    selected: null,
+
+    async init() {
+      this.devices = await fetch('/api/pairing/devices')
+        .then(r => r.json())
+        .then(list => list.filter(d => d.assigned_at && !d.revoked_at))
+        .catch(() => []);
+      this.loaded = true;
+    },
+
+    async onSelect() {
+      this.selected = null;
+      if (!this.selectedId) return;
+      this.selected = await fetch(`/api/pairing/devices/${this.selectedId}/reveal`)
+        .then(r => r.json()).catch(() => null);
+    },
+  };
+}
+</script>
+</body>
+</html>
