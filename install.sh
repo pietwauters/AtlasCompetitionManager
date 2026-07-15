@@ -56,7 +56,7 @@ echo "    npm : $(npm --version)"
 # ---------------------------------------------------------------------------
 echo "==> Installing Node.js dependencies"
 cd "$APP_DIR"
-npm ci --omit=dev
+sudo -u "$APP_USER" npm ci --omit=dev
 
 # ---------------------------------------------------------------------------
 # 3. Create runtime data directory

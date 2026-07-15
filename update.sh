@@ -70,8 +70,16 @@ fi
 
 # ---------------------------------------------------------------------------
 # 2. Update Node dependencies (only if package-lock.json changed)
+#
+#    Self-heal (sudo only): older install.sh ran the initial `npm ci` as
+#    root instead of APP_USER, leaving node_modules root-owned on boxes
+#    installed before that was fixed — which then makes a plain, non-root
+#    `npm ci` fail with EACCES. Reclaim ownership before installing.
 # ---------------------------------------------------------------------------
 echo "==> Updating Node.js dependencies"
+if $IS_ROOT && [[ -d "$APP_DIR/node_modules" ]]; then
+  chown -R "$APP_USER":"$APP_USER" "$APP_DIR/node_modules"
+fi
 run_as_app_user npm ci --omit=dev
 
 # ---------------------------------------------------------------------------
