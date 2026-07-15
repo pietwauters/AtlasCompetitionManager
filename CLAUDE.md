@@ -1538,7 +1538,7 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 |---|---|
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
 | `db/migrator.js` | Runs pending `.sql` files on start |
-| `db/migrations/` | Numbered schema migrations (001–026) |
+| `db/migrations/` | Numbered schema migrations (001–030) |
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) — see `docs/format-authoring-guide.md` for the full field reference |
 | `formats/` | Format shape files + `catalog.json` — see `docs/format-authoring-guide.md` |
 | `docs/format-authoring-guide.md` | Complete authoring reference: rule files → format shapes → catalog entries, with a worked end-to-end example |
