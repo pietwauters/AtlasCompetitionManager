@@ -699,8 +699,7 @@ Key conclusions so far:
   warning, service worker active → Add to Home Screen → launched from the home-screen
   icon in genuine standalone mode (no address bar/tabs). This resolves §4.4's open
   question **for Android**: once the manifest/SW/cert are all valid, Chrome does launch
-  a real standalone PWA. **iOS Safari is still unverified** — its profile-install +
-  separate "enable full trust" toggle is structurally different and untested. One
+  a real standalone PWA. One
   real snag hit and fixed along the way: on a dev machine with Docker installed, avahi
   was advertising `openpiste.local`'s IPv4 as the Docker bridge (`172.17.0.1`) instead of
   the real LAN interface — fixed with `deny-interfaces=docker0` in
@@ -710,6 +709,20 @@ Key conclusions so far:
   installability — retrying after the service worker was confirmed active fixed it;
   the eventual pairing UX should prompt for home-screen install only after confirming
   SW-active + warning-free, not immediately on first load.
+- **iOS verified for real, 2026-07-15.** Resolved §4.4's open question for iOS too —
+  genuinely works, but only from Safari specifically. First attempt failed because the
+  device was using Chrome on iOS: Apple restricts true standalone-launching "Add to
+  Home Screen" to Safari — every other iOS browser is a WebKit wrapper that at best
+  produces a plain bookmark (opens with the browser's own address bar/tabs), never a
+  real standalone window, regardless of manifest/service-worker correctness. Once
+  switched to Safari and both cert-trust steps were completed (install the profile via
+  `install-cert.html`, then separately enable **Full Trust** for the root CA in
+  Settings → General → About → Certificate Trust Settings — the step that's easy to
+  miss, since installing the profile alone leaves it untrusted for actual TLS use),
+  install worked cleanly. No manifest/HTML changes were needed — `escoresheet/manifest.json`
+  (`display: standalone`) and `escoresheet/index.html`'s iOS meta tags
+  (`apple-mobile-web-app-capable`, `apple-touch-icon`, etc.) were already correct;
+  this was purely a browser-choice + cert-trust-completeness issue on the device side.
 - **Implemented 2026-07-13: broker WSS trust unification.** Mosquitto already had a
   `wss://` listener (`9002`, alongside plain-`ws://` `9001`) — nothing new needed on the
   transport side. It was presenting a cert from an unrelated pre-existing CA
