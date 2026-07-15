@@ -34,7 +34,8 @@ apt-get install -y \
   sqlite3 \
   build-essential \
   python3 \
-  p7zip-full
+  p7zip-full \
+  avahi-daemon
 
 # Check Node.js version (18+ required)
 NODE_VERSION=$(node -e "console.log(parseInt(process.versions.node.split('.')[0]))")
@@ -60,6 +61,24 @@ npm ci --omit=dev
 echo "==> Creating data directory"
 mkdir -p "$APP_DIR/data"
 chown "$APP_USER":"$APP_USER" "$APP_DIR/data"
+
+# ---------------------------------------------------------------------------
+# 3b. Optionally set this machine's hostname to "openpiste" — CLAUDE.md's TLS/OPP2
+#     design assumes devices reach this server as openpiste.local via mDNS
+#     (avahi-daemon, installed in step 1, advertises <hostname>.local
+#     automatically). Delegates to scripts/set-hostname.sh (asks first, backs up
+#     the original — see that script for the idempotency/backup details) rather
+#     than duplicating that logic here. Skipped if not an interactive terminal
+#     (e.g. install.sh piped from curl) — run scripts/set-hostname.sh manually
+#     afterward in that case.
+# ---------------------------------------------------------------------------
+if [[ -t 0 ]]; then
+  bash "$APP_DIR/scripts/set-hostname.sh"
+else
+  echo "==> Skipping hostname prompt (not an interactive terminal)"
+  echo "    Run ./scripts/set-hostname.sh later if you want this machine to be"
+  echo "    reachable as openpiste.local."
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Initialise / migrate database (idempotent — safe to re-run)

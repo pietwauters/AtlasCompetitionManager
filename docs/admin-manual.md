@@ -15,6 +15,8 @@ unless stated otherwise.
 | First-time install | `sudo bash install.sh` | yes |
 | Start/stop/status | `pm2 {start\|stop\|restart\|status\|logs} atlas` | no |
 | Enable/disable auto-start on boot | `sudo bash StartAtBoot.sh` / `sudo bash DontStartAtBoot.sh` | yes |
+| Set hostname to `openpiste` (asks first, backs up the original) | `./scripts/set-hostname.sh` | no* |
+| Undo the above (or set a fresh hostname if no backup exists) | `./scripts/restore-hostname.sh` | no* |
 | Reset a lost admin PIN | `node scripts/reset_admin_pin.js` | no |
 | Generate/renew HTTPS certs | `./scripts/generate-tls-cert.sh [--rotate-ca]` | no |
 | Push certs to the MQTT broker | `./scripts/install-broker-cert.sh` | yes |
@@ -29,6 +31,9 @@ unless stated otherwise.
 
 \* `restore-failover-bundle.sh` itself needs no sudo, but if Mosquitto is on the same
 host it shells out to `install-broker-cert.sh`/`sync-mosquitto-*.sh`, which do.
+`set-hostname.sh`/`restore-hostname.sh` are the same shape — the script itself runs
+unprivileged, but `sudo` is invoked internally for the one or two commands that
+actually need it (`hostnamectl`, editing `/etc/hosts`).
 
 ---
 
@@ -48,6 +53,14 @@ once, at the end of this run, and never shown again.** Write it down immediately
 Safe to re-run: every step is idempotent (skips the admin account if one already
 exists, skips `.env` if present, skips the credential pool if one already exists — see
 §5). Re-running is the normal way to pick up a fresh `git pull`'s new dependencies.
+
+**Also asks, interactively, whether to set this machine's hostname to `openpiste`**
+(CLAUDE.md's TLS/OPP2 design assumes `openpiste.local` via mDNS) — backs up whatever
+the hostname was before changing it, so it can be undone later. Skipped automatically
+if `install.sh` isn't running in an interactive terminal (e.g. piped from `curl`); run
+`./scripts/set-hostname.sh` by hand afterward in that case, or any time you declined it
+during install. `./scripts/restore-hostname.sh` undoes it (or, if the backup's gone,
+asks what hostname to set instead).
 
 **Also provisions the e-scoresheet credential pool** (10 credentials) and the CMS's own
 Tier A broker certificate (see §5.3), and, if Mosquitto is installed on the same host,
