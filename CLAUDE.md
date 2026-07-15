@@ -1073,6 +1073,109 @@ pushed with the operator's own broker (`sudo grep` confirmed `software` absent f
 anonymous block and present under a `user software-cms` stanza); Atlas reconnected over
 mTLS with no disruption to already-live piste state.
 
+### Mid-competition failover bundle — complete, 2026-07-15
+A pre-provisioned standby server (Atlas + Node + Mosquitto already installed, just
+idle — a live failover has no time for `install.sh` from scratch) can take over from a
+failed primary without every device needing to re-pair. Two scripts:
+- `scripts/create-failover-bundle.sh` — bundles a live, consistent `data/atlas.db`
+  snapshot (`sqlite3 .backup`, safe without stopping the server) and the *entire*
+  `data/tls/` directory (CA + every issued certificate, including `ca-db/` so serial
+  numbers and revocation history survive too) into a `7z` archive with **AES-256
+  encryption and encrypted filenames** — deliberately not `zip -e`'s legacy
+  ZipCrypto, since the archive contains the CA private key. Deliberately does *not*
+  bundle Mosquitto's own `acl.conf`/`passwd`/`mosquitto.conf` — those are fully
+  regenerable from the two bundled things via scripts this project already has, so
+  regenerating on restore avoids a second, independently-drifting snapshot.
+- `scripts/restore-failover-bundle.sh` — extracts, shows the bundle's manifest
+  (created-at/source host/git commit) so the operator can confirm it's the right
+  one, asks for explicit confirmation, backs up the standby's *own* current
+  `data/atlas.db`/`data/tls/` first (reversible), installs the restored files, then
+  re-runs `install-broker-cert.sh` + `sync-mosquitto-scoresheet-acl.sh` +
+  `sync-mosquitto-tier-a.sh` if Mosquitto is co-located, and restarts Atlas.
+- `p7zip-full` added to `install.sh`'s package list. Verified: the `sqlite3 .backup`
+  snapshot (integrity check passes, tables match the live DB) and the `data/tls/`
+  copy logic tested against the real repo; the encrypted-archive round trip itself
+  wasn't exercised in the dev sandbox (no `7z` installed there at the time) — worth a
+  real dry run before trusting it for an actual failover.
+
+### Hostname provisioning — complete, 2026-07-15
+`install.sh` never actually set the hostname to `openpiste` anywhere — that had been
+done by hand on the reference deployment, with avahi's default `<hostname>.local`
+advertisement doing the rest; there was no script at all, contrary to what a stale
+assumption held. Built properly instead of just documented:
+- `scripts/set-hostname.sh` — asks first, backs up the original hostname to
+  `data/hostname.backup` (never overwritten by a later run — that file is the ONE
+  true original), then `hostnamectl set-hostname openpiste` + updates `/etc/hosts`'s
+  `127.0.1.1` line. Idempotent (no-ops if already `openpiste`). Callable standalone
+  or from `install.sh` (skipped there if not an interactive terminal, e.g. piped
+  installs — `avahi-daemon` also added to `install.sh`'s package list, since mDNS
+  advertisement depends on it).
+- `scripts/restore-hostname.sh` — restores from that backup (and deletes it once
+  restored); if no backup exists, asks interactively what hostname to set instead
+  rather than failing.
+- Verified logic end-to-end in an isolated sandbox (fake `hostname`/`hostnamectl`/
+  `sudo`) covering all branches: fresh set, idempotent re-run (doesn't clobber the
+  backup), decline, empty-answer-defaults-to-no, already-`openpiste`, restore with
+  backup present, restore with no backup. Never touched the real dev machine's
+  hostname while building this.
+
+### Clean-install broker/NTP provisioning — complete, 2026-07-15
+Auditing "will a truly clean Pi get everything `install.sh` needs?" (prompted by a
+direct question, not assumed) surfaced a real gap: **Mosquitto itself was never
+installed by anything in this repo**, and no script created its listener config
+(1883/8883/9001/9002) from scratch — every broker-touching script only ever
+`command -v mosquitto`-checked and silently skipped if absent. Worse, confirmed by
+reading it: `sync-mosquitto-tier-a.sh`'s listener-8883 editor specifically searches
+for an *already-existing* `listener 8883` block to edit — on a stock Mosquitto
+install (only the default port 1883, no extra listeners), it would silently do
+nothing at all, no error. The whole 4-listener layout had always been set up by hand
+on the reference deployment (traces back to the sibling `mqtt-web` project).
+- `scripts/provision-broker.sh` (new, called interactively from `install.sh`,
+  same skip-if-not-interactive handling as the hostname step) — installs Mosquitto
+  if missing and creates the two listeners that never depend on TLS material (`1883`
+  plain MQTT, `9001` plain WebSockets) if they don't already exist anywhere in
+  `mosquitto.conf` or `/etc/mosquitto/conf.d/*.conf` (won't duplicate or fight a
+  hand-customized broker — confirmed harmless against the real, already-configured
+  reference deployment, since its listeners already exist and the check just skips).
+  Backs up `mosquitto.conf` first, same convention as `sync-mosquitto-tier-a.sh`.
+  Also installs and configures **chrony as a local NTP server**, per
+  `docs/level2.md` §4.3 ("The broker host SHOULD also run a local NTP server...
+  chrony is recommended") — bundled into the same script rather than a separate one
+  because devices reach the NTP server at the same address as the broker, so it only
+  makes sense on whichever machine actually runs Mosquitto. Keeps the distro's
+  default upstream `pool`/`server` lines (real internet time when available) and
+  only adds `allow` for the three common private-network ranges plus
+  `local stratum 10`, so it still serves time to local clients with zero working
+  upstream source — the actual "self-contained competition network" requirement.
+- `scripts/install-broker-cert.sh` extended to also create the `8883`/`9002` TLS
+  listener stanzas if they don't exist yet (`require_certificate false` — still
+  `sync-mosquitto-tier-a.sh`'s job to flip that to `true` once a real Tier A cert
+  exists), right before installing the cert files — deferred out of
+  `provision-broker.sh` specifically because these listeners need real certs to
+  reference, which don't exist yet on a clean box.
+- `openssl`/`curl`/`lsof` added to `install.sh`'s package list — all three were
+  already shelled out to by existing scripts (`generate-tls-cert.sh`,
+  `provisioning.js`, the NodeSource fallback, the port-in-use check) but never
+  explicitly installed; likely present already on most Debian-based images but not
+  guaranteed, especially `lsof` on a minimal image.
+- **Verified against a real disposable Mosquitto instance** (this dev machine
+  already has mosquitto 2.0.18 installed) — extracted the exact content both
+  scripts generate (not a hand-typed approximation) and confirmed it starts cleanly
+  with all four listeners open, anonymous plain MQTT pub/sub works, and anonymous
+  TLS (`require_certificate false`, no client cert offered) works. Sandbox testing
+  hit two artifacts worth remembering if reused: `sudo install -o root -g root`
+  genuinely returns exit 1 when not truly root (file still gets copied; only the
+  chown fails) — irrelevant in real deployment since these scripts always run under
+  real `sudo`/root; and `set -e` does **not** reliably abort on a failing pipeline
+  in this environment even as the pipeline's last command, confirmed empirically
+  (`true | false` does not trigger `-e`) — a real bash quirk, not specific to these
+  scripts, but worth knowing before trusting `set -e` alone to catch a pipeline
+  failure elsewhere.
+- Time sync itself (not just chrony's presence) was *not* found to be a gap —
+  Debian/Raspberry Pi OS ships `systemd-timesyncd` active by default, which is what
+  actually matters for TLS handshakes; worth a one-time `timedatectl status` check
+  on a truly offline-at-first-boot Pi, not an `install.sh` package addition.
+
 ### Competition formats (complete)
 - Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged
   since before the catalog existed) define multi-phase flows with cohorts and exemptions
