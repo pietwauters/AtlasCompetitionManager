@@ -20,6 +20,8 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TLS_DIR="$DIR/data/tls"
 MOSQ_CERTS="/etc/mosquitto/certs"
+MOSQ_CONF="/etc/mosquitto/mosquitto.conf"
+MOSQ_CONF_D="/etc/mosquitto/conf.d"
 
 for f in ca.crt server.crt server.key; do
   if [[ ! -f "$TLS_DIR/$f" ]]; then
@@ -29,6 +31,51 @@ for f in ca.crt server.crt server.key; do
     exit 1
   fi
 done
+
+# Create the TLS listener stanzas (8883 mTLS-capable, 9002 wss) if they don't exist
+# yet — a genuinely fresh Mosquitto install only has the plain listeners from
+# scripts/provision-broker.sh (1883/9001). require_certificate stays false here;
+# scripts/sync-mosquitto-tier-a.sh is what later flips it to true, once at least
+# one Tier A certificate actually exists, by editing this same block. Idempotent —
+# checks conf.d too, so it won't duplicate or fight an already-configured broker
+# (like this project's own real deployment, which already has both).
+has_listener() {
+  grep -rhq "^listener $1\b" "$MOSQ_CONF" "$MOSQ_CONF_D"/*.conf 2>/dev/null
+}
+if ! has_listener 8883 || ! has_listener 9002; then
+  STAMP=$(date +%Y%m%d%H%M%S)
+  echo "Adding missing TLS listener stanza(s) to $MOSQ_CONF (backup: .bak-cert-$STAMP)..."
+  sudo cp -a "$MOSQ_CONF" "$MOSQ_CONF.bak-cert-$STAMP"
+  TMP=$(mktemp)
+  sudo cp "$MOSQ_CONF" "$TMP"
+  {
+    if ! has_listener 8883; then
+      echo ""
+      echo "# Added by scripts/install-broker-cert.sh — mTLS-capable MQTT."
+      echo "# require_certificate stays false until scripts/sync-mosquitto-tier-a.sh"
+      echo "# flips it (once a Tier A certificate actually exists)."
+      echo "listener 8883"
+      echo "allow_anonymous true"
+      echo "require_certificate false"
+      echo "cafile $MOSQ_CERTS/ca.crt"
+      echo "certfile $MOSQ_CERTS/server.crt"
+      echo "keyfile $MOSQ_CERTS/server.key"
+    fi
+    if ! has_listener 9002; then
+      echo ""
+      echo "# Added by scripts/install-broker-cert.sh — wss, for browser clients"
+      echo "# (the e-scoresheet PWA)."
+      echo "listener 9002"
+      echo "protocol websockets"
+      echo "allow_anonymous true"
+      echo "cafile $MOSQ_CERTS/ca.crt"
+      echo "certfile $MOSQ_CERTS/server.crt"
+      echo "keyfile $MOSQ_CERTS/server.key"
+    fi
+  } | sudo tee -a "$TMP" >/dev/null
+  sudo install -o root -g root -m 644 "$TMP" "$MOSQ_CONF"
+  rm -f "$TMP"
+fi
 
 echo "Installing certificate into $MOSQ_CERTS (needs sudo)..."
 sudo install -o root -g mosquitto -m 640 "$TLS_DIR/ca.crt"     "$MOSQ_CERTS/ca.crt"

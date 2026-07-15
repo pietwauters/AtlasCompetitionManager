@@ -35,7 +35,10 @@ apt-get install -y \
   build-essential \
   python3 \
   p7zip-full \
-  avahi-daemon
+  avahi-daemon \
+  openssl \
+  curl \
+  lsof
 
 # Check Node.js version (18+ required)
 NODE_VERSION=$(node -e "console.log(parseInt(process.versions.node.split('.')[0]))")
@@ -78,6 +81,20 @@ else
   echo "==> Skipping hostname prompt (not an interactive terminal)"
   echo "    Run ./scripts/set-hostname.sh later if you want this machine to be"
   echo "    reachable as openpiste.local."
+fi
+
+# ---------------------------------------------------------------------------
+# 3c. Optionally provision Mosquitto's base listeners + chrony as a local NTP
+#     server on this machine — see scripts/provision-broker.sh for the full
+#     reasoning (asks first per listener/package, idempotent, backs up before
+#     editing). Same "skip if not interactive" handling as the hostname step.
+# ---------------------------------------------------------------------------
+if [[ -t 0 ]]; then
+  bash "$APP_DIR/scripts/provision-broker.sh"
+else
+  echo "==> Skipping broker/NTP prompts (not an interactive terminal)"
+  echo "    Run ./scripts/provision-broker.sh later if this machine should host"
+  echo "    the MQTT broker and/or a local NTP server."
 fi
 
 # ---------------------------------------------------------------------------

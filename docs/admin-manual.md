@@ -17,6 +17,7 @@ unless stated otherwise.
 | Enable/disable auto-start on boot | `sudo bash StartAtBoot.sh` / `sudo bash DontStartAtBoot.sh` | yes |
 | Set hostname to `openpiste` (asks first, backs up the original) | `./scripts/set-hostname.sh` | no* |
 | Undo the above (or set a fresh hostname if no backup exists) | `./scripts/restore-hostname.sh` | no* |
+| Install/configure Mosquitto's base listeners + chrony NTP | `./scripts/provision-broker.sh` | no* |
 | Reset a lost admin PIN | `node scripts/reset_admin_pin.js` | no |
 | Generate/renew HTTPS certs | `./scripts/generate-tls-cert.sh [--rotate-ca]` | no |
 | Push certs to the MQTT broker | `./scripts/install-broker-cert.sh` | yes |
@@ -31,9 +32,9 @@ unless stated otherwise.
 
 \* `restore-failover-bundle.sh` itself needs no sudo, but if Mosquitto is on the same
 host it shells out to `install-broker-cert.sh`/`sync-mosquitto-*.sh`, which do.
-`set-hostname.sh`/`restore-hostname.sh` are the same shape — the script itself runs
-unprivileged, but `sudo` is invoked internally for the one or two commands that
-actually need it (`hostnamectl`, editing `/etc/hosts`).
+`set-hostname.sh`/`restore-hostname.sh`/`provision-broker.sh` are the same shape — the
+script itself runs unprivileged, but `sudo` is invoked internally for the specific
+commands that actually need it.
 
 ---
 
@@ -62,13 +63,18 @@ if `install.sh` isn't running in an interactive terminal (e.g. piped from `curl`
 during install. `./scripts/restore-hostname.sh` undoes it (or, if the backup's gone,
 asks what hostname to set instead).
 
+**Also asks, interactively, whether to install/configure Mosquitto's base listeners
+(1883, 9001) and chrony as a local NTP server** on this machine — see §4.1. Same
+skip-if-not-interactive handling as the hostname step; run `./scripts/provision-broker.sh`
+by hand afterward if you skipped it or install.sh wasn't interactive.
+
 **Also provisions the e-scoresheet credential pool** (10 credentials) and the CMS's own
 Tier A broker certificate (see §5.3), and, if Mosquitto is installed on the same host,
 pushes both to the broker automatically. If your broker runs on separate hardware, it
 prints the manual commands instead — see §5.
 
 **Not done by `install.sh`:** generating the HTTPS/CA certificates in the first place
-(§4 — needed before either of the above can do anything, since both depend on
+(§4.2 — needed before either of the above can do anything, since both depend on
 `data/tls/ca.key` already existing) and flipping listener 8883 to actually require a
 Tier A certificate (`./scripts/sync-mosquitto-tier-a.sh`, §5.1/§5.3 — left manual since
 it's a heavier, full-broker-restart change). Run those separately once, or whenever you
@@ -111,7 +117,38 @@ For non-admin users (director/assistant/referee accounts), PIN resets and accoun
 management go through the Admin → Users UI (`/admin.html`, requires an admin login),
 not a script — see `docs/security-and-roles.md` for the role model.
 
-## 4. HTTPS / TLS certificates
+## 4. Broker: Mosquitto, NTP, and TLS certificates
+
+### 4.1 Mosquitto's base listeners + chrony NTP
+
+A genuinely clean machine has neither — nothing in this repo installed Mosquitto
+itself before this section existed, and every broker-touching script only ever
+`command -v mosquitto`-checked and skipped if absent. Handled by one script:
+
+```bash
+./scripts/provision-broker.sh
+```
+
+No sudo itself, but shells out to it internally. Asks before doing anything, and each
+piece is independently idempotent — safe to re-run, and safe to run even if the other
+piece was already handled some other way:
+
+- **Mosquitto**: installs it if missing, then creates the two listeners that never
+  depend on TLS material — `1883` (plain MQTT, `docs/level2.md`'s default
+  `mqtt://openpiste.local:1883`) and `9001` (plain WebSockets) — if they don't already
+  exist (checks the whole of `mosquitto.conf` and `/etc/mosquitto/conf.d/*.conf`, so it
+  won't duplicate or fight a hand-customized broker). Backs up `mosquitto.conf` first.
+  Deliberately does **not** touch `8883`/`9002` (the TLS listeners) — those need real
+  certificates first, so §4.2's `install-broker-cert.sh` creates them.
+- **chrony**: installs it if missing, and adds a local-NTP-server fallback
+  (`docs/level2.md` §4.3 — the broker host should also serve NTP, so devices reach it
+  at the same address). Leaves the distro's default upstream `pool`/`server` lines
+  untouched (real internet time is still used when available) and only adds `allow`
+  for private-network ranges plus `local stratum 10`, so chrony still serves time to
+  local clients with zero working upstream source — exactly the "self-contained
+  competition network" case. Backs up `chrony.conf` first.
+
+### 4.2 HTTPS / TLS certificates
 
 Needed for the e-scoresheet PWA (service workers only register in a secure context)
 and for the MQTT broker's TLS listeners (8883, 9002). Two separate scripts because the
@@ -140,9 +177,13 @@ this machine):
 ./scripts/install-broker-cert.sh
 ```
 
-Needs sudo — installs into `/etc/mosquitto/certs/` and restarts Mosquitto. **Always
-re-run this after `--rotate-ca`** — otherwise the broker keeps presenting a leaf signed
-by the now-replaced root and every device's TLS connection to it breaks.
+Needs sudo — first ensures the `8883`/`9002` listener stanzas exist in
+`mosquitto.conf` (creating them, backing up first, if this is the first time —
+`require_certificate` starts `false`; §5.1/§5.3's `sync-mosquitto-tier-a.sh` is what
+later flips it to `true`), then installs the certs into `/etc/mosquitto/certs/` and
+restarts Mosquitto. **Always re-run this after `--rotate-ca`** — otherwise the broker
+keeps presenting a leaf signed by the now-replaced root and every device's TLS
+connection to it breaks.
 
 New device onboarding (installing the CA root so a browser stops warning) is a
 self-service page, not a script: `http://openpiste.local:<PORT>/install-cert.html`.
@@ -343,7 +384,7 @@ local mirror matches what actually got merged.
 | Variable | Default | Notes |
 |---|---|---|
 | `PORT` | `3001` | Plain HTTP port |
-| `HTTPS_PORT` | `3443` | HTTPS port — only listens if `data/tls/server.{key,crt}` exist (§4) |
+| `HTTPS_PORT` | `3443` | HTTPS port — only listens if `data/tls/server.{key,crt}` exist (§4.2) |
 | `SESSION_SECRET` | placeholder | **Change this before going to production** — `install.sh` prints a generator command; not auto-generated because a fresh random value would invalidate all existing sessions on every restart if it weren't persisted |
 
 OPP2 broker settings (URL, enable/disable) are **not** environment variables — they're
