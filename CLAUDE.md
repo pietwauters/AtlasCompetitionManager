@@ -1094,9 +1094,20 @@ failed primary without every device needing to re-pair. Two scripts:
   `sync-mosquitto-tier-a.sh` if Mosquitto is co-located, and restarts Atlas.
 - `p7zip-full` added to `install.sh`'s package list. Verified: the `sqlite3 .backup`
   snapshot (integrity check passes, tables match the live DB) and the `data/tls/`
-  copy logic tested against the real repo; the encrypted-archive round trip itself
-  wasn't exercised in the dev sandbox (no `7z` installed there at the time) — worth a
-  real dry run before trusting it for an actual failover.
+  copy logic tested against the real repo.
+- **Full encrypted round trip verified for real, 2026-07-15** (same day, later
+  pass) — the gap above is closed. `p7zip-full` installed, bundle created from this
+  dev checkout's real pairing data (an active apparatus Tier A cert plus the Tier B
+  e-scoresheet credential pool), `scp`'d to the real standby (`atlas@openpiste.local`),
+  and restored there with `restore-failover-bundle.sh`: manifest matched the source
+  host/commit, Mosquitto ACL/CRL/listener-8883 resync and Atlas restart both completed
+  cleanly, and the previously-paired device showed as paired again with no re-pairing
+  needed. One real, non-obvious wrinkle found: an already-open browser session on the
+  standby didn't reflect the restored state until a fresh login — restoring
+  `atlas.db` mid-session replaces the `users`/session tables out from under the
+  existing session cookie, so a relogin (not a bug, not a re-pair) is needed to see
+  the restored data. Worth calling out to whoever runs a real failover so it isn't
+  mistaken for the restore having failed.
 
 ### Hostname provisioning — complete, 2026-07-15
 `install.sh` never actually set the hostname to `openpiste` anywhere — that had been
