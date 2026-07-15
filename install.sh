@@ -198,23 +198,7 @@ fi
 # 9. Scoresheet MQTT credential pool (first install only — skipped if any exist)
 # ---------------------------------------------------------------------------
 echo "==> Provisioning scoresheet MQTT credential pool"
-POOL_RESULT=$(sudo -u "$APP_USER" node -e "
-  require('./db/migrator').migrate();
-  const Pairing = require('./services/pairing');
-  const stats = Pairing.poolStats();
-  if (stats.total > 0) { console.log('SKIP'); process.exit(0); }
-  const created = Pairing.createPoolBatch(10);
-  console.log('CREATED:' + created.length);
-" 2>&1)
-
-if echo "$POOL_RESULT" | grep -q "^SKIP"; then
-  echo "    Credential pool already provisioned, skipping."
-elif echo "$POOL_RESULT" | grep -q "^CREATED:"; then
-  N=$(echo "$POOL_RESULT" | grep "^CREATED:" | cut -d: -f2)
-  echo "    Created $N scoresheet MQTT credential(s) in Atlas's own database."
-else
-  echo "    Warning: could not provision credential pool: $POOL_RESULT"
-fi
+sudo -u "$APP_USER" node "$APP_DIR/scripts/seed-credential-pool.js" 2>&1 | sed 's/^/    /'
 
 # ---------------------------------------------------------------------------
 # 10. CMS's own Tier A client certificate (Atlas authenticates to the broker
@@ -227,24 +211,7 @@ fi
 #     next-step instead of failing.
 # ---------------------------------------------------------------------------
 echo "==> Provisioning Atlas's own broker client certificate"
-if [[ -f "$APP_DIR/data/tls/software-client.crt" ]]; then
-  echo "    CMS client certificate already provisioned, skipping."
-elif [[ -f "$APP_DIR/data/tls/ca.key" && -f "$APP_DIR/data/tls/ca.crt" ]]; then
-  CMS_CERT_RESULT=$(sudo -u "$APP_USER" node -e "
-    const Provisioning = require('./services/provisioning');
-    const { serial } = Provisioning.issueCmsCertificate();
-    console.log('ISSUED:' + serial);
-  " 2>&1)
-  if echo "$CMS_CERT_RESULT" | grep -q "^ISSUED:"; then
-    echo "    Issued (serial $(echo "$CMS_CERT_RESULT" | cut -d: -f2)) — Atlas will use it"
-    echo "    automatically on next start, once it's pushed to the broker below."
-  else
-    echo "    Warning: could not issue CMS client certificate: $CMS_CERT_RESULT"
-  fi
-else
-  echo "    No local CA yet — run ./scripts/generate-tls-cert.sh, then re-run this"
-  echo "    step manually: ./scripts/provision-cms-client-cert.sh"
-fi
+sudo -u "$APP_USER" node "$APP_DIR/scripts/issue-cms-certificate.js" 2>&1 | sed 's/^/    /'
 
 # Pushing these to Mosquitto only makes sense if the broker is on this same
 # host — see scripts/install-broker-cert.sh for the separate-hardware case,
