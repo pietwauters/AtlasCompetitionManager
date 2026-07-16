@@ -918,6 +918,95 @@ surfaced two concrete protocol gaps (see `docs/roles-and-responsibilities-discus
    mid-bout piste-transfer feature — 2026-07-10 only closed the messaging-format
    prerequisite (item 1), not the feature itself.
 
+### e-Scoresheet network-drop resilience fixes — complete, 2026-07-16
+
+Investigated "how resilient is the already-shipped e-scoresheet to network drops?"
+by reading the actual connection code, not from memory. Found brief blips were
+already handled reasonably well (`reconnectPeriod: 2000`, full resubscribe on every
+reconnect, retained topics mean a reconnect gets current state immediately, `qos: 1`
+card-reason publishes queue in `mqtt.js` while disconnected and flush on reconnect,
+service worker keeps the app shell rendering through a drop) — but found and fixed
+three real, independent bugs in `escoresheet/js/app.js`:
+
+1. **Conflated status badge.** `#conn-badge` ("apparatus online/offline") was driven
+   by *both* the retained `apparatus/connection` message *and* this e-scoresheet's
+   own MQTT `error`/`close` events — same badge, same text either way. A referee
+   couldn't tell "the scoring box disconnected" from "my phone lost WiFi." Fixed by
+   adding a second, independent `#broker-badge` (new `renderBrokerStatus()`) driven
+   only by this device's own connection lifecycle (`connect`/`reconnect`/`close`/
+   `offline`) — `renderConnection()` (the apparatus badge) is now only ever called
+   from the `apparatus/connection` message handler.
+2. **Retained delivery can collapse more than one event into a single diff.**
+   `detectCards()` compares two consecutive `apparatus/score` payloads to infer new
+   cards. Since `apparatus/score` is retained, a reconnect only ever delivers the
+   *current* state — if e.g. two red cards were given while disconnected, the diff
+   against the pre-drop snapshot would only fire one dialog, silently
+   under-representing what happened. Fixed by resetting `lastScoreForCards`/
+   `lastFencers`/`lastClock` to `null` on every reconnect (tracked via a new
+   `hasConnectedOnce` flag, distinguishing "first connect for this piste" from
+   "reconnected after a drop") — reuses the exact guard (`if (lastScoreForCards)`)
+   already in place to skip detection on the very first message ever, for the same
+   reason: silently resync rather than risk a false or incomplete trigger. Tradeoff,
+   accepted deliberately: a card given entirely within a gap gets no annotation
+   recorded (there's still no manual card-assignment path — see the paused
+   legacy-mode discussion below) — safer than logging a wrong or partial one, and
+   consistent with cards being audit/annotation data only, not the authoritative
+   record.
+3. **`navigator.onLine`-driven status is a weak signal on its own** — reflects
+   whether the device's network interface is up, not whether the broker is actually
+   reachable; can read "Online" while the WSS connection is failing outright. Not
+   removed (still legitimate, lower-cost information) but no longer the only signal
+   — the new `#broker-badge` from fix 1 is the authoritative "is live data actually
+   flowing" indicator.
+
+Service worker cache bumped to `v11` (app shell — `index.html`/`app.css`/`app.js` —
+all changed). Verified via `node --check` and manual code-path review; not yet
+exercised against a real network-drop on a real device.
+
+### e-Scoresheet legacy/no-apparatus mode discussion — paused 2026-07-15
+
+`docs/e-scoresheet-legacy-mode-discussion.md` — **non-normative, nothing implemented,
+paused pending reconsideration.** Started from a concrete ask: when no scoring
+apparatus is connected, the e-scoresheet should still be usable to increment/correct
+scores, assign cards outright (not just record a reason — today's `CardReason.record()`
+is *only* ever called from apparatus-driven card detection, no manual path exists
+anywhere, not even in Atlas's own director UI), assign and log priority (currently not
+persisted anywhere at all — it's a transient MQTT payload field, discarded after use),
+and manually activate/end a match. Directly revives the three sub-problems already
+flagged as open in `docs/e-scoresheet-standalone-design.md` §5 (offline bundle/
+pre-round export, local §23.4 enforcement, stale-replay reconciliation).
+
+Worked through several decision axes (auth = real Atlas login on-device; activation =
+fallback-only-when-apparatus-absent; DE deferred, pools only; frozen per-piste
+pipeline snapshot, not live reassignment; trust the referee, no local correct-ending
+enforcement; reconnect conflicts flagged for a human, never auto-merged) — see the doc
+for the full table. **Paused by a reframing the user raised partway through:** brief
+network instability and a sustained loss of connection for an entire bout/pool are
+qualitatively different problems, not one continuum. Brief instability is exactly
+where OPP2 earns its keep (real-time, time-accurate data) and is worth engineering
+resilience for. Sustained loss has *no* real-time data to protect — OPP2 has nothing
+to offer there, and the honest answer is a much simpler offline paper-scoresheet
+replacement synchronizing at just two points (start/end of pool or bout), same
+approach already used by existing systems like FencingTime via their own REST API —
+not a scaled-down OPP2 client. Whether this means splitting into two genuinely
+separate modes (a live/connected mode for the new manual capabilities, riding on
+OPP2/MQTT as today; a separate two-sync-point "digital paper scoresheet" mode for
+real disconnection) — and whether the second mode even belongs in the e-scoresheet
+PWA rather than being its own smaller tool — is exactly what's left open.
+
+**Corrected 2026-07-16:** an earlier tentative note in the doc had proposed the
+two-sync-point mode call Atlas's own REST API directly — wrong, and flagged by the
+user as violating this project's own ecosystem-independence principle (see "OPP2
+design principle" above): that would mean only an Atlas-specific e-scoresheet could
+ever run in this mode, exactly the fragmentation OPP2 exists to prevent. **Even the
+disconnected mode's two sync points must be standardized OPP2 messages**, so any PWA
+or non-PWA e-scoresheet works against any compliant CMS, not just Atlas — a real spec
+extension is likely needed, since no existing OPP2 message carries pipeline/pool-
+structure data today. The connection doesn't need to be *continuous* to be OPP2 —
+brief-connect/sync/disconnect at each of the two points is still protocol-pure; only
+the live window in between has no OPP2 involvement. Read the doc directly before
+resuming this thread.
+
 ### Tier A (certificate-based) device provisioning — complete, 2026-07-14/15
 
 Implements `docs/level2.md` §30.5 for real: embedded/native components (the scoring

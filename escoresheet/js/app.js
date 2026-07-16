@@ -104,6 +104,7 @@ let lastScoreForCards = null;
 let lastFencers = null;    // last apparatus/fencers payload, for the active bout row
 let lastClock = null;      // last apparatus/clock payload, re-applied after bout-list re-renders
 let dialog = null;         // { side, card, step, fencerName, officialId, custom }
+let hasConnectedOnce = false; // false until the first successful connect for the current piste
 
 // Full-slot state — pool matrix, bout list, team relay banner (docs/level2.md §16/§17).
 let participants = [];
@@ -156,10 +157,24 @@ function renderClock(payload) {
   setText('clock-time', payload.time || '0:00');
 }
 
+// Apparatus state, from the retained apparatus/connection message — never touched
+// by this e-scoresheet's own broker connectivity (see renderBrokerStatus below).
+// Conflating the two used to mean "apparatus offline" could also just mean this
+// phone lost WiFi, with no way to tell which from the badge alone.
 function renderConnection(online) {
   const badge = document.getElementById('conn-badge');
   badge.textContent = online ? 'apparatus online' : 'apparatus offline';
   badge.className = 'badge ' + (online ? 'online' : 'offline');
+}
+
+// This e-scoresheet's own connection to the broker — independent of apparatus state.
+function renderBrokerStatus(state) {
+  const badge = document.getElementById('broker-badge');
+  if (!badge) return;
+  const label = { connecting: 'connecting…', connected: 'live', reconnecting: 'reconnecting…', disconnected: 'disconnected' }[state] || state;
+  const cls = { connected: 'online', reconnecting: 'reconnecting', disconnected: 'offline' }[state] || '';
+  badge.textContent = label;
+  badge.className = 'badge ' + cls;
 }
 
 function renderMatch(payload) {
@@ -560,6 +575,8 @@ function watchPiste(piste) {
   document.getElementById('live-card').hidden = false;
   setText('live-piste-label', piste);
   renderConnection(false);
+  renderBrokerStatus('connecting');
+  hasConnectedOnce = false;
 
   slotId = null; activeBoutId = null; officials = {}; annotations = [];
   lastScoreForCards = null; lastFencers = null; lastClock = null;
@@ -581,6 +598,21 @@ function watchPiste(piste) {
   });
 
   mqttClient.on('connect', () => {
+    if (hasConnectedOnce) {
+      // Reconnecting after a drop, not the first connect for this piste. The
+      // retained snapshot we're about to receive again reflects only the
+      // *current* state — if more than one card/touch happened while we were
+      // disconnected, diffing it against what we last saw before the drop could
+      // misattribute or undercount what actually happened (e.g. two red cards
+      // collapsed into one). Resync silently instead of risking a false or
+      // incomplete card-reason trigger — same reasoning as skipping detection
+      // on the very first message ever (lastScoreForCards starts null).
+      lastScoreForCards = null;
+      lastFencers = null;
+      lastClock = null;
+    }
+    hasConnectedOnce = true;
+    renderBrokerStatus('connected');
     mqttClient.subscribe(`${topicPrefix}/apparatus/connection`);
     mqttClient.subscribe(`${topicPrefix}/apparatus/fencers`);
     mqttClient.subscribe(`${topicPrefix}/apparatus/score`);
@@ -608,8 +640,11 @@ function watchPiste(piste) {
     else if (type === 'scoresheet/record') handleScoresheetRecord(payload);
   });
 
-  mqttClient.on('error', () => renderConnection(false));
-  mqttClient.on('close', () => renderConnection(false));
+  mqttClient.on('reconnect', () => renderBrokerStatus('reconnecting'));
+  mqttClient.on('close', () => renderBrokerStatus('disconnected'));
+  mqttClient.on('offline', () => renderBrokerStatus('disconnected'));
+  // 'error' precedes 'close' in practice — avoid a duplicate/flickery state change.
+  mqttClient.on('error', (err) => console.error('[escoresheet] MQTT error:', err.message));
 }
 
 function stopWatching() {
