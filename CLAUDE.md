@@ -674,14 +674,20 @@ Key conclusions so far:
   global slot (closes a real race condition and adds a human-verification step), and a
   bearer token instead of a client cert/CSR (no crypto library needed in-browser,
   trivial revocation).
-- **Open, unverified:** whether an installed/home-screen PWA handles a self-signed
-  cert warning the same way a normal tab does — determines whether pairing needs a real
-  CA-profile install step or a simple click-through suffices. Needs hands-on testing on
-  real iOS Safari / Android Chrome.
-- **Not yet designed:** the pairing-ticket API/payload shape, the PWA-side pairing UI,
-  and the three older scoresheet-authority sub-problems (offline bundle/pre-round
-  export, local §23.4 correct-ending enforcement when Atlas is unreachable, stale-replay
-  reconciliation) — still open, not covered by this thread either.
+- ~~**Open, unverified:** whether an installed/home-screen PWA handles a self-signed
+  cert warning the same way a normal tab does~~ — **resolved.** Needs a real CA-profile
+  install (a click-through alone isn't enough), confirmed hands-on on both real Android
+  Chrome (2026-07-13) and real iOS Safari (2026-07-15 — Safari specifically; Chrome on
+  iOS can't produce a true standalone install at all, see "iOS verified for real" below).
+- ~~**Not yet designed:** the pairing-ticket API/payload shape, the PWA-side pairing
+  UI~~ — **built** (see "pairing-ticket flow" below), **then rebuilt** to the converged
+  Tier A/B credential-pool design (see "Device Pairing Tiers" / §4.5 of
+  `docs/security-provisioning-discussion.md`) — no longer ticket-based. **Still
+  genuinely open:** the three older scoresheet-authority sub-problems (offline
+  bundle/pre-round export, local §23.4 correct-ending enforcement when Atlas is
+  unreachable, stale-replay reconciliation) — see
+  `docs/e-scoresheet-legacy-mode-discussion.md` for where that thread stands now
+  (paused mid-design, 2026-07-15).
 - **Implemented 2026-07-13:** the PWA app shell itself — `escoresheet/` (manifest,
   service worker with versioned app-shell caching, install/online-status page, no
   OPP2/pairing logic yet), mounted in `server.js` at `/escoresheet` as a plain static
@@ -733,7 +739,10 @@ Key conclusions so far:
   on separate hardware — copy `data/tls/` there and run it there). Verified: both
   listeners now show `issuer=CN = Atlas Local CA`, chain validates (`Verify return
   code: 0`), and Atlas's own OPP2 client (plain `1883`, untouched) reconnected cleanly
-  after the broker restart. **Not done:** no OPP2/MQTT client code in the PWA itself yet.
+  after the broker restart. *(True only at this specific point on 2026-07-13 — the PWA
+  gained its first real OPP2 client code later the same day; see "Live piste display"
+  below, and by 2026-07-16 the PWA has a full OPP2 client with published resilience
+  fixes too.)*
 - **Implemented 2026-07-13: pairing-ticket flow.** Migration `027_scoresheet_pairing.sql`
   (`pairing_tickets`, `paired_devices`); `services/pairing.js`
   (create/redeem/list/revoke/verifyToken — 6-digit codes, 5-min TTL, single-use, not
@@ -855,22 +864,28 @@ Key conclusions so far:
   `matrixOpen: true` (expanded by default). Fixed by removing the static `hidden` and
   defaulting the arrow to `open`. Bout list, team relay banner, slot info, and theme
   toggle all worked correctly on first real-device try, no fixes needed.
-- **Tracked gap, raised 2026-07-13, not fixed: no per-piste/role scoping once
-  paired.** Confirmed by reading the code: `services/pairing.js`'s `verifyToken()` is
-  never called anywhere, `watchPiste()`'s `mqtt.connect()` sends no credentials, and
-  every Mosquitto listener has `allow_anonymous true` — so any device that can reach
-  the broker (paired or not) can watch/publish for any piste. Not unique to this
-  session's work — the same trust model the apparatus firmware and Atlas's own backend
-  already operate under. Real fix needs assigning paired devices genuine MQTT
-  credentials (username/password or per-device client cert) plus `acl_file` rules
-  scoping them to specific pistes — `%u`/`%c` substitution in Mosquitto ACLs
-  (`topic write openpiste/%u/scoresheet/#`) is the natural mechanism, but nothing
-  implemented yet. Mosquitto's `allow_anonymous`/`require_certificate` are
-  per-*listener* (already split differently across 1883/8883/9001/9002 here); ACL
-  `read`/`write` rules are independent per topic pattern, so "read stays open,
-  write gets scoped" is directly supportable on the same listener — see
-  `docs/e-scoresheet-standalone-design.md` §4.8 for the full writeup. Not decided
-  whether/when to actually build this.
+- **Tracked gap, raised 2026-07-13 — role-scoping now DONE, piste-scoping still
+  open (corrected 2026-07-16).** The original note described `services/pairing.js`'s
+  `verifyToken()`/bearer-token model, and `watchPiste()` sending no credentials at
+  all — that whole system no longer exists. It was fully replaced by the Tier A/B
+  credential-pool design (see "Device Pairing Tiers"): `escoresheet/js/app.js`'s
+  `watchPiste()` now sends a real per-device MQTT username/password
+  (`mqtt.connect(url, { username: mqttUsername, password: mqttPassword })`), required
+  by the broker, and `scripts/sync-mosquitto-scoresheet-acl.sh` scopes each
+  authenticated credential's write access by *role* (`topic write
+  openpiste/+/scoresheet/#`, not open to anyone anonymous). So "any device that can
+  reach the broker, paired or not, can watch/publish for any piste" is no longer
+  true — an unpaired/unauthenticated device can no longer publish at all.
+
+  **What's still genuinely open:** that same ACL line uses `+` (any piste), not a
+  specific one — a paired e-scoresheet credential can still write to *any* piste's
+  `scoresheet/*` topics, not just the one it's actually watching. True per-piste
+  scoping (e.g. `%u`/`%c` substitution binding a credential to one specific piste)
+  is still not implemented — confirmed directly against the sync script, not assumed.
+  Mosquitto's `read`/`write` ACL rules are independent per topic pattern, so "read
+  stays open, write gets scoped per-piste" would still be directly supportable on the
+  same listener if this is ever prioritized — see `docs/e-scoresheet-standalone-design.md`
+  §4.8 for the full writeup. Not decided whether/when to build it.
 
 **Piste transfer** (moving an ongoing match, or an entire pipeline, to a different piste
 mid-competition — apparatus failure, scheduling) is raised 2026-07-09, explicitly
@@ -960,8 +975,11 @@ three real, independent bugs in `escoresheet/js/app.js`:
    flowing" indicator.
 
 Service worker cache bumped to `v11` (app shell — `index.html`/`app.css`/`app.js` —
-all changed). Verified via `node --check` and manual code-path review; not yet
-exercised against a real network-drop on a real device.
+all changed). Verified via `node --check` and manual code-path review; confirmed the
+update itself reaches a real device (`git pull` + close/reopen picked up `v11`
+cleanly). **Not yet confirmed:** actually triggering a real network drop on that
+device and watching the new broker/apparatus badge split and reconnect-safe card
+detection behave as designed — still worth a real test.
 
 ### e-Scoresheet legacy/no-apparatus mode discussion — paused 2026-07-15
 
@@ -1636,10 +1654,9 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - `bout_duration_standards`' adaptive running average is built and wired (see above) but
   unexercised — `sample_count` is 0 across the board in the dev DB, meaning no real or
   simulated competition has run enough bouts over live MQTT to validate it yet
-- Pipeline UI drag-to-reorder (▲▼ buttons work; drag is future)
 - `video_review`'s `official` field is spec-documented (upstream, see the mirror rule
   above) but unimplemented — no Atlas code publishes `var/video_review` at all yet;
-  there's no video-review tool built
+  there's no video-review tool built (Atlas only *subscribes*/handles an incoming one)
 
 ---
 
@@ -1677,7 +1694,6 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 - `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
   simulated competition run over live MQTT to confirm the observed-average path behaves
   (see OPP2 section above)
-- Pipeline UI drag-to-reorder (▲▼ works; drag is future)
 - Resilience: discuss network loss / crash recovery across the ecosystem
 - Minor: `CyranoServer.js` missing `'use strict'`
 
