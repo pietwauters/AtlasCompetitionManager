@@ -25,11 +25,15 @@
     <section class="card" id="pair-card">
       <h2>Pair with a CMS</h2>
       <p>Scan the QR code shown on the CMS's "Pair a scoresheet" screen with your
-         camera app — it fills this in and pairs automatically. If scanning isn't
-         possible, enter the MQTT username and password shown there instead.</p>
-      <input id="pair-username" placeholder="MQTT username" autocomplete="off">
-      <input id="pair-password" type="password" placeholder="MQTT password" autocomplete="off">
-      <button id="pair-button">Pair</button>
+         camera app — it fills this in below. Tap Pair once to finish (and let
+         Safari offer to save it to your Keychain, so it's there again after you
+         install this to your Home Screen). If scanning isn't possible, enter the
+         MQTT username and password shown there instead.</p>
+      <form id="pair-form">
+        <input id="pair-username" name="username" placeholder="MQTT username" autocomplete="username">
+        <input id="pair-password" name="password" type="password" placeholder="MQTT password" autocomplete="current-password">
+        <button id="pair-button" type="submit">Pair</button>
+      </form>
       <p id="pair-error" class="error" hidden></p>
     </section>
 

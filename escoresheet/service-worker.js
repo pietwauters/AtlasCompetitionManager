@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const CACHE_NAME = `escoresheet-${CACHE_VERSION}`;
 
 const CORE_ASSETS = [

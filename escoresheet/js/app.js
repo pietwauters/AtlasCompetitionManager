@@ -56,18 +56,31 @@ function initPairingUI() {
   // (#u=...&p=...&l=...), not the query string, so it never reaches Atlas's own
   // server (fragments are client-side only) and doesn't land in any access log.
   // Scrub it from the visible URL/history immediately after reading it.
+  //
+  // Deliberately pre-fill rather than auto-apply: a standalone iOS home-screen
+  // install runs in a storage container isolated from Safari's own tabs, so
+  // anything written straight to localStorage here never reaches the installed
+  // app. A real <form> submit — an actual user gesture, not JS calling
+  // localStorage directly — is what makes Safari offer to save the credential
+  // to iCloud Keychain, which (unlike localStorage) *is* shared with the
+  // installed app. That's why the field values only get applied from the
+  // form's submit handler below, never here directly.
+  let label = null;
   if (location.hash.length > 1) {
     const frag = new URLSearchParams(location.hash.slice(1));
-    applyPairing(frag.get('u'), frag.get('p'), frag.get('l'));
+    document.getElementById('pair-username').value = frag.get('u') || '';
+    document.getElementById('pair-password').value = frag.get('p') || '';
+    label = frag.get('l');
     history.replaceState(null, '', location.pathname + location.search);
   }
 
-  document.getElementById('pair-button').addEventListener('click', () => {
+  document.getElementById('pair-form').addEventListener('submit', (event) => {
+    event.preventDefault();
     const errorEl = document.getElementById('pair-error');
     errorEl.hidden = true;
     const username = document.getElementById('pair-username').value.trim();
     const password = document.getElementById('pair-password').value.trim();
-    if (!applyPairing(username, password)) {
+    if (!applyPairing(username, password, label)) {
       errorEl.textContent = 'Enter both the MQTT username and password.';
       errorEl.hidden = false;
     }

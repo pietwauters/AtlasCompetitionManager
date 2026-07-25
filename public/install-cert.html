@@ -56,14 +56,38 @@
     </div>
 
     <div class="steps" id="steps-desktop" hidden>
-      <strong>Desktop Chrome:</strong>
+      <strong>Desktop Chrome (Windows / macOS):</strong>
       <ol>
-        <li>Open <code>chrome://settings/certificates</code> → <strong>Authorities</strong>
-            tab → <strong>Import</strong>.</li>
-        <li>Select the downloaded <code>ca.crt</code> file.</li>
-        <li>Check "Trust this certificate for identifying websites."</li>
+        <li>Open <code>chrome://settings/certificates</code> → <strong>Manage
+            certificates</strong>. This opens your OS's own certificate manager
+            (Keychain Access on macOS, the Windows Certificate Manager).</li>
+        <li>Import the downloaded <code>ca.crt</code> into the
+            <strong>Trusted Root Certification Authorities</strong> (Windows) or
+            <strong>System</strong> keychain, trusted for SSL (macOS).</li>
       </ol>
-      <strong>Desktop Firefox:</strong>
+      <strong>Desktop Firefox (any OS):</strong>
+      <ol>
+        <li>Settings → Privacy &amp; Security → Certificates → View Certificates →
+            Authorities tab → Import.</li>
+        <li>Select the downloaded <code>ca.crt</code> file and check "Trust this CA
+            to identify websites."</li>
+      </ol>
+    </div>
+
+    <div class="steps" id="steps-linux" hidden>
+      <strong>Desktop Chrome on Linux:</strong>
+      <p style="font-size:0.85rem">Modern Chrome on Linux no longer has an in-browser
+         "Authorities → Import" screen — <code>chrome://settings/certificates</code>
+         just points at your OS's certificate tooling, which most distros don't ship
+         with a usable GUI for this. Add it to Chrome's own NSS trust store from a
+         terminal instead (one-time per machine):</p>
+      <ol>
+        <li>Install the NSS tools if you don't have them: <code>sudo apt install libnss3-tools</code></li>
+        <li>Import the CA: <code>certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Atlas Local CA" -i ~/Downloads/ca.crt</code>
+            (adjust the path to wherever the downloaded certificate landed).</li>
+        <li>Fully quit Chrome (all windows, not just the tab) and reopen it.</li>
+      </ol>
+      <strong>Desktop Firefox on Linux:</strong>
       <ol>
         <li>Settings → Privacy &amp; Security → Certificates → View Certificates →
             Authorities tab → Import.</li>
@@ -80,6 +104,7 @@
   const ua = navigator.userAgent;
   const id = /Android/i.test(ua) ? 'steps-android'
            : /iPhone|iPad|iPod/i.test(ua) ? 'steps-ios'
+           : /Linux/i.test(ua) ? 'steps-linux'
            : 'steps-desktop';
   document.getElementById(id).hidden = false;
 </script>
