@@ -277,7 +277,7 @@
                             @change="updateSlot(slot.id, {minutes_per_bout: Number($event.target.value) || null})">
                         </label>
                         <label>Referee
-                          <select @change="updateSlot(slot.id, {referee_id: $event.target.value || null})">
+                          <select @change="assignOfficial(slot, 'referee_id', $event.target.value)">
                             <option value="">— None —</option>
                             <template x-for="r in referees" :key="r.referee_id">
                               <option :value="r.referee_id"
@@ -289,7 +289,7 @@
                       </div>
                       <div class="row">
                         <label>Referee 2
-                          <select @change="updateSlot(slot.id, {referee2_id: $event.target.value || null})">
+                          <select @change="assignOfficial(slot, 'referee2_id', $event.target.value)">
                             <option value="">— None —</option>
                             <template x-for="r in referees" :key="r.referee_id">
                               <option :value="r.referee_id"
@@ -299,7 +299,7 @@
                           </select>
                         </label>
                         <label>Video assistant
-                          <select @change="updateSlot(slot.id, {video_assistant_id: $event.target.value || null})">
+                          <select @change="assignOfficial(slot, 'video_assistant_id', $event.target.value)">
                             <option value="">— None —</option>
                             <template x-for="r in referees" :key="r.referee_id">
                               <option :value="r.referee_id"
@@ -309,7 +309,7 @@
                           </select>
                         </label>
                         <label>Assessor 1
-                          <select @change="updateSlot(slot.id, {assessor1_id: $event.target.value || null})">
+                          <select @change="assignOfficial(slot, 'assessor1_id', $event.target.value)">
                             <option value="">— None —</option>
                             <template x-for="r in referees" :key="r.referee_id">
                               <option :value="r.referee_id"
@@ -319,7 +319,7 @@
                           </select>
                         </label>
                         <label>Assessor 2
-                          <select @change="updateSlot(slot.id, {assessor2_id: $event.target.value || null})">
+                          <select @change="assignOfficial(slot, 'assessor2_id', $event.target.value)">
                             <option value="">— None —</option>
                             <template x-for="r in referees" :key="r.referee_id">
                               <option :value="r.referee_id"
@@ -722,8 +722,110 @@
         <button @click="bulkModal.open=false">Cancel</button>
         <button class="primary"
                 :disabled="bulkModal.loading || !bulkReadyToSubmit"
-                @click="submitBulkAssign()"
+                @click="confirmSubmitBulkAssign()"
                 x-text="bulkSubmitLabel"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bulk assign: no start time warning ──────────────────────────────────── -->
+  <div class="modal-backdrop" x-show="noStartTimeModal.open" @click.self="noStartTimeModal.open=false">
+    <div class="modal-box" style="width:min(420px,90vw)">
+      <h2 style="margin:0 0 1rem">⚠ No start time set</h2>
+      <p style="font-size:.9rem;margin:0 0 1rem">
+        These slots will be assigned without a scheduled start time, so predicted-end
+        times and overlap checks won't apply. Continue anyway?
+      </p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button @click="noStartTimeModal.open=false">Cancel</button>
+        <button class="primary" @click="noStartTimeModal.open=false; submitBulkAssign()">Continue anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Referee double-booking conflict ─────────────────────────────────────── -->
+  <div class="modal-backdrop" x-show="conflictModal.open" @click.self="cancelConflict()">
+    <div class="modal-box" style="width:min(560px,94vw)">
+
+      <template x-if="conflictModal.step === 1">
+        <div>
+          <h2 style="margin:0 0 1rem">⚠ Double-booking</h2>
+          <p style="font-size:.9rem;margin:0 0 .5rem">
+            <strong x-text="conflictModal.refereeName"></strong> is already assigned as
+            <strong x-text="conflictModal.otherRole"></strong> on:
+          </p>
+          <div style="font-size:.85rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;margin-bottom:.5rem">
+            <div x-text="(conflictModal.otherSlot?.__stripName || '') + ' — ' + (conflictModal.otherSlot ? slotLabel(conflictModal.otherSlot) : '')"></div>
+            <div style="color:#856404" x-text="(conflictModal.otherSlot?.scheduled_start || '—') + ' → ' + (conflictModal.otherSlot?.predicted_end || '—')"></div>
+          </div>
+          <p style="font-size:.9rem;margin:0 0 .5rem">This overlaps with:</p>
+          <div style="font-size:.85rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;margin-bottom:1rem">
+            <div x-text="(conflictModal.currentSlot ? (strips.find(s=>s.slots.some(sl=>sl.id===conflictModal.currentSlot.id))?.name || 'Piste') : '') + ' — ' + (conflictModal.currentSlot ? slotLabel(conflictModal.currentSlot) : '')"></div>
+            <div style="color:#856404" x-text="(conflictModal.currentSlot?.scheduled_start || '—') + ' → ' + (conflictModal.currentSlot?.predicted_end || '—')"></div>
+          </div>
+          <p style="font-size:.85rem;color:#555;margin:0 0 1rem">
+            Assigning this would double-book the same person at overlapping times.
+          </p>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end">
+            <button @click="cancelConflict()">Cancel</button>
+            <button class="primary" @click="conflictModal.step = 2">Continue anyway</button>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="conflictModal.step === 2">
+        <div>
+          <h2 style="margin:0 0 1rem">Which comes first?</h2>
+          <p style="font-size:.85rem;color:#555;margin:0 0 .75rem">
+            The later assignment's start time will be pushed to start right after the earlier one ends.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem">
+            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px">
+              <input type="radio" x-model="conflictModal.order" value="current-first" style="margin-top:.2rem">
+              <span>
+                <strong x-text="conflictModal.currentSlot ? slotLabel(conflictModal.currentSlot) : ''"></strong>
+                <span style="display:block;font-size:.8rem;color:#888"
+                      x-text="(conflictModal.currentSlot?.scheduled_start || '—') + ' → ' + (conflictModal.currentSlot?.predicted_end || '—') + ' comes first'"></span>
+              </span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px">
+              <input type="radio" x-model="conflictModal.order" value="other-first" style="margin-top:.2rem">
+              <span>
+                <strong x-text="conflictModal.otherSlot ? slotLabel(conflictModal.otherSlot) : ''"></strong>
+                <span style="display:block;font-size:.8rem;color:#888"
+                      x-text="(conflictModal.otherSlot?.scheduled_start || '—') + ' → ' + (conflictModal.otherSlot?.predicted_end || '—') + ' comes first'"></span>
+              </span>
+            </label>
+          </div>
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem;margin-bottom:1rem">
+            <input type="checkbox" x-model="conflictModal.cascade">
+            Also cascade the rest of that piste's schedule to avoid a new overlap
+          </label>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end">
+            <button @click="cancelConflict()">Cancel</button>
+            <button class="primary" :disabled="!conflictModal.order" @click="applyConflictResolution()">Apply</button>
+          </div>
+        </div>
+      </template>
+
+    </div>
+  </div>
+
+  <!-- ── Conflict resolved — offer to restore original time ──────────────────── -->
+  <div class="modal-backdrop" x-show="restoreModal.open" @click.self="dismissRestore()">
+    <div class="modal-box" style="width:min(520px,94vw)">
+      <h2 style="margin:0 0 1rem">Double-booking resolved</h2>
+      <p style="font-size:.9rem;margin:0 0 .75rem">
+        <strong x-text="restoreModal.stripName"></strong> — <span x-text="restoreModal.slot ? slotLabel(restoreModal.slot) : ''"></span>
+        no longer double-books the same person against
+        <span x-text="restoreModal.pairedSlot ? slotLabel(restoreModal.pairedSlot) : ''"></span>.
+      </p>
+      <p style="font-size:.9rem;margin:0 0 1rem">
+        Restore its original start time of <strong x-text="restoreModal.originalStart"></strong>?
+      </p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button @click="dismissRestore()">Keep current time</button>
+        <button class="primary" @click="applyRestore()">Restore original time</button>
       </div>
     </div>
   </div>
@@ -834,6 +936,14 @@ function app() {
       selectedPisteIds: [], startTime: '',
     },
     lastBulkSlotIds: [],
+    conflictModal: {
+      open: false, step: 1,
+      field: null, refereeId: null, refereeName: '',
+      currentSlot: null, otherSlot: null, otherRole: '',
+      order: null, cascade: true,
+    },
+    restoreModal: { open: false, slot: null, pairedSlot: null, originalStart: null, stripName: '' },
+    noStartTimeModal: { open: false },
     drag: { id: null, overSlotId: null },
     ganttVersion: 0,
     wantMulti: false,
@@ -1155,6 +1265,12 @@ function app() {
     async submitAddSlot() {
       const strip = this.selectedStrip;
       if (!strip) return;
+      if (this.addForm.type === 'pool' && !this.addForm.pool_id) {
+        this.showNotice('Select a pool first', true); return;
+      }
+      if (this.addForm.type === 'team_match' && !this.addForm.team_match_id) {
+        this.showNotice('Select a team match first', true); return;
+      }
       if (this.addForm.type === 'de') {
         if (!this.addForm.tableau) { this.showNotice('Select a DE phase and round first', true); return; }
         const n = this.addForm.tableau / 2;
@@ -1219,6 +1335,196 @@ function app() {
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Update failed', true); return; }
       await this.loadStrips();
+    },
+
+    // Assign a referee/referee2/video_assistant/assessor1/assessor2 to a slot.
+    // Checks whether that person already has an overlapping assignment (in any
+    // of the 5 roles, on any strip) before committing — clearing an assignment
+    // (value null) can never create a conflict, so it always goes straight
+    // through updateSlot.
+    async assignOfficial(slot, field, rawValue) {
+      const value = rawValue || null;
+      if (!value) {
+        await this.updateSlot(slot.id, { [field]: value });
+        await this._checkConflictResolutions(slot.id);
+        return;
+      }
+
+      const conflict = this._findRefereeConflict(slot, value);
+      if (!conflict) {
+        await this.updateSlot(slot.id, { [field]: value });
+        await this._checkConflictResolutions(slot.id);
+        return;
+      }
+
+      this.conflictModal = {
+        open: true, step: 1,
+        field, refereeId: value, refereeName: this._refereeName(value),
+        currentSlot: slot, otherSlot: conflict.slot, otherRole: conflict.role,
+        order: null, cascade: true,
+      };
+    },
+
+    async cancelConflict() {
+      this.conflictModal = {
+        open: false, step: 1, field: null, refereeId: null, refereeName: '',
+        currentSlot: null, otherSlot: null, otherRole: '', order: null, cascade: true,
+      };
+      // The referee/official <select>s use :selected bindings, not x-model —
+      // the browser already shows whatever option the operator just clicked
+      // regardless of Alpine state. Since we never actually committed that
+      // change, force a full reload so the dropdowns visually snap back to
+      // the real (unchanged) assignment instead of showing a phantom pick.
+      await this.loadStrips();
+    },
+
+    async applyConflictResolution() {
+      const m = this.conflictModal;
+      if (!m.order) return;
+
+      await this.updateSlot(m.currentSlot.id, { [m.field]: m.refereeId });
+
+      const firstSlot  = m.order === 'current-first' ? m.currentSlot : m.otherSlot;
+      const secondSlot = m.order === 'current-first' ? m.otherSlot   : m.currentSlot;
+      const firstWin = this._slotWindow(firstSlot);
+      if (firstWin) {
+        // Remember what this slot's start time was before the push, and
+        // which referee/slot the conflict was against, so a later change
+        // that removes the conflict can offer to restore it (see
+        // _checkConflictResolutions).
+        await this._patchSlot(secondSlot.id, {
+          scheduled_start:         firstWin.end,
+          conflict_referee_id:     m.refereeId,
+          conflict_original_start: secondSlot.scheduled_start,
+          conflict_paired_slot_id: firstSlot.id,
+        });
+      }
+      await this.loadStrips();
+
+      if (m.cascade) {
+        const stripOfSecond = this.strips.find(s => s.slots.some(sl => sl.id === secondSlot.id));
+        if (stripOfSecond) await this._recascadeStrip(stripOfSecond);
+      }
+
+      this.showNotice('Referee assigned — schedule updated to resolve the conflict');
+      await this.cancelConflict();
+    },
+
+    // ── Conflict-push undo ──────────────────────────────────────────────────
+
+    // Refereed slots remember (conflict_referee_id/conflict_original_start/
+    // conflict_paired_slot_id) that they were pushed to a later start time to
+    // resolve a double-booking. Call this after any successful official
+    // assignment change on `touchedSlotId` — if that slot (or a slot paired
+    // with it) has such a marker and the underlying double-booking no longer
+    // holds, prompt the operator to restore the original time.
+    async _checkConflictResolutions(touchedSlotId) {
+      for (const strip of this.strips) {
+        for (const p of strip.slots) {
+          if (!p.conflict_referee_id || !p.conflict_paired_slot_id) continue;
+          if (p.id !== touchedSlotId && p.conflict_paired_slot_id !== touchedSlotId) continue;
+          const q = this._findSlotById(p.conflict_paired_slot_id);
+          if (!q) continue;
+          if (!this._conflictPairStillHolds(p, q)) {
+            this.restoreModal = {
+              open: true, slot: p, pairedSlot: q,
+              originalStart: p.conflict_original_start,
+              stripName: strip.name || ('Piste ' + strip.strip_number),
+            };
+            return;
+          }
+        }
+      }
+    },
+
+    _findSlotById(id) {
+      for (const strip of this.strips) {
+        const s = strip.slots.find(sl => sl.id === id);
+        if (s) return s;
+      }
+      return null;
+    },
+
+    // Whether the original double-booking that caused p's push still holds:
+    // both p and q still have conflict_referee_id in any of their 5 official
+    // roles, AND p's ORIGINAL window still overlaps q's current window.
+    _conflictPairStillHolds(p, q) {
+      const refId = p.conflict_referee_id;
+      const ROLE_FIELDS = ['referee_id', 'referee2_id', 'video_assistant_id', 'assessor1_id', 'assessor2_id'];
+      const pHasRef = ROLE_FIELDS.some(f => p[f] != null && String(p[f]) === String(refId));
+      const qHasRef = ROLE_FIELDS.some(f => q[f] != null && String(q[f]) === String(refId));
+      if (!pHasRef || !qHasRef) return false;
+      const pOrigEnd = this._computeSlotEnd(p, p.conflict_original_start) || this.addMinutes(p.conflict_original_start, 30);
+      const qWin = this._slotWindow(q);
+      if (!qWin) return false;
+      return this._windowsOverlap({ start: p.conflict_original_start, end: pOrigEnd }, qWin);
+    },
+
+    async dismissRestore() {
+      const m = this.restoreModal;
+      // Acknowledge and stop tracking — leave the current (pushed) time as
+      // is, but don't keep re-prompting for the same resolved conflict.
+      await this._patchSlot(m.slot.id, {
+        conflict_referee_id: null, conflict_original_start: null, conflict_paired_slot_id: null,
+      });
+      await this.loadStrips();
+      this.restoreModal = { open: false, slot: null, pairedSlot: null, originalStart: null, stripName: '' };
+    },
+
+    async applyRestore() {
+      const m = this.restoreModal;
+      await this._patchSlot(m.slot.id, {
+        scheduled_start: m.originalStart,
+        conflict_referee_id: null, conflict_original_start: null, conflict_paired_slot_id: null,
+      });
+      await this.loadStrips();
+      const strip = this.strips.find(s => s.slots.some(sl => sl.id === m.slot.id));
+      if (strip) await this._recascadeStrip(strip);
+      this.showNotice('Original start time restored');
+      this.restoreModal = { open: false, slot: null, pairedSlot: null, originalStart: null, stripName: '' };
+    },
+
+    _refereeName(id) {
+      const r = this.referees.find(x => String(x.referee_id) === String(id));
+      return r ? `${r.last_name}, ${r.first_name}` : ('Referee ' + id);
+    },
+
+    // A slot's [start, end) window for overlap purposes, or null if it has no
+    // scheduled_start at all (nothing to double-book against).
+    _slotWindow(slot) {
+      if (!slot.scheduled_start) return null;
+      const end = slot.predicted_end
+        || this._computeSlotEnd(slot, slot.scheduled_start)
+        || this.addMinutes(slot.scheduled_start, 30);
+      return { start: slot.scheduled_start, end };
+    },
+
+    _windowsOverlap(a, b) {
+      return a.start < b.end && b.start < a.end;
+    },
+
+    // Find another slot (any strip) where refereeId is already assigned in
+    // any of the 5 official roles, with a time window overlapping slot's own.
+    _findRefereeConflict(slot, refereeId) {
+      const win = this._slotWindow(slot);
+      if (!win) return null;
+      const ROLE_FIELDS = { referee_id: 'Referee', referee2_id: 'Referee 2', video_assistant_id: 'Video Assistant', assessor1_id: 'Assessor 1', assessor2_id: 'Assessor 2' };
+      for (const strip of this.strips) {
+        for (const other of strip.slots) {
+          if (other.id === slot.id) continue;
+          const otherWin = this._slotWindow(other);
+          if (!otherWin || !this._windowsOverlap(win, otherWin)) continue;
+          for (const [field, label] of Object.entries(ROLE_FIELDS)) {
+            if (other[field] != null && String(other[field]) === String(refereeId)) {
+              return {
+                slot: { ...other, __stripName: strip.name || ('Piste ' + strip.strip_number) },
+                role: label,
+              };
+            }
+          }
+        }
+      }
+      return null;
     },
 
     async moveSlot(id, direction) {
@@ -1674,6 +1980,15 @@ function app() {
         this.bulkModal.selectedPisteIds = [...this.bulkModal.selectedPisteIds, id];
       else if (!checked)
         this.bulkModal.selectedPisteIds = this.bulkModal.selectedPisteIds.filter(x => x !== id);
+    },
+
+    confirmSubmitBulkAssign() {
+      if (!this.bulkReadyToSubmit) return;
+      if (!this.bulkModal.startTime) {
+        this.noStartTimeModal.open = true;
+        return;
+      }
+      this.submitBulkAssign();
     },
 
     async submitBulkAssign() {

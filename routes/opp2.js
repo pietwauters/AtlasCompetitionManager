@@ -81,6 +81,11 @@ router.get('/pipeline/referee/:refereeId', (req, res) => {
   res.json(Pipeline.findAllForReferee(req.params.refereeId));
 });
 
+// Fencer schedule for a competition (used by the kiosk fencer display)
+router.get('/pipeline/competition/:compId/fencers', (req, res) => {
+  res.json(Pipeline.fencersForCompetition(req.params.compId));
+});
+
 // Add a slot to a strip's pipeline
 router.post('/pipeline/strip/:stripId', (req, res) => {
   try {

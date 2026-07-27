@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas — Officiating Schedule</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/theme-init.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--clr-bg); color: var(--clr-text);
+    font-family: inherit; overflow: hidden;
+  }
+  .kiosk-header {
+    flex: 0 0 auto;
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 1.1rem 2rem;
+    background: var(--clr-nav-bg); color: #fff;
+  }
+  .kiosk-header h1 { margin: 0; font-size: 1.7rem; color: #fff; }
+  .kiosk-clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .kiosk-body { flex: 1 1 auto; min-height: 0; }
+  .kiosk-col-head {
+    display: grid; grid-template-columns: 6rem 1fr 12rem 8rem;
+    padding: .6rem 2rem;
+    font-size: .85rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--clr-text-muted); font-weight: 700;
+    background: var(--clr-th-bg); border-bottom: 2px solid var(--clr-border);
+  }
+  .kiosk-row {
+    display: grid; grid-template-columns: 6rem 1fr 12rem 8rem;
+    align-items: center;
+    padding: 1.1rem 2rem;
+    border-bottom: 1px solid var(--clr-border);
+  }
+  .kiosk-piste {
+    text-align: center; font-weight: 700; font-size: 1.6rem; color: var(--clr-brand);
+  }
+  .kiosk-name { font-weight: 700; font-size: 1.4rem; }
+  .kiosk-sub { font-size: 1rem; color: var(--clr-text-muted); margin-top: .15rem; }
+  .kiosk-role {
+    display: inline-block; padding: .2rem .6rem; border-radius: 1rem;
+    font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    background: var(--clr-brand); color: #fff;
+  }
+  .kiosk-role.role-video_assistant,
+  .kiosk-role.role-assessor1,
+  .kiosk-role.role-assessor2 { background: var(--clr-de); }
+  .kiosk-assignment { font-size: 1.1rem; }
+  .kiosk-time { text-align: right; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 700; }
+  .kiosk-empty { padding: 4rem 2rem; text-align: center; font-size: 1.5rem; color: var(--clr-text-muted); }
+</style>
+</head>
+<body>
+
+<div class="kiosk-header">
+  <h1>Officiating Schedule</h1>
+  <div class="kiosk-clock" id="clock"></div>
+</div>
+
+<div class="kiosk-body" id="root">
+  <div class="kiosk-col-head">
+    <div>Piste</div>
+    <div>Official</div>
+    <div>Assignment</div>
+    <div style="text-align:right">Start</div>
+  </div>
+  <div class="kiosk-viewport" id="viewport">
+    <div class="kiosk-track" id="track">
+      <div id="content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/kiosk-scroll.js?v=2"></script>
+<script src="/js/kiosk-fullscreen.js?v=1"></script>
+<script>
+'use strict';
+(function () {
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch]));
+  }
+
+  function boutRangeForPartition(partition, tableau) {
+    const n = tableau / 2;
+    if (!partition || partition === 'full') return [1, n];
+    let lo = 1, hi = n;
+    for (const ch of partition) {
+      const mid = Math.floor((lo + hi) / 2);
+      if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
+    }
+    return [lo, hi];
+  }
+
+  function slotLabel(s) {
+    const comp = s.competition_name || '?';
+    if (s.type === 'pool') return `${comp} — Pool ${s.pool_number ?? '?'}`;
+    if (s.type === 'team_match') return `${comp} — ${s.left_team_name || '?'} vs ${s.right_team_name || '?'}`;
+    if (!s.partition || s.partition === 'full') return `${comp} — Table of ${s.tableau ?? '?'}`;
+    const [lo, hi] = boutRangeForPartition(s.partition, s.tableau);
+    return lo === hi
+      ? `${comp} — Table of ${s.tableau}, bout ${lo}`
+      : `${comp} — Table of ${s.tableau}, bouts ${lo}–${hi}`;
+  }
+
+  function roleLabel(role) {
+    return {
+      referee: 'Referee', referee2: 'Referee 2', video_assistant: 'Video Assistant',
+      assessor1: 'Assessor 1', assessor2: 'Assessor 2',
+    }[role] || role;
+  }
+
+  function render(rows) {
+    const content = document.getElementById('content');
+    content.innerHTML = rows.length ? rows.map(r => `
+      <div class="kiosk-row">
+        <div class="kiosk-piste">${r.strip_number ?? '—'}</div>
+        <div>
+          <div class="kiosk-name">${escapeHtml(r.last_name)} ${escapeHtml(r.first_name)}</div>
+          <div class="kiosk-sub"><span class="kiosk-role role-${r.role}">${escapeHtml(roleLabel(r.role))}</span></div>
+        </div>
+        <div class="kiosk-assignment">${escapeHtml(slotLabel(r.slot))}</div>
+        <div class="kiosk-time">${r.scheduled_start || '—'}</div>
+      </div>
+    `).join('') : '<div class="kiosk-empty">No officiating assignments currently scheduled.</div>';
+
+    requestAnimationFrame(() => {
+      setupKioskScroll(document.getElementById('viewport'), document.getElementById('track'), content);
+    });
+  }
+
+  async function load() {
+    let strips = [];
+    try { strips = await fetch('/api/opp2/pipeline').then(r => r.json()); }
+    catch (e) { console.error('kiosk-officials load error', e); }
+
+    const rows = [];
+    for (const strip of strips) {
+      for (const slot of (strip.slots || [])) {
+        if (slot.status === 'done') continue;
+        for (const official of (slot.officials || [])) {
+          rows.push({
+            role: official.role,
+            first_name: official.first_name,
+            last_name: official.last_name,
+            strip_number: strip.strip_number,
+            scheduled_start: slot.scheduled_start,
+            slot,
+          });
+        }
+      }
+    }
+
+    rows.sort((a, b) => {
+      const at = a.scheduled_start || '99:99';
+      const bt = b.scheduled_start || '99:99';
+      if (at !== bt) return at.localeCompare(bt);
+      return (a.strip_number ?? 999) - (b.strip_number ?? 999);
+    });
+
+    render(rows);
+  }
+
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  load();
+  setInterval(load, 20000);
+  updateClock();
+  setInterval(updateClock, 1000);
+  window.addEventListener('resize', () => {
+    setupKioskScroll(document.getElementById('viewport'), document.getElementById('track'), document.getElementById('content'));
+  });
+  setupKioskFullscreen();
+})();
+</script>
+</body>
+</html>

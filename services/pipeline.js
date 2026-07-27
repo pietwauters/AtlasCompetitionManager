@@ -265,6 +265,20 @@ const Pipeline = {
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   addSlot(stripId, data) {
+    // Defense in depth against a client submitting a slot type with nothing
+    // real behind it (e.g. "pool" selected but no pool actually chosen) —
+    // such a slot has no bouts/roster, yet still counts toward slot_count
+    // and still shows up on the Gantt, reading as a phantom assignment.
+    if (data.type === 'pool' && !data.pool_id) {
+      throw new Error('pool_id is required for a pool slot');
+    }
+    if (data.type === 'team_match' && !data.team_match_id) {
+      throw new Error('team_match_id is required for a team_match slot');
+    }
+    if (data.type === 'de' && (!data.phase_id || !data.tableau)) {
+      throw new Error('phase_id and tableau are required for a DE slot');
+    }
+
     return db.transaction(() => {
       // A DE round (phase_id + bracket + de_round/tableau + partition) can only live
       // on one strip. de_round must be part of this key: a repechage phase's last
@@ -393,21 +407,41 @@ const Pipeline = {
     db.transaction(() => {
       db.prepare(`
         UPDATE pipeline_slots
-        SET scheduled_start  = @scheduled_start,
-            minutes_per_bout = @minutes_per_bout,
-            referee_id       = @referee_id,
-            status           = @status
+        SET scheduled_start         = @scheduled_start,
+            minutes_per_bout        = @minutes_per_bout,
+            referee_id              = @referee_id,
+            status                  = @status,
+            conflict_referee_id     = @conflict_referee_id,
+            conflict_original_start = @conflict_original_start,
+            conflict_paired_slot_id = @conflict_paired_slot_id
         WHERE id = @id
       `).run({
         id: Number(id),
-        scheduled_start:  m.scheduled_start  ?? null,
-        minutes_per_bout: m.minutes_per_bout ?? null,
-        referee_id:       m.referee_id       ?? null,
-        status:           m.status,
+        scheduled_start:         m.scheduled_start         ?? null,
+        minutes_per_bout:        m.minutes_per_bout        ?? null,
+        referee_id:              m.referee_id              ?? null,
+        status:                  m.status,
+        conflict_referee_id:     m.conflict_referee_id     ?? null,
+        conflict_original_start: m.conflict_original_start ?? null,
+        conflict_paired_slot_id: m.conflict_paired_slot_id ?? null,
       });
 
       for (const [field, role] of Object.entries(OFFICIAL_ROLES)) {
         if (field in data) this.setOfficial(id, role, data[field]);
+      }
+
+      // Mirror back onto pools.referee_id (the phase.html/pool.html display
+      // badge) — symmetric with how strip_id is already mirrored in
+      // addSlot/deleteSlot/moveToStrip below. Only for the slot that IS the
+      // pool's primary/home strip (matches pools.strip_id itself only ever
+      // reflecting the primary strip); a distributed pool's secondary-strip
+      // slots keep their own referee independently.
+      if ('referee_id' in data && current.type === 'pool' && current.pool_id) {
+        const pool = db.prepare('SELECT strip_id FROM pools WHERE id = ?').get(current.pool_id);
+        if (pool && pool.strip_id === current.strip_id) {
+          db.prepare('UPDATE pools SET referee_id = ? WHERE id = ?')
+            .run(m.referee_id ?? null, current.pool_id);
+        }
       }
     })();
 
@@ -984,6 +1018,119 @@ const Pipeline = {
       competition_name: match.competition_name,
       phase_order:     match.phase_order,
     };
+  },
+
+  // ── Competitor rosters per slot (kiosk displays) ─────────────────────────
+
+  // Resolve which competitors currently belong to a pipeline slot: the whole
+  // pool for a pool slot, both teams' rosters for a team_match slot, or every
+  // fencer appearing in the DE bouts the slot's round-range/placement group
+  // currently covers (byes and not-yet-decided pairings naturally drop out
+  // since their opposing left_id/right_id is still null).
+  competitorsForSlot(slot) {
+    if (slot.type === 'pool') {
+      return db.prepare(`
+        SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+               cl.name AS club_name
+        FROM pool_competitors pc
+        JOIN competitors c  ON c.id  = pc.competitor_id
+        LEFT JOIN people p2 ON p2.id = c.person_id
+        LEFT JOIN clubs  cl ON cl.id = p2.club_id
+        WHERE pc.pool_id = ?
+        ORDER BY c.initial_seed ASC, c.last_name
+      `).all(slot.pool_id);
+    }
+
+    if (slot.type === 'team_match') {
+      const teamMembers = (teamId, side) => teamId ? db.prepare(`
+        SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+               cl.name AS club_name, ? AS team_side
+        FROM team_members tmm
+        JOIN competitors c  ON c.id  = tmm.competitor_id
+        LEFT JOIN people p2 ON p2.id = c.person_id
+        LEFT JOIN clubs  cl ON cl.id = p2.club_id
+        WHERE tmm.team_id = ?
+      `).all(side, teamId) : [];
+      return [...teamMembers(slot.left_team_id, 'left'), ...teamMembers(slot.right_team_id, 'right')];
+    }
+
+    // DE (main/repechage/placement)
+    let boutRows;
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      if (!ids.length) return [];
+      boutRows = db.prepare(
+        `SELECT left_id, right_id FROM bouts WHERE id IN (${ids.map(() => '?').join(',')})`
+      ).all(...ids);
+    } else {
+      const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
+      if (!deRound) return [];
+      boutRows = db.prepare(`
+        WITH ordered AS (${DE_BOUT_ORDER})
+        SELECT b.left_id, b.right_id FROM bouts b
+        JOIN ordered o ON o.id = b.id
+        WHERE b.phase_id = ? AND b.de_round = ? AND o.round_index BETWEEN ? AND ?
+      `).all(bracket, slot.phase_id, deRound, lo, hi);
+    }
+
+    const ids = [...new Set(boutRows.flatMap(b => [b.left_id, b.right_id]).filter(Boolean))];
+    if (!ids.length) return [];
+    return db.prepare(`
+      SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+             cl.name AS club_name
+      FROM competitors c
+      LEFT JOIN people p2 ON p2.id = c.person_id
+      LEFT JOIN clubs  cl ON cl.id = p2.club_id
+      WHERE c.id IN (${ids.map(() => '?').join(',')})
+    `).all(...ids);
+  },
+
+  // Every competitor in a competition, each with its currently relevant
+  // pipeline assignment (or null if not currently in any non-done slot).
+  // Used by the fencer kiosk display. When a competitor matches more than
+  // one live slot (e.g. a pool slot and an already-built next-phase DE slot
+  // both exist), the active one wins, else the one starting soonest.
+  fencersForCompetition(compId) {
+    compId = Number(compId);
+    const roster = db.prepare(`
+      SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+             cl.name AS club_name
+      FROM competitors c
+      LEFT JOIN people p2 ON p2.id = c.person_id
+      LEFT JOIN clubs  cl ON cl.id = p2.club_id
+      WHERE c.competition_id = ?
+      ORDER BY c.initial_seed ASC, c.last_name, c.first_name
+    `).all(compId);
+
+    const candidatesByCompetitor = new Map();
+    for (const strip of this.findAllStrips()) {
+      for (const slot of strip.slots) {
+        if (slot.competition_id !== compId || slot.status === 'done') continue;
+        const info = {
+          strip_id: strip.id, strip_name: strip.name, strip_number: strip.strip_number,
+          scheduled_start: slot.scheduled_start, predicted_end: slot.predicted_end,
+          status: slot.status, slot_type: slot.type, pool_number: slot.pool_number,
+          bracket: slot.bracket, tableau: slot.tableau, partition: slot.partition,
+          left_team_name: slot.left_team_name, right_team_name: slot.right_team_name,
+        };
+        for (const c of this.competitorsForSlot(slot)) {
+          const list = candidatesByCompetitor.get(c.competitor_id) || [];
+          list.push(info);
+          candidatesByCompetitor.set(c.competitor_id, list);
+        }
+      }
+    }
+
+    const pick = (list) => {
+      if (!list || !list.length) return null;
+      return list.slice().sort((a, b) => {
+        const rank = s => s === 'active' ? 0 : 1;
+        if (rank(a.status) !== rank(b.status)) return rank(a.status) - rank(b.status);
+        return (a.scheduled_start || '99:99').localeCompare(b.scheduled_start || '99:99');
+      })[0];
+    };
+
+    return roster.map(r => ({ ...r, assignment: pick(candidatesByCompetitor.get(r.competitor_id)) }));
   },
 
   // ── Predicted end helper ─────────────────────────────────────────────────

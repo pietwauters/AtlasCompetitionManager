@@ -1632,6 +1632,45 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
   chart in `public/opp2.html` both iterate every assigned official, not just the primary
   referee, tagging each with their role.
 
+**Referee/official double-booking detection & schedule-cascade resolution (added
+2026-07-27):** Assigning any of the 5 officiating roles (`assignOfficial` in
+`public/opp2.html`) now checks every other slot on every strip for a time-window overlap
+where the same person already holds any officiating role, before committing.
+- On a conflict: a 2-step modal (`conflictModal`) — step 1 shows both overlapping
+  assignments (Cancel / Continue anyway); step 2 asks which of the two comes first,
+  pushes the later one's `scheduled_start` to right after the earlier one's predicted
+  end, and optionally cascades the rest of that piste's schedule (`_recascadeStrip`) to
+  avoid creating a new overlap further down.
+- The push is remembered on the pushed slot (`conflict_referee_id` /
+  `conflict_original_start` / `conflict_paired_slot_id`, migration
+  `031_pipeline_slot_conflict_tracking.sql`) so a later change that removes the conflict
+  (reassigning the referee, changing a time) prompts to restore the slot's original start
+  time (`restoreModal` — "Keep current time" / "Restore original time"). Persisted in the
+  DB, not just Alpine state, so it survives a page reload.
+- Clearing an assignment (setting a role to none) can never create a conflict and always
+  goes straight through.
+
+**`Pipeline.addSlot` defense-in-depth validation (added 2026-07-27):** rejects creating a
+`pool` slot with no `pool_id`, a `team_match` slot with no `team_match_id`, or a `de` slot
+with no `phase_id`/`tableau` — previously a client bug could silently create a phantom
+slot with nothing real behind it, still counting toward `slot_count` and showing on the
+Gantt. Mirrored client-side in `submitAddSlot` for an immediate error message.
+
+**`pools.referee_id` / `pipeline_slots.referee_id` mirroring fix (added 2026-07-27):**
+`PATCH /api/pools/:id` (assigning a referee from the pool side, in `routes/pools.js`)
+previously only updated `pools.referee_id`, leaving `pipeline_slots.referee_id` — the
+value actually sent to the apparatus over OPP2 and shown on the schedule/referee-schedule
+pages — stale. Now mirrors onto every pipeline slot for that pool (there can be more than
+one for a multi-strip pool). Conversely, `Pipeline.updateSlot` now mirrors a slot's
+`referee_id` back onto `pools.referee_id` whenever that slot is the pool's primary/home
+strip, so the two attributes can no longer drift apart from either direction.
+
+**Bulk-assign "no start time" warning (added 2026-07-27):** `public/opp2.html`'s bulk
+pool/DE-round assignment modal now warns before submitting with no start time set
+(predicted-end and overlap/conflict checks don't apply without one) — a small
+`noStartTimeModal` with Cancel / Continue anyway gates `submitBulkAssign()` via
+`confirmSubmitBulkAssign()`.
+
 **Key files added:**
 | Path | Purpose |
 |---|---|
@@ -1657,6 +1696,35 @@ Each strip has an ordered list of pipeline slots. A slot is either a pool or a D
 - `video_review`'s `official` field is spec-documented (upstream, see the mirror rule
   above) but unimplemented — no Atlas code publishes `var/video_review` at all yet;
   there's no video-review tool built (Atlas only *subscribes*/handles an incoming one)
+
+### Kiosk waiting-room displays — complete, 2026-07-27
+Two new full-screen, auto-scrolling display pages for a spectator/waiting-room monitor,
+linked from a new "Kiosk displays" card on `public/admin.html`:
+- `public/kiosk-fencers.html` — per-competition fencer schedule (piste, name, club/
+  nationality, pool/DE assignment label, scheduled start). Driven by a new
+  `Pipeline.fencersForCompetition(compId)` (`services/pipeline.js`), exposed at
+  `GET /api/opp2/pipeline/competition/:compId/fencers`. Resolves each competitor's
+  currently-relevant live (non-`done`) assignment via a new
+  `Pipeline.competitorsForSlot(slot)` — the whole pool roster (`pool_competitors`) for a
+  pool slot, both rosters (`team_members`) for a team-match slot, or every fencer still
+  appearing in the DE bouts the slot's round-range/placement group currently covers (byes
+  and undecided pairings drop out naturally since their opposing `left_id`/`right_id` is
+  still null). When a competitor matches more than one live slot (e.g. a pool slot and an
+  already-built next-phase DE slot both exist), the active one wins, else the
+  soonest-starting. No `competition_id` in the URL shows a competition picker instead.
+- `public/kiosk-officials.html` — cross-competition officiating schedule, every assigned
+  role (not just primary referee) via the existing `GET /api/opp2/pipeline` payload's
+  per-slot `officials` list.
+- `public/js/kiosk-scroll.js` — continuous, constant-speed vertical auto-scroll, driven
+  frame-by-frame via `requestAnimationFrame` rather than a CSS `@keyframes` loop (which
+  visibly stutters at the iteration restart on most browsers); no-ops (static) whenever
+  the content already fits the viewport. Re-measures on each data refresh without
+  resetting scroll position, so a ~20s poll interval doesn't repeatedly yank a long list
+  back to the top before it's scrolled far enough to show later rows.
+- `public/js/kiosk-fullscreen.js` — one-time "tap anywhere for full screen" hint, since
+  `requestFullscreen()` can only ever be triggered from a real user gesture, never
+  automatically on page load; reappears if full screen is exited (e.g. Escape).
+- `.kiosk-viewport` added to `public/css/style.css` for the clipping container.
 
 ---
 

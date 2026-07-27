@@ -502,3 +502,12 @@ button.warning:hover { background: #d97706; }
     min-height: 2.5rem;
   }
 }
+
+/* ── Kiosk auto-scroll (waiting-room displays) ───────────────────────────── */
+/* Continuous, constant-speed vertical scroll for a list that's too tall for
+   the screen. .kiosk-viewport clips; .kiosk-track's transform is driven
+   frame-by-frame by setupKioskScroll() (/js/kiosk-scroll.js) — deliberately
+   not a CSS @keyframes loop, which stutters for a frame at the iteration
+   restart on most browsers. Static (no scroll) whenever the content
+   already fits — most competitions, most of the time. */
+.kiosk-viewport { overflow: hidden; height: 100%; }

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas — Fencer Schedule</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/theme-init.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--clr-bg); color: var(--clr-text);
+    font-family: inherit; overflow: hidden;
+  }
+  .kiosk-header {
+    flex: 0 0 auto;
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 1.1rem 2rem;
+    background: var(--clr-nav-bg); color: #fff;
+  }
+  .kiosk-header h1 { margin: 0; font-size: 1.7rem; color: #fff; }
+  .kiosk-clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .kiosk-body { flex: 1 1 auto; min-height: 0; }
+  .kiosk-col-head {
+    display: grid; grid-template-columns: 6rem 1fr 8rem;
+    padding: .6rem 2rem;
+    font-size: .85rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--clr-text-muted); font-weight: 700;
+    background: var(--clr-th-bg); border-bottom: 2px solid var(--clr-border);
+  }
+  .kiosk-row {
+    display: grid; grid-template-columns: 6rem 1fr 8rem;
+    align-items: center;
+    padding: 1.1rem 2rem;
+    border-bottom: 1px solid var(--clr-border);
+  }
+  .kiosk-piste {
+    text-align: center; font-weight: 700; font-size: 1.6rem; color: var(--clr-brand);
+  }
+  .kiosk-name { font-weight: 700; font-size: 1.4rem; }
+  .kiosk-sub { font-size: 1rem; color: var(--clr-text-muted); margin-top: .15rem; }
+  .kiosk-time { text-align: right; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 700; }
+  .kiosk-empty { padding: 4rem 2rem; text-align: center; font-size: 1.5rem; color: var(--clr-text-muted); }
+  .kiosk-setup { padding: 3rem 2rem; max-width: 32rem; margin: 0 auto; }
+  .kiosk-setup h2 { margin: 0 0 1rem; }
+  .kiosk-setup a {
+    display: block; padding: 1rem 1.2rem; margin-bottom: .6rem;
+    background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: .5rem;
+    text-decoration: none; color: var(--clr-text); font-size: 1.15rem;
+  }
+  .kiosk-setup a:hover { border-color: var(--clr-brand); }
+</style>
+</head>
+<body>
+
+<div class="kiosk-header">
+  <h1 id="comp-name">Fencer Schedule</h1>
+  <div class="kiosk-clock" id="clock"></div>
+</div>
+
+<div class="kiosk-body" id="root">
+  <div class="kiosk-col-head">
+    <div>Piste</div>
+    <div>Fencer</div>
+    <div style="text-align:right">Start</div>
+  </div>
+  <div class="kiosk-viewport" id="viewport">
+    <div class="kiosk-track" id="track">
+      <div id="content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/kiosk-scroll.js?v=2"></script>
+<script src="/js/kiosk-fullscreen.js?v=1"></script>
+<script>
+'use strict';
+(function () {
+  const params = new URLSearchParams(location.search);
+  const compId = params.get('competition_id');
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch]));
+  }
+
+  function boutRangeForPartition(partition, tableau) {
+    const n = tableau / 2;
+    if (!partition || partition === 'full') return [1, n];
+    let lo = 1, hi = n;
+    for (const ch of partition) {
+      const mid = Math.floor((lo + hi) / 2);
+      if ('A1aceg'.includes(ch)) hi = mid; else lo = mid + 1;
+    }
+    return [lo, hi];
+  }
+
+  function slotLabel(a) {
+    if (a.slot_type === 'pool') return `Pool ${a.pool_number ?? '?'}`;
+    if (a.slot_type === 'team_match') return `${a.left_team_name || '?'} vs ${a.right_team_name || '?'}`;
+    if (!a.partition || a.partition === 'full') return `DE — Table of ${a.tableau ?? '?'}`;
+    const [lo, hi] = boutRangeForPartition(a.partition, a.tableau);
+    return lo === hi
+      ? `DE — Table of ${a.tableau}, bout ${lo}`
+      : `DE — Table of ${a.tableau}, bouts ${lo}–${hi}`;
+  }
+
+  async function showSetup() {
+    const root = document.getElementById('root');
+    let comps = [];
+    try { comps = await fetch('/api/competitions').then(r => r.json()); } catch (e) { /* shown as empty list */ }
+    root.innerHTML = `<div class="kiosk-setup"><h2>Select a competition</h2>${
+      comps.length
+        ? comps.map(c => `<a href="?competition_id=${c.id}">${escapeHtml(c.name)}</a>`).join('')
+        : '<p>No competitions found.</p>'
+    }</div>`;
+  }
+
+  function render(rows) {
+    const content = document.getElementById('content');
+    content.innerHTML = rows.length ? rows.map(f => `
+      <div class="kiosk-row">
+        <div class="kiosk-piste">${f.assignment.strip_number ?? '—'}</div>
+        <div>
+          <div class="kiosk-name">${escapeHtml(f.last_name)} ${escapeHtml(f.first_name)}</div>
+          <div class="kiosk-sub">${escapeHtml([f.club_name, f.nationality].filter(Boolean).join(' · '))}${f.club_name || f.nationality ? ' — ' : ''}${escapeHtml(slotLabel(f.assignment))}</div>
+        </div>
+        <div class="kiosk-time">${f.assignment.scheduled_start || '—'}</div>
+      </div>
+    `).join('') : '<div class="kiosk-empty">No fencers currently scheduled.</div>';
+
+    requestAnimationFrame(() => {
+      setupKioskScroll(document.getElementById('viewport'), document.getElementById('track'), content);
+    });
+  }
+
+  async function load() {
+    let fencers = [];
+    try {
+      fencers = await fetch(`/api/opp2/pipeline/competition/${compId}/fencers`).then(r => r.json());
+    } catch (e) { console.error('kiosk-fencers load error', e); }
+
+    const rows = fencers
+      .filter(f => f.assignment)
+      .sort((a, b) => {
+        const at = a.assignment.scheduled_start || '99:99';
+        const bt = b.assignment.scheduled_start || '99:99';
+        if (at !== bt) return at.localeCompare(bt);
+        return (a.assignment.strip_number ?? 999) - (b.assignment.strip_number ?? 999);
+      });
+    render(rows);
+  }
+
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function init() {
+    if (!compId) { await showSetup(); return; }
+    try {
+      const comp = await fetch(`/api/competitions/${compId}`).then(r => r.ok ? r.json() : null);
+      document.getElementById('comp-name').textContent = comp ? comp.name : 'Fencer Schedule';
+    } catch (e) { /* keep default title */ }
+
+    await load();
+    setInterval(load, 20000);
+    updateClock();
+    setInterval(updateClock, 1000);
+    window.addEventListener('resize', () => {
+      setupKioskScroll(document.getElementById('viewport'), document.getElementById('track'), document.getElementById('content'));
+    });
+  }
+
+  init();
+  setupKioskFullscreen();
+})();
+</script>
+</body>
+</html>
