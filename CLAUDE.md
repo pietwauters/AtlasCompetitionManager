@@ -1649,6 +1649,18 @@ where the same person already holds any officiating role, before committing.
   DB, not just Alpine state, so it survives a page reload.
 - Clearing an assignment (setting a role to none) can never create a conflict and always
   goes straight through.
+- **Availability-aware option ordering (added 2026-07-27):** each of the 5 officiating
+  `<select>`s is built from `officialOptionsFor(slot)`, which flags every referee `busy`
+  (same overlap check as above) and sorts available names first, busy ones last — busy
+  options stay fully selectable, just visually deprioritized (greyed, `— busy` suffix) so
+  a double-booking is still possible (e.g. deliberately, or once accepted via the conflict
+  modal) but never the default eye-catching choice.
+- **Start-time gate on assignment itself (added 2026-07-27):** a slot with no
+  `scheduled_start` has no time window to check overlap against at all — nobody can be
+  correctly flagged busy — so `assignOfficial` warns (shared `noStartTimeModal`, see
+  below) before assigning a person to such a slot, rather than silently skipping the
+  availability check. Clearing an assignment is exempt (never needs an availability
+  check either way).
 
 **`Pipeline.addSlot` defense-in-depth validation (added 2026-07-27):** rejects creating a
 `pool` slot with no `pool_id`, a `team_match` slot with no `team_match_id`, or a `de` slot
@@ -1665,11 +1677,14 @@ one for a multi-strip pool). Conversely, `Pipeline.updateSlot` now mirrors a slo
 `referee_id` back onto `pools.referee_id` whenever that slot is the pool's primary/home
 strip, so the two attributes can no longer drift apart from either direction.
 
-**Bulk-assign "no start time" warning (added 2026-07-27):** `public/opp2.html`'s bulk
-pool/DE-round assignment modal now warns before submitting with no start time set
-(predicted-end and overlap/conflict checks don't apply without one) — a small
-`noStartTimeModal` with Cancel / Continue anyway gates `submitBulkAssign()` via
-`confirmSubmitBulkAssign()`.
+**Shared "no start time" warning modal (added 2026-07-27):** `public/opp2.html` has one
+`noStartTimeModal` (Cancel / Continue anyway) reused by both places a missing
+`scheduled_start` blocks a real check: the bulk pool/DE-round assignment modal
+(`confirmSubmitBulkAssign()` gates `submitBulkAssign()`) and single-slot official
+assignment (`assignOfficial()` gates `_assignOfficialConfirmed()`, see above). The modal
+holds a generic `onContinue` callback set by whichever caller opened it, rather than
+hardcoding which action to resume — `continueNoStartTime()`/`cancelNoStartTime()` are
+the only two exit paths.
 
 **Key files added:**
 | Path | Purpose |

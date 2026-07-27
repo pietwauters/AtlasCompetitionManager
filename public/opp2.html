@@ -279,10 +279,11 @@
                         <label>Referee
                           <select @change="assignOfficial(slot, 'referee_id', $event.target.value)">
                             <option value="">— None —</option>
-                            <template x-for="r in referees" :key="r.referee_id">
+                            <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.referee_id == r.referee_id"
-                                x-text="r.last_name + ', ' + r.first_name"></option>
+                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
                         </label>
@@ -291,40 +292,44 @@
                         <label>Referee 2
                           <select @change="assignOfficial(slot, 'referee2_id', $event.target.value)">
                             <option value="">— None —</option>
-                            <template x-for="r in referees" :key="r.referee_id">
+                            <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.referee2_id == r.referee_id"
-                                x-text="r.last_name + ', ' + r.first_name"></option>
+                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
                         </label>
                         <label>Video assistant
                           <select @change="assignOfficial(slot, 'video_assistant_id', $event.target.value)">
                             <option value="">— None —</option>
-                            <template x-for="r in referees" :key="r.referee_id">
+                            <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.video_assistant_id == r.referee_id"
-                                x-text="r.last_name + ', ' + r.first_name"></option>
+                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
                         </label>
                         <label>Assessor 1
                           <select @change="assignOfficial(slot, 'assessor1_id', $event.target.value)">
                             <option value="">— None —</option>
-                            <template x-for="r in referees" :key="r.referee_id">
+                            <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.assessor1_id == r.referee_id"
-                                x-text="r.last_name + ', ' + r.first_name"></option>
+                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
                         </label>
                         <label>Assessor 2
                           <select @change="assignOfficial(slot, 'assessor2_id', $event.target.value)">
                             <option value="">— None —</option>
-                            <template x-for="r in referees" :key="r.referee_id">
+                            <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.assessor2_id == r.referee_id"
-                                x-text="r.last_name + ', ' + r.first_name"></option>
+                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
                         </label>
@@ -728,17 +733,17 @@
     </div>
   </div>
 
-  <!-- ── Bulk assign: no start time warning ──────────────────────────────────── -->
-  <div class="modal-backdrop" x-show="noStartTimeModal.open" @click.self="noStartTimeModal.open=false">
+  <!-- ── No start time warning (bulk assign / official assignment) ───────────── -->
+  <div class="modal-backdrop" x-show="noStartTimeModal.open" @click.self="cancelNoStartTime()">
     <div class="modal-box" style="width:min(420px,90vw)">
       <h2 style="margin:0 0 1rem">⚠ No start time set</h2>
       <p style="font-size:.9rem;margin:0 0 1rem">
-        These slots will be assigned without a scheduled start time, so predicted-end
-        times and overlap checks won't apply. Continue anyway?
+        This slot has no scheduled start time, so predicted-end times and
+        availability/overlap checks can't be applied. Continue anyway?
       </p>
       <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button @click="noStartTimeModal.open=false">Cancel</button>
-        <button class="primary" @click="noStartTimeModal.open=false; submitBulkAssign()">Continue anyway</button>
+        <button @click="cancelNoStartTime()">Cancel</button>
+        <button class="primary" @click="continueNoStartTime()">Continue anyway</button>
       </div>
     </div>
   </div>
@@ -943,7 +948,7 @@ function app() {
       order: null, cascade: true,
     },
     restoreModal: { open: false, slot: null, pairedSlot: null, originalStart: null, stripName: '' },
-    noStartTimeModal: { open: false },
+    noStartTimeModal: { open: false, onContinue: null },
     drag: { id: null, overSlotId: null },
     ganttVersion: 0,
     wantMulti: false,
@@ -1341,9 +1346,23 @@ function app() {
     // Checks whether that person already has an overlapping assignment (in any
     // of the 5 roles, on any strip) before committing — clearing an assignment
     // (value null) can never create a conflict, so it always goes straight
-    // through updateSlot.
+    // through updateSlot. Without a scheduled_start on this slot there's no
+    // time window to check overlap against at all, so availability can't be
+    // determined — warn before assigning rather than silently letting a real
+    // double-booking through undetected.
     async assignOfficial(slot, field, rawValue) {
       const value = rawValue || null;
+      if (value && !slot.scheduled_start) {
+        this.noStartTimeModal = {
+          open: true,
+          onContinue: () => this._assignOfficialConfirmed(slot, field, value),
+        };
+        return;
+      }
+      await this._assignOfficialConfirmed(slot, field, value);
+    },
+
+    async _assignOfficialConfirmed(slot, field, value) {
       if (!value) {
         await this.updateSlot(slot.id, { [field]: value });
         await this._checkConflictResolutions(slot.id);
@@ -1363,6 +1382,20 @@ function app() {
         currentSlot: slot, otherSlot: conflict.slot, otherRole: conflict.role,
         order: null, cascade: true,
       };
+    },
+
+    // Options for an official <select>, sorted available-first then
+    // busy-last (overlapping-assignment busy, per _findRefereeConflict) —
+    // busy ones stay selectable, just visually deprioritized/greyed. When
+    // the slot has no scheduled_start, availability can't be determined at
+    // all (see assignOfficial above), so nobody is flagged busy here either.
+    officialOptionsFor(slot) {
+      return this.referees
+        .map(r => ({ ...r, busy: !!this._findRefereeConflict(slot, r.referee_id) }))
+        .sort((a, b) => {
+          if (a.busy !== b.busy) return a.busy ? 1 : -1;
+          return (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name);
+        });
     },
 
     async cancelConflict() {
@@ -1985,10 +2018,24 @@ function app() {
     confirmSubmitBulkAssign() {
       if (!this.bulkReadyToSubmit) return;
       if (!this.bulkModal.startTime) {
-        this.noStartTimeModal.open = true;
+        this.noStartTimeModal = { open: true, onContinue: () => this.submitBulkAssign() };
         return;
       }
       this.submitBulkAssign();
+    },
+
+    async cancelNoStartTime() {
+      this.noStartTimeModal = { open: false, onContinue: null };
+      // Same reasoning as cancelConflict(): a <select> here uses :selected
+      // bindings, not x-model, so the browser may already be showing the
+      // just-picked (uncommitted) option — reload to snap it back.
+      await this.loadStrips();
+    },
+
+    async continueNoStartTime() {
+      const fn = this.noStartTimeModal.onContinue;
+      this.noStartTimeModal = { open: false, onContinue: null };
+      if (fn) await fn();
     },
 
     async submitBulkAssign() {
