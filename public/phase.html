@@ -53,6 +53,11 @@
       <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+      <button x-show="pools.length>0" @click="autoAssignReferees()"
+              style="background:#eef6ff;color:#1a6bab;border-color:#b8d4ef"
+              title="Draw referees for every pool from the competition's roster, avoiding a nationality/club conflict where possible (FIE t.50.1-2)">
+        ⚡ Auto-assign referees
+      </button>
       <button x-show="phase?.status==='finished'"
               style="background:#fff3cd;color:#856404;border-color:#ffc107"
               @click="reopenPhase()">↩ Reopen round</button>
@@ -251,6 +256,18 @@ function app() {
       if(!r.ok){this.showNotice(data.error||'Simulate failed',true);return;}
       this.showNotice('Simulated '+data.simulated+' bout(s)');
       await Promise.all([this.loadPhase(), this.loadRankings()]);
+    },
+
+    async autoAssignReferees() {
+      const r = await fetch('/api/phases/'+phaseId+'/auto-assign-referees', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Auto-assign failed', true); return; }
+      let msg = 'Assigned '+data.assigned.length+' referee(s)';
+      const withConflict = data.assigned.filter(a => a.conflicts > 0).length;
+      if (withConflict) msg += ' ('+withConflict+' with an unavoidable nationality/club conflict)';
+      if (data.unassigned.length) msg += ' — '+data.unassigned.length+' pool(s) left unassigned: not enough referees in the roster';
+      this.showNotice(msg, data.unassigned.length > 0);
+      await this.loadPhase();
     },
 
     async reopenPhase() {

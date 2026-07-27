@@ -6,6 +6,7 @@ const Phase     = require('../services/phases');
 const Pool      = require('../services/pools');
 const SSE       = require('../lib/sse');
 const DeLayout  = require('../services/deLayout');
+const PoolRefereeAssignment = require('../services/poolRefereeAssignment');
 
 const router = express.Router();
 
@@ -25,6 +26,17 @@ router.get('/:id/rankings', (req, res) => {
 
 router.get('/:id/pools', (req, res) => {
   res.json(Pool.findByPhase(req.params.id));
+});
+
+// Auto-assign a referee to every pool in this phase (FIE t.50.1-2: drawing
+// lots, avoiding a nationality/club conflict with the pool's fencers "if
+// possible" per the competition's referee_separation setting).
+router.post('/:id/auto-assign-referees', (req, res) => {
+  try {
+    res.json(PoolRefereeAssignment.autoAssign(req.params.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
 });
 
 router.post('/:id/close', (req, res) => {

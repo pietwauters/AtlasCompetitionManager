@@ -412,6 +412,56 @@ ranking UI only).
   nationality-neutrality check from `referee_separation` above) — this pass only adds
   the ranked-list data model and UI, not the draw itself.
 
+### Pool referee auto-assignment (added 2026-07-27)
+FIE Technical Rules t.50.1-2, for pools specifically (simpler than the DE-table
+mechanism above, which needs the ranked list): *"the Refereeing Delegates select the
+referees by drawing lots... the referee must be of a different nationality from any of
+the fencers in the pool if possible."* No algorithm is specified beyond that — unlike
+pool *formation* (exact serpentine + swap rules, byte-verified bout-order tables), FIE
+leaves the actual "if possible" conflict-resolution procedure entirely up to the
+organizers. `services/poolRefereeAssignment.js`'s `autoAssign(phaseId)` is Atlas's own
+choice of procedure, not a spec-mandated one:
+- Draws only from the competition's registered referee roster
+  (`services/competitionReferees.js` — "the referees present", t.50.1), not the global
+  referee list. Shuffles that roster before matching each time (drawing-lots spirit —
+  which referee lands where, among equally-valid options, isn't deterministic).
+- Every pool in a phase runs at the same time, so no two pools may share a referee —
+  this is a genuine bipartite matching problem (pools ↔ compatible referees), not
+  something brute force could ever handle at scale (40 pools is 40! permutations).
+  `lib/bipartiteMatching.js`'s `maxBipartiteMatching` is a plain textbook Kuhn's
+  augmenting-path algorithm — small, generic, reusable, O(pools × edges), instant at
+  this app's scale (dozens of pools).
+- Conflict count per (pool, referee) pair = how many of the competition's
+  `referee_separation` criteria (nationality/club) that referee violates against *any*
+  fencer in the pool — 0, 1, or 2. A referee with no club never counts as a club
+  conflict (`club` design note under the `referee_separation` flag above). Assignment
+  proceeds in threshold stages: first find the maximum possible set of *fully clean*
+  (threshold-0) assignments via bipartite matching, then — only for pools still
+  unmatched, only using referees not already used — retry allowing threshold-1
+  (one criterion violated), then threshold-2, etc. This finds the true maximum
+  clean-assignment count first (not a greedy first-fit that could leave an avoidable
+  conflict), and only ever accepts a conflict where no clean option exists at all.
+- Pools left unmatched even after exhausting every referee in the roster mean there
+  are genuinely fewer registered referees than pools running simultaneously — reported
+  back as `unassigned`, not silently double-booked or dropped; the director adds more
+  referees to the roster or assigns those by hand.
+- Writes through `Pool.update(poolId, {referee_id})`, which — moved into
+  `services/pools.js` itself in this same pass (previously this mirroring only lived
+  inside `routes/pools.js`'s PATCH handler, so any other caller bypassing that specific
+  route, like this new bulk-assignment service, would have silently left
+  `pipeline_slots.referee_id` stale) — mirrors onto every pipeline slot for that pool.
+  This is a genuine latent-bug fix, not just a refactor: the invariant belongs at the
+  data layer, not one particular HTTP entry point.
+- **Deliberately out of scope:** cross-phase/cross-competition scheduling conflicts
+  (a referee already busy on a different phase's overlapping pipeline slot) — that's
+  `opp2.html`'s separate time-window double-booking check (see "Referee/official
+  double-booking detection" above), which only applies once slots are actually
+  scheduled onto strips/times; this feature only guarantees distinctness *within* one
+  phase's own simultaneous pools.
+- UI: "⚡ Auto-assign referees" button on `phase.html`'s phase-header actions row
+  (`POST /api/phases/:id/auto-assign-referees`), reports how many were assigned, how
+  many had an unavoidable conflict, and how many pools were left unassigned.
+
 ### Pool phase (complete)
 - FIE serpentine seeding + separation (nationality for FIE formats; club also supported for
   non-FIE rule files — see "Pool formation" above)

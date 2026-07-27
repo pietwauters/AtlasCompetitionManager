@@ -1,6 +1,7 @@
 'use strict';
-const db   = require('../db');
-const Bout = require('./bouts');
+const db       = require('../db');
+const Bout     = require('./bouts');
+const Pipeline = require('./pipeline');
 const { distributeBoutsToStrips } = require('../lib/multiStripPool');
 
 const Pool = {
@@ -22,7 +23,7 @@ const Pool = {
       SELECT
         c.id AS competitor_id, c.initial_seed,
         c.first_name, c.last_name, c.nationality,
-        cl.name AS club_name
+        p2.club_id, cl.name AS club_name
       FROM pool_competitors pc
       JOIN competitors c  ON c.id  = pc.competitor_id
       LEFT JOIN people p2 ON p2.id = c.person_id
@@ -128,11 +129,27 @@ const Pool = {
 
   // Only referee_id is a direct pool attribute. Strip assignment is owned
   // by the pipeline — use Pipeline.addSlot / Pipeline.deleteSlot for that.
+  //
+  // pipeline_slots.referee_id is the value actually sent to the apparatus
+  // over OPP2 and shown on the schedule/referee-schedule pages, so any
+  // change to a pool's referee_id here is mirrored onto every pipeline slot
+  // for this pool (there can be more than one, for a multi-strip pool) —
+  // this is the data-layer invariant itself, not just something the PATCH
+  // route happens to do, so any other caller (e.g. bulk auto-assignment)
+  // gets it for free too.
   update(poolId, data) {
     const current = db.prepare('SELECT * FROM pools WHERE id = ?').get(poolId);
     if (!current) return null;
     const newRefId = 'referee_id' in data ? (data.referee_id ?? null) : current.referee_id;
     db.prepare('UPDATE pools SET referee_id = ? WHERE id = ?').run(newRefId, Number(poolId));
+
+    if ('referee_id' in data) {
+      const slots = db.prepare('SELECT id FROM pipeline_slots WHERE pool_id = ?').all(poolId);
+      for (const slot of slots) {
+        Pipeline.updateSlot(slot.id, { referee_id: newRefId });
+      }
+    }
+
     return this.findById(poolId);
   },
 };

@@ -20,12 +20,10 @@ router.get('/:id', (req, res) => {
 
 // Assign strip and/or referee to a pool.
 // Body: { strip_id?, referee_id? }
-// strip_id routes through Pipeline (single source of truth).
-// referee_id is a direct pool attribute, but pipeline_slots.referee_id is
-// the one actually sent to the apparatus over OPP2 and shown on the
-// schedule/referee-schedule pages — mirror onto every pipeline slot for
-// this pool (there can be more than one for a multi-strip pool) so the two
-// never drift apart.
+// strip_id routes through Pipeline (single source of truth). referee_id is a
+// direct pool attribute; Pool.update mirrors it onto every pipeline slot for
+// this pool so pipeline_slots.referee_id (what's actually sent to the
+// apparatus over OPP2 and shown on the schedule pages) never drifts.
 router.patch('/:id', (req, res) => {
   try {
     const pool = Pool.findById(req.params.id);
@@ -44,13 +42,6 @@ router.patch('/:id', (req, res) => {
     const updated = 'referee_id' in req.body
       ? Pool.update(req.params.id, { referee_id: req.body.referee_id })
       : Pool.findById(req.params.id);
-
-    if ('referee_id' in req.body) {
-      const slots = db.prepare('SELECT id FROM pipeline_slots WHERE pool_id = ?').all(pool.id);
-      for (const slot of slots) {
-        Pipeline.updateSlot(slot.id, { referee_id: req.body.referee_id ?? null });
-      }
-    }
 
     res.json(updated);
   } catch (e) {
