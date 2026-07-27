@@ -29,6 +29,9 @@
         <div class="card" id="tournament-detail">
             <span class="loading">Loading…</span>
         </div>
+        <div class="card" id="tournament-referees">
+            <span class="loading">Loading…</span>
+        </div>
     </main>
     <script>
         // Get tournament id from URL
@@ -38,6 +41,131 @@
             if (urlParams.has('tournament')) return urlParams.get('tournament');
             const m = window.location.pathname.match(/tournaments\/(\d+)/);
             return m ? m[1] : null;
+        }
+
+        // ── Referee roster (tournament-wide) ────────────────────────────────
+        let lastTournamentRoster = [];
+        let lastEligibleTournamentReferees = [];
+        let selectedTournamentRefIds = [];
+        let tournamentRefClubFilter = '';
+
+        async function loadTournamentReferees() {
+            const id = getTournamentId();
+            if (!id) return;
+            const [roster, eligible] = await Promise.all([
+                fetch(`/api/tournaments/${id}/referees`).then(r => r.json()),
+                fetch(`/api/tournaments/${id}/referees/eligible`).then(r => r.json()),
+            ]);
+            lastTournamentRoster = roster;
+            lastEligibleTournamentReferees = eligible;
+            renderTournamentReferees();
+        }
+
+        function renderTournamentReferees() {
+            const roster = lastTournamentRoster;
+            const clubs = [...new Set(lastEligibleTournamentReferees.map(r => r.club_name).filter(Boolean))].sort();
+            let eligible = lastEligibleTournamentReferees;
+            if (tournamentRefClubFilter) eligible = eligible.filter(r => r.club_name === tournamentRefClubFilter);
+
+            const rosterRows = roster.length
+                ? roster.map((r, i) => `
+                    <tr>
+                        <td data-label="Rank" style="white-space:nowrap">
+                            <span style="display:inline-block;min-width:1.4rem;text-align:right">${r.rank_order || '—'}</span>
+                            <button style="font-size:.7rem;padding:.05rem .3rem" ${i === 0 ? 'disabled' : ''} onclick="moveTournamentReferee(${r.referee_id},'up')">▲</button>
+                            <button style="font-size:.7rem;padding:.05rem .3rem" ${i === roster.length - 1 ? 'disabled' : ''} onclick="moveTournamentReferee(${r.referee_id},'down')">▼</button>
+                        </td>
+                        <td data-label="Name">${esc(r.last_name)}, ${esc(r.first_name)}</td>
+                        <td data-label="Club">${esc(r.club_name || '—')}</td>
+                        <td data-label="Nationality">${esc(r.nationality || '—')}</td>
+                        <td data-label="Level">${esc(r.level || '—')}</td>
+                        <td data-label="Actions"><button class="danger" onclick="removeTournamentReferee(${r.referee_id})">✕</button></td>
+                    </tr>`).join('')
+                : `<tr><td colspan="6" style="text-align:center;color:#999;padding:1rem">No referees yet. Add from the list below.</td></tr>`;
+
+            const eligibleRows = eligible.length
+                ? eligible.map(r => `
+                    <tr class="elig-row${r.is_registered ? ' registered' : ''}">
+                        <td>${r.is_registered
+                            ? '<span class="badge badge-registered">✓ added</span>'
+                            : `<input type="checkbox" ${selectedTournamentRefIds.includes(r.referee_id) ? 'checked' : ''} onchange="toggleTournamentRefSelect(${r.referee_id}, this.checked)">`}</td>
+                        <td>${esc(r.last_name)}, ${esc(r.first_name)}</td>
+                        <td>${esc(r.club_name || '—')}</td>
+                        <td>${esc(r.nationality || '—')}</td>
+                        <td>${esc(r.level || '—')}</td>
+                    </tr>`).join('')
+                : `<tr><td colspan="5" style="text-align:center;color:#999;padding:1rem">No referees found.</td></tr>`;
+
+            document.getElementById('tournament-referees').innerHTML = `
+                <h2 style="margin-top:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+                    <span>Referees</span>
+                    <span style="font-weight:400;font-size:.85rem;color:#888">(${roster.length})</span>
+                    <button style="margin-left:auto;font-size:.78rem;padding:.25rem .6rem" ${roster.length ? '' : 'disabled'}
+                            onclick="autoRankTournamentReferees()" title="Rank by referee level (t.50.3: best referees per weapon)">
+                        ⚡ Auto-rank by level
+                    </button>
+                </h2>
+                <table class="table-responsive"><thead><tr><th>Rank</th><th>Name</th><th>Club</th><th>Nationality</th><th>Level</th><th></th></tr></thead>
+                <tbody>${rosterRows}</tbody></table>
+
+                <h3 style="margin:1.5rem 0 .5rem">Add referees</h3>
+                <div class="toolbar">
+                    <select style="flex:1;min-width:100px" onchange="setTournamentRefClubFilter(this.value)">
+                        <option value="">All clubs</option>
+                        ${clubs.map(c => `<option value="${esc(c)}" ${c === tournamentRefClubFilter ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                    </select>
+                    <button class="primary" ${selectedTournamentRefIds.length ? '' : 'disabled'} onclick="addSelectedTournamentReferees()">${
+                        selectedTournamentRefIds.length ? 'Add ' + selectedTournamentRefIds.length + ' selected' : 'Select referees'
+                    }</button>
+                </div>
+                <table class="table-responsive"><thead><tr><th></th><th>Name</th><th>Club</th><th>Nationality</th><th>Level</th></tr></thead>
+                <tbody>${eligibleRows}</tbody></table>
+            `;
+        }
+
+        function setTournamentRefClubFilter(v) { tournamentRefClubFilter = v; renderTournamentReferees(); }
+        function toggleTournamentRefSelect(id, checked) {
+            id = Number(id);
+            if (checked) { if (!selectedTournamentRefIds.includes(id)) selectedTournamentRefIds.push(id); }
+            else { selectedTournamentRefIds = selectedTournamentRefIds.filter(x => x !== id); }
+            renderTournamentReferees();
+        }
+        async function addSelectedTournamentReferees() {
+            const id = getTournamentId();
+            if (!id || !selectedTournamentRefIds.length) return;
+            const r = await fetch(`/api/tournaments/${id}/referees/bulk`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ referee_ids: selectedTournamentRefIds }),
+            });
+            const data = await r.json();
+            if (!r.ok) { alert(data.error || 'Add failed'); return; }
+            selectedTournamentRefIds = [];
+            await loadTournamentReferees();
+        }
+        async function removeTournamentReferee(refereeId) {
+            const id = getTournamentId();
+            if (!id) return;
+            if (!confirm('Remove this referee from the tournament?')) return;
+            const r = await fetch(`/api/tournaments/${id}/referees/${refereeId}`, { method: 'DELETE' });
+            if (!r.ok) { const d = await r.json(); alert(d.error || 'Remove failed'); return; }
+            await loadTournamentReferees();
+        }
+        async function autoRankTournamentReferees() {
+            const id = getTournamentId();
+            if (!id) return;
+            const r = await fetch(`/api/tournaments/${id}/referees/auto-rank`, { method: 'POST' });
+            if (!r.ok) { const d = await r.json(); alert(d.error || 'Auto-rank failed'); return; }
+            await loadTournamentReferees();
+        }
+        async function moveTournamentReferee(refereeId, direction) {
+            const id = getTournamentId();
+            if (!id) return;
+            const r = await fetch(`/api/tournaments/${id}/referees/${refereeId}/reorder`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction }),
+            });
+            if (!r.ok) { const d = await r.json(); alert(d.error || 'Move failed'); return; }
+            await loadTournamentReferees();
         }
         async function loadTournamentDetail() {
             const id = getTournamentId();
@@ -62,6 +190,7 @@
         }
         function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         window.addEventListener('DOMContentLoaded', loadTournamentDetail);
+        window.addEventListener('DOMContentLoaded', loadTournamentReferees);
     </script>
     <script src="/js/nav.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

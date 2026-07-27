@@ -511,3 +511,28 @@ button.warning:hover { background: #d97706; }
    restart on most browsers. Static (no scroll) whenever the content
    already fits — most competitions, most of the time. */
 .kiosk-viewport { overflow: hidden; height: 100%; }
+
+/* ── Collapsible section (native <details>/<summary>, no JS) ─────────────── */
+/* A card whose <summary> is the section heading — click to expand/collapse.
+   Use for grouping several related cards (e.g. a roster + its "add" panel)
+   under one collapsible header instead of always showing both at once. */
+details.card > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--clr-brand);
+  user-select: none;
+  list-style: none;
+}
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: .5rem;
+  transition: transform .15s ease;
+}
+details.card[open] > summary::before {
+  transform: rotate(90deg);
+}
+details.card[open] > summary {
+  margin-bottom: 1rem;
+}

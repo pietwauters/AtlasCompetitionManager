@@ -285,6 +285,132 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Eligibility filter (gender + weapon + age)
 - Auto-seed from national ranking
 - UI: `public/tournaments.html`, `public/competition-detail.html`
+- **`referee_separation` flag (added 2026-07-27, storage/UI only):** a `competitions`
+  column (migration `032_competition_referee_separation.sql`) recording which fencer
+  attribute(s) — `nationality`, `club`, both (`nationality,club`), or none (`''`/`null`)
+  — a referee/official assignment should avoid matching, per FIE Technical Rules t.50.2/
+  t.50.3 (pool/DE referees should be a different nationality from the pool/quarter's
+  fencers "if possible"). Same comma-separated value vocabulary and option labels as the
+  existing per-phase `poolSeparation` picker in `competition-detail.html`, but this is a
+  **separate, competition-level** setting — `poolFormation.separation` (rule-file/
+  per-phase, governs fencer-vs-fencer pool separation) is untouched and unrelated. Editable
+  via a "Referee neutrality" `<select>` on the competition header
+  (`competition-detail.html`), persisted through the normal `PATCH /api/competitions/:id`.
+  **Not yet consumed anywhere** — `assignOfficial`/`officialOptionsFor` in `opp2.html`
+  still only check time-overlap availability (see "Referee/official double-booking
+  detection" below); wiring this flag into an actual nationality/club-neutrality warning
+  on that screen is deliberately deferred to a later pass. **Design note for that future
+  pass (2026-07-27):** a referee with no club (`club_id`/`club_name` null — an
+  unaffiliated or independent referee) should count as neutral for the `club` criterion
+  for local/domestic competitions — never flagged as sharing a club with any fencer,
+  regardless of the fencers' own clubs. No `nationality` equivalent was specified —
+  don't assume the same "null = neutral" treatment applies there without asking.
+
+### Referee rosters — tournament + competition (added 2026-07-27)
+Referees previously had no per-event registration at all — `opp2.html`'s officiating
+dropdowns list literally every referee in the DB (`GET /api/people?role=referee`), with
+no notion of "which referees are actually working this event." Added the same
+add-from-the-database roster mechanism fencers already have (`competitors`/eligible-list/
+bulk-add), at two levels:
+- **`tournament_referees` / `competition_referees`** (migration
+  `033_referee_rosters.sql`) — plain many-to-many join tables (`(tournament_id,
+  referee_id)` / `(competition_id, referee_id)`), no snapshot fields (unlike
+  `competitors`, which freezes a fencer's identity at registration time — a referee's
+  identity doesn't need freezing the same way, so this is a live join to `referees`/
+  `people`/`clubs`).
+- **A competition's *effective* roster is the union** of its own
+  `competition_referees` rows and its parent tournament's `tournament_referees` rows
+  (`services/competitionReferees.js`'s `findAll`/`findEligible`, `LEFT JOIN ... ON
+  tr.tournament_id = @tournament_id` — degrades correctly to "no match" for a
+  tournament-less competition since SQL `x = NULL` is never true, no sentinel value
+  needed). Each row is tagged `via: 'competition' | 'tournament' | 'both'` — only
+  `'competition'`/`'both'` rows can be removed from the competition's own roster page;
+  a `'tournament'`-only row must be removed from the tournament roster instead (adding
+  it there again at the competition level, making it `'both'`, is what makes it
+  independently removable per-competition without affecting the tournament roster).
+- `services/tournamentReferees.js` mirrors the same shape one level up (no union to
+  compute — a tournament roster is just its own table).
+- Routes: `GET/POST .../referees`, `GET .../referees/eligible`, `POST
+  .../referees/bulk` (body `{referee_ids: [...]}`), `DELETE .../referees/:refereeId` —
+  both mounted the same way as the existing `:compId/competitors` pattern:
+  `/api/tournaments/:tid/referees` (`routes/tournamentReferees.js`) and
+  `/api/competitions/:compId/referees` (`routes/competitionReferees.js`), both gated
+  `writeOnly('director')` in `server.js`.
+- UI: `competition-detail.html` gained a "Referees"/"Add referees" two-card panel
+  (identical interaction pattern to the existing "Competitors"/"Add fencers" panel —
+  club-filterable eligible list, bulk-select, bulk-add) plus a `via`-tagged badge and a
+  remove button hidden for tournament-only rows. `tournaments-detail.html` — a
+  vanilla-JS/innerHTML page (no Alpine `x-data`, unlike every other detail page; not
+  refactored to Alpine here since that's a pre-existing inconsistency out of this
+  task's scope) — gained an equivalent card using the same manual
+  fetch-then-`innerHTML` idiom already used for its competitions list, with cached
+  last-fetched roster/eligible arrays so a checkbox toggle or club-filter change
+  re-renders from the cache instead of re-fetching.
+- **Deliberately not done, per explicit scoping decision:** `opp2.html`'s officiating
+  assignment screen still pulls from every referee in the DB — it does not yet filter
+  to a competition's roster. That's a separate follow-up, same deferred-wiring pattern
+  as the `referee_separation` flag above.
+- **Collapsible grouping (added 2026-07-27):** the existing "Competitors"/"Add fencers"
+  pair and the new "Referees"/"Add referees" pair are each wrapped in a
+  `<details class="card" open>`/`<summary>` (native, no JS) instead of always-visible
+  bare `.layout-detail` grids — shared styling in `style.css`'s "Collapsible section"
+  block (`details.card > summary`, custom ▸/▾ marker replacing the browser default).
+  Reuses the same pattern `people.html`'s CSV-import section already established
+  (`<details>`/`<summary>` inside a card), generalized into a shared, reusable class
+  rather than that page's one-off local CSS.
+
+### Referee roster ranking (added 2026-07-27)
+FIE Technical Rules t.50.3: for the DE table, Refereeing Delegates "establish, among
+the referees present, a list of the best referees at each weapon (according to the
+grades obtained during the season)" — draws are then made from within that ranked
+list. `tournament_referees`/`competition_referees` both gained a `rank_order` column
+(migration `034_referee_roster_ranking.sql`, nullable — unranked rows sort last,
+alphabetically, until ranked) to model exactly this list, ahead of actually building
+the lot-draw mechanism itself (not started — this is the data model + manual/auto
+ranking UI only).
+- **`lib/refereeLevel.js`'s `compareByLevel`** — best-effort ordering for the free-text
+  `referees.level` field: letter grades (`A`/`B`/`C`) rank above any numeric grade
+  (matching the real FIE Engarde export convention found in `docs/GP/*.xml` — see
+  below), numeric grades ascending (`1` best, matching this app's own seed data
+  convention, e.g. `"1.0"`.."4.0"`), anything else/blank last. Shared by both
+  `autoRankByLevel` methods so the two rosters can't drift on convention.
+- **`autoRankByLevel(id)`** (both services) — full re-rank: sorts the whole roster by
+  `compareByLevel`, ties broken alphabetically, writes sequential `rank_order` 1..N.
+  Always a full reset, not a "nudge" — re-running it after manual reordering discards
+  the manual order, which is the intended, obvious behavior of an "auto-rank" button.
+- **`moveRank(id, refereeId, direction)`** (both services) — swaps a referee with its
+  neighbor in the *current displayed order*. Always normalizes every row in the roster
+  to sequential `rank_order` first (current order — ranked if set, else the
+  alphabetical fallback `findAll` already applies), so up/down works correctly even
+  before anything has ever been ranked — no need to force "auto-rank first."
+- **Competition-level ranking on a tournament-only referee promotes them to
+  `via: 'both'`** — `CompetitionReferee.autoRankByLevel`/`moveRank` `INSERT OR IGNORE`
+  a `competition_referees` row for every referee touched before writing `rank_order`
+  (a tournament-only referee has no competition-level row to rank otherwise). Considered
+  correct, not a bug: giving a referee a competition-specific rank is itself a
+  competition-specific fact worth recording, same reasoning as the existing `via`
+  design from the roster feature above.
+- UI: a "Rank" column (number + ▲/▼ buttons, disabled at the ends of the list) and an
+  "⚡ Auto-rank by level" button on the roster card header, on both
+  `competition-detail.html` (Alpine) and `tournaments-detail.html` (vanilla JS/innerHTML,
+  matching that page's existing idiom).
+- **What real FIE XML data confirms (`docs/GP/*.xml` — see also "FIE Organisation
+  Rules"/Technical Rules reference in memory):** referees carry a letter grade **per
+  weapon** (`CategorieFleuret="B"` in the sample Grand Prix files, alongside a base
+  `Categorie="B"`) — confirms t.50.3's "grades... at each weapon" is a real, already-
+  modeled Engarde concept, not just spec text; this app's own single `referees.level`
+  field is a simplification (not changed here — out of scope for this pass, flagged for
+  later if per-weapon grading is ever wanted). **The referee list order in these XML
+  files is alphabetical by surname, not a performance ranking** — so there's no ranking
+  signal to import from real competition exports; the actual t.50.3 "list of best
+  referees" is decided live by the Refereeing Delegates and never appears in the
+  results/roster export. No per-bout/per-pool referee assignment is recorded in these
+  files either (no `IdArbitre`-type linkage) — consistent with Atlas tracking that
+  itself (`pipeline_slot_officials`) rather than expecting to import it.
+- **Not yet built:** the actual t.50.3 lot-draw mechanism (drawing referees for a
+  specific pool/DE-quarter/final from within the top of this ranked list, with the
+  nationality-neutrality check from `referee_separation` above) — this pass only adds
+  the ranked-list data model and UI, not the draw itself.
 
 ### Pool phase (complete)
 - FIE serpentine seeding + separation (nationality for FIE formats; club also supported for

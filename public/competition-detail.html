@@ -73,6 +73,20 @@
               style="background:#f8d7da;color:#721c24;border-color:#f5c6cb"
               @click="setStatus('active')">↩ Reopen competition</button>
     </div>
+    <div style="margin-top:.6rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <label style="font-size:.83rem;display:flex;align-items:center;gap:.4rem">
+        Referee neutrality
+        <select class="inline" x-model="refereeSeparation" @change="updateRefereeSeparation()">
+          <option value="">None</option>
+          <option value="club">Club (local competitions)</option>
+          <option value="nationality">Nationality (international)</option>
+          <option value="nationality,club">Nationality + Club</option>
+        </select>
+      </label>
+      <span style="font-size:.78rem;color:#888">
+        Which fencer attribute(s) a referee/official assignment should avoid matching — not yet enforced automatically.
+      </span>
+    </div>
   </div>
 
   <!-- ── Rounds ──────────────────────────────────── -->
@@ -410,7 +424,9 @@
 
   <!-- ── Individual competitors (non-team competitions only) ── -->
 
-  <div class="layout-detail">
+  <details class="card" open>
+  <summary><h2 style="display:inline;margin:0">Fencers</h2></summary>
+  <div class="layout-detail" style="margin-top:1rem">
     <!-- Registered competitors -->
     <div class="card">
       <h2 style="margin-top:0">
@@ -499,6 +515,94 @@
       </table>
     </div>
   </div>
+  </details>
+
+  <!-- ── Referees ── -->
+  <details class="card" open>
+  <summary><h2 style="display:inline;margin:0">Referees</h2></summary>
+  <div class="layout-detail" style="margin-top:1rem">
+    <!-- Assigned referees -->
+    <div class="card">
+      <h2 style="margin-top:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <span>Referees</span>
+        <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+refereeRoster.length+')'"></span>
+        <button style="margin-left:auto;font-size:.78rem;padding:.25rem .6rem" @click="autoRankReferees()"
+                :disabled="refereeRoster.length===0" title="Rank by referee level (t.50.3: best referees per weapon)">
+          ⚡ Auto-rank by level
+        </button>
+      </h2>
+      <table>
+        <thead><tr><th>Rank</th><th>Name</th><th>Club</th><th>Nationality</th><th>Level</th><th></th><th></th></tr></thead>
+        <tbody>
+          <template x-for="(r, i) in refereeRoster" :key="r.referee_id">
+            <tr>
+              <td style="white-space:nowrap">
+                <span x-text="r.rank_order||'—'" style="display:inline-block;min-width:1.4rem;text-align:right"></span>
+                <button style="font-size:.7rem;padding:.05rem .3rem" :disabled="i===0" @click="moveReferee(r,'up')">▲</button>
+                <button style="font-size:.7rem;padding:.05rem .3rem" :disabled="i===refereeRoster.length-1" @click="moveReferee(r,'down')">▼</button>
+              </td>
+              <td x-text="r.last_name+', '+r.first_name"></td>
+              <td x-text="r.club_name||'—'"></td>
+              <td x-text="r.nationality||'—'"></td>
+              <td x-text="r.level||'—'"></td>
+              <td>
+                <span class="badge badge-pending" x-show="r.via==='tournament'"
+                      title="Registered via the tournament's roster — remove from the tournament page">via tournament</span>
+                <span class="badge badge-pending" x-show="r.via==='both'"
+                      title="Also registered directly on this competition, on top of the tournament roster">tournament + here</span>
+              </td>
+              <td><button class="danger" x-show="r.via!=='tournament'" @click="removeCompetitionReferee(r)">✕</button></td>
+            </tr>
+          </template>
+          <tr x-show="refereeRoster.length===0">
+            <td colspan="7" style="text-align:center;color:#999;padding:1rem">No referees yet. Add from the right panel.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Eligible referees -->
+    <div class="card">
+      <h2 style="margin-top:0">Add referees</h2>
+      <div class="toolbar">
+        <select x-model="eligRefClub" style="flex:1;min-width:100px">
+          <option value="">All clubs</option>
+          <template x-for="c in eligRefClubs" :key="c"><option :value="c" x-text="c"></option></template>
+        </select>
+        <button class="primary" @click="addSelectedReferees()" :disabled="selectedRefIds.length===0"
+          x-text="selectedRefIds.length?'Add '+selectedRefIds.length+' selected':'Select referees'"></button>
+      </div>
+      <div style="margin-bottom:.5rem;font-size:.85rem">
+        <label style="cursor:pointer">
+          <input type="checkbox" @change="toggleSelectAllReferees($event.target.checked)" :checked="allEligibleRefereesSelected()">
+          Select all unregistered
+        </label>
+      </div>
+      <table>
+        <thead><tr><th></th><th>Name</th><th>Club</th><th>Nationality</th><th>Level</th></tr></thead>
+        <tbody>
+          <template x-for="r in filteredEligibleReferees" :key="r.referee_id">
+            <tr :class="'elig-row'+(r.is_registered?' registered':'')">
+              <td>
+                <template x-if="!r.is_registered">
+                  <input type="checkbox" :checked="selectedRefIds.includes(r.referee_id)" @change="toggleSelectReferee(r.referee_id,$event.target.checked)">
+                </template>
+                <span class="badge badge-registered" x-show="r.is_registered">✓ added</span>
+              </td>
+              <td x-text="r.last_name+', '+r.first_name"></td>
+              <td x-text="r.club_name||'—'"></td>
+              <td x-text="r.nationality||'—'"></td>
+              <td x-text="r.level||'—'"></td>
+            </tr>
+          </template>
+          <tr x-show="filteredEligibleReferees.length===0">
+            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No referees found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  </details>
 </main>
 <script>
 function app() {
@@ -506,8 +610,9 @@ function app() {
   return {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[],
     eligClub:'', eligGender:'', eligAge:'', eligSortKey:'rank', eligSortDir:1,
+    refereeRoster:[], eligibleReferees:[], selectedRefIds:[], eligRefClub:'',
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
-    newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club',
+    newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club', refereeSeparation:'',
     poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
     notice:{text:'',error:false},
     teams:[], newTeamName:'', addingTeam:false, expandedTeam:null,
@@ -519,6 +624,14 @@ function app() {
 
     get eligClubs() {
       return [...new Set(this.eligible.map(f=>f.club_name).filter(Boolean))].sort();
+    },
+    get eligRefClubs() {
+      return [...new Set(this.eligibleReferees.map(r=>r.club_name).filter(Boolean))].sort();
+    },
+    get filteredEligibleReferees() {
+      let list = this.eligibleReferees;
+      if (this.eligRefClub) list = list.filter(r => r.club_name === this.eligRefClub);
+      return [...list].sort((a,b) => (a.last_name+a.first_name).localeCompare(b.last_name+b.first_name));
     },
     get eligAges() {
       return [...new Set(this.eligible.map(f=>f.age).filter(Boolean))].sort((a,b)=>a-b);
@@ -549,7 +662,7 @@ function app() {
 
     async init() {
       if(!compId){this.showNotice('No competition ID in URL',true);return;}
-      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules(),this.loadFormats()]);
+      await Promise.all([this.loadComp(),this.loadCompetitors(),this.loadEligible(),this.loadPhases(),this.loadRules(),this.loadFormats(),this.loadRefereeRoster(),this.loadEligibleReferees()]);
       if(this.comp?.is_team) await this.loadTeams();
       if(this.comp?.format_id) await this.loadFormatPlan();
       this.$watch('selectedFormat', id => {
@@ -562,6 +675,13 @@ function app() {
     async loadComp() {
       this.comp=await fetch('/api/competitions/'+compId).then(r=>r.json());
       document.title='Atlas — '+(this.comp.name||'Competition');
+      this.refereeSeparation=this.comp.referee_separation||'';
+    },
+
+    async updateRefereeSeparation() {
+      await fetch('/api/competitions/'+compId,{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({referee_separation:this.refereeSeparation||null})});
+      await this.loadComp();
     },
     async loadCompetitors() {
       this.competitors=await fetch('/api/competitions/'+compId+'/competitors').then(r=>r.json());
@@ -580,6 +700,43 @@ function app() {
       this.selectedIds=[];
       await Promise.all([this.loadCompetitors(),this.loadEligible()]);
     },
+
+    async loadRefereeRoster() {
+      this.refereeRoster=await fetch('/api/competitions/'+compId+'/referees').then(r=>r.json());
+    },
+    async loadEligibleReferees() {
+      this.eligibleReferees=await fetch('/api/competitions/'+compId+'/referees/eligible').then(r=>r.json());
+    },
+    async addSelectedReferees() {
+      if(!this.selectedRefIds.length)return;
+      const r=await fetch('/api/competitions/'+compId+'/referees/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({referee_ids:this.selectedRefIds})});
+      const data=await r.json();
+      if(!r.ok){this.showNotice(data.error||'Add failed',true);return;}
+      this.showNotice('Added '+data.added+' referee(s)');
+      this.selectedRefIds=[];
+      await Promise.all([this.loadRefereeRoster(),this.loadEligibleReferees()]);
+    },
+    async removeCompetitionReferee(r) {
+      if(!confirm('Remove '+r.first_name+' '+r.last_name+' from this competition?'))return;
+      const res=await fetch('/api/competitions/'+compId+'/referees/'+r.referee_id,{method:'DELETE'});
+      if(!res.ok){const d=await res.json();this.showNotice(d.error||'Remove failed',true);return;}
+      await Promise.all([this.loadRefereeRoster(),this.loadEligibleReferees()]);
+    },
+    async autoRankReferees() {
+      const r=await fetch('/api/competitions/'+compId+'/referees/auto-rank',{method:'POST'});
+      const data=await r.json();
+      if(!r.ok){this.showNotice(data.error||'Auto-rank failed',true);return;}
+      this.showNotice('Ranked '+data.ranked+' referee(s) by level');
+      await this.loadRefereeRoster();
+    },
+    async moveReferee(r,direction) {
+      const res=await fetch('/api/competitions/'+compId+'/referees/'+r.referee_id+'/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction})});
+      if(!res.ok){const d=await res.json();this.showNotice(d.error||'Move failed',true);return;}
+      await this.loadRefereeRoster();
+    },
+    toggleSelectReferee(id,checked){ if(checked){if(!this.selectedRefIds.includes(id))this.selectedRefIds.push(id);}else{this.selectedRefIds=this.selectedRefIds.filter(x=>x!==id);} },
+    toggleSelectAllReferees(checked){ this.selectedRefIds=checked?this.filteredEligibleReferees.filter(r=>!r.is_registered).map(r=>r.referee_id):[]; },
+    allEligibleRefereesSelected() { const u=this.filteredEligibleReferees.filter(r=>!r.is_registered); return u.length>0&&u.every(r=>this.selectedRefIds.includes(r.referee_id)); },
 
     async removeCompetitor(c) {
       if(!confirm('Remove '+c.first_name+' '+c.last_name+' from this competition?'))return;
