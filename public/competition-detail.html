@@ -422,6 +422,27 @@
     </template>
   </div>
 
+  <!-- ── Presence warning before creating the first round ─────────────────── -->
+  <div class="modal-backdrop" x-show="presenceModal.open" @click.self="cancelPresenceModal()">
+    <div class="modal-box" style="width:min(480px,90vw)">
+      <h3 style="margin:0 0 1rem">⚠ Some fencers haven't checked in</h3>
+      <p style="font-size:.9rem;margin:0 0 1rem">
+        <strong x-text="presenceModal.unknownCount"></strong> registered fencer(s) have no explicit
+        presence status yet — not marked present, absent, or withdrawn. If you continue, only fencers
+        explicitly marked <strong>present</strong> will be entered into this round; the rest will be
+        left out entirely, not just skipped for later.
+      </p>
+      <p style="font-size:.85rem;color:#666;margin:0 0 1rem">
+        It's best to resolve this on the <a :href="'/checkin.html?id='+compId" target="_blank">check-in page</a>
+        first — explicitly withdraw/scratch fencers who won't show, rather than leaving them unknown.
+      </p>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button @click="cancelPresenceModal()">Cancel</button>
+        <button class="primary" @click="continuePresenceModal()">Continue with present fencers only</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Individual competitors (non-team competitions only) ── -->
 
   <details class="card" open>
@@ -611,6 +632,7 @@ function app() {
     compId, comp:null, competitors:[], eligible:[], selectedIds:[],
     eligClub:'', eligGender:'', eligAge:'', eligSortKey:'rank', eligSortDir:1,
     refereeRoster:[], eligibleReferees:[], selectedRefIds:[], eligRefClub:'',
+    presenceModal:{open:false,unknownCount:0,onContinue:null},
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
     newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club', refereeSeparation:'',
     poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
@@ -799,7 +821,8 @@ function app() {
       if (!r.ok) { this.showNotice(data.error||'Failed', true); return; }
       this.deOptions = data;
     },
-    async createDE() {
+    createDE() { this.maybeWarnPresence(() => this._createDENow()); },
+    async _createDENow() {
       const r = await fetch('/api/competitions/'+compId+'/phases/create-de', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ rule_doc: this.newRuleDoc, seeding_method: this.deSeedingMethod })
@@ -810,7 +833,8 @@ function app() {
       this.phaseFormOpen=false; this.deOptions=null; this.newRuleDoc='';
       await this.loadPhases();
     },
-    async createPhase() {
+    createPhase() { this.maybeWarnPresence(() => this._createPhaseNow()); },
+    async _createPhaseNow() {
       const sep = this.poolSeparation ? this.poolSeparation.split(',') : [];
       const r = await fetch('/api/competitions/'+compId+'/phases',{
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -821,6 +845,26 @@ function app() {
       this.showNotice('Round created with '+this.chosenSizes.length+' pools');
       this.phaseFormOpen=false; this.poolOptions=null; this.chosenSizes=null; this.newRuleDoc='';
       await this.loadPhases();
+    },
+
+    // Warn before creating the competition's very first round if any active
+    // competitor has no explicit presence status yet (checkin.html). Phase
+    // creation only ever includes checked_in=1 competitors (services/phases.js) —
+    // this is a heads-up so the operator isn't surprised by a smaller field
+    // than expected, not a way to include unknowns anyway.
+    maybeWarnPresence(onContinue) {
+      if (this.phases.length > 0) { onContinue(); return; }
+      const unknown = this.competitors.filter(c => c.competitor_status==='active' && c.checked_in!==1).length;
+      if (!unknown) { onContinue(); return; }
+      this.presenceModal = { open: true, unknownCount: unknown, onContinue };
+    },
+    cancelPresenceModal() {
+      this.presenceModal = { open: false, unknownCount: 0, onContinue: null };
+    },
+    async continuePresenceModal() {
+      const fn = this.presenceModal.onContinue;
+      this.presenceModal = { open: false, unknownCount: 0, onContinue: null };
+      if (fn) await fn();
     },
     async deletePhase(ph) {
       if(!confirm('Delete this round and all its pools and bouts?'))return;
@@ -1007,7 +1051,8 @@ function app() {
       const t = Math.pow(2, Math.ceil(Math.log2(n)));
       this.formatDeInfo = { N: n, tableauSize: t, byeCount: t - n };
     },
-    async createFormatPhase() {
+    createFormatPhase() { this.maybeWarnPresence(() => this._createFormatPhaseNow()); },
+    async _createFormatPhaseNow() {
       const next = this.nextFormatStage();
       const sep  = this.poolSeparation ? this.poolSeparation.split(',') : [];
       const r    = await fetch('/api/competitions/'+compId+'/phases',{
@@ -1020,7 +1065,8 @@ function app() {
       this.formatStageFormOpenId = ''; this.poolOptions = null; this.chosenSizes = null;
       await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
-    async createFormatDE() {
+    createFormatDE() { this.maybeWarnPresence(() => this._createFormatDENow()); },
+    async _createFormatDENow() {
       const next = this.nextFormatStage();
       const r    = await fetch('/api/competitions/'+compId+'/phases/create-de',{
         method:'POST', headers:{'Content-Type':'application/json'},

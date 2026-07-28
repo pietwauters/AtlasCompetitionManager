@@ -60,11 +60,11 @@ const Phase = {
     }
 
     if (!N) {
-      const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+      const competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active' && c.checked_in === 1);
       N = competitors.length;
     }
 
-    if (N < 2) throw Object.assign(new Error('At least 2 active competitors required.'), { status: 400 });
+    if (N < 2) throw Object.assign(new Error('At least 2 present competitors required.'), { status: 400 });
 
     const options = calcPoolOptions(N, rule.poolFormation);
 
@@ -105,11 +105,23 @@ const Phase = {
       }
     }
 
+    // Only competitors explicitly marked present (checkin.html) are entered —
+    // a fencer who was never checked in (or explicitly marked absent/withdrawn)
+    // never appears in a phase, even if their competitor status is still
+    // 'active'. Applies uniformly to every manually-created pool round, not
+    // just the first — a survivor of an earlier round is already checked_in=1
+    // from having been included then, so this never re-excludes anyone
+    // legitimately still in the competition.
     if (!competitors) {
-      competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+      competitors = Competitor.findAll(compId).filter(c => c.competitor_status === 'active' && c.checked_in === 1);
     }
 
-    if (!competitors.length) throw Object.assign(new Error('No active competitors.'), { status: 400 });
+    if (!competitors.length) {
+      throw Object.assign(
+        new Error('No present competitors. Mark fencers present on the check-in page before creating a round.'),
+        { status: 400 }
+      );
+    }
 
     // If a previous pool phase exists, use its rankings as the seed order so
     // that round 2 (and beyond) serpentine-seeds from the actual results of
@@ -527,8 +539,11 @@ const Phase = {
     `).all(compId);
 
     if (finishedPhases.length === 0) {
+      // Straight-to-DE with no preceding pool phase — same present-only rule
+      // as Phase.create's fallback (see its comment): only checked-in fencers
+      // are entered.
       return Competitor.findAll(compId)
-        .filter(c => c.competitor_status === 'active')
+        .filter(c => c.competitor_status === 'active' && c.checked_in === 1)
         .sort((a, b) => (a.initial_seed || 9999) - (b.initial_seed || 9999))
         .map(c => ({ competitor_id: c.competitor_id }));
     }
@@ -552,8 +567,11 @@ const Phase = {
   _combinedSeeding(compId, finishedPhases) {
     const phaseIds = finishedPhases.map(p => p.id);
 
-    // Collect all active competitors
-    const active = Competitor.findAll(compId).filter(c => c.competitor_status === 'active');
+    // Collect all present competitors — checked_in matters here too: a
+    // never-checked-in fencer (so never entered into any pool, per the
+    // present-only filters above) would otherwise still show up with a
+    // padded 0-victories/0-matches stat line and occupy a DE bracket slot.
+    const active = Competitor.findAll(compId).filter(c => c.competitor_status === 'active' && c.checked_in === 1);
     const stats  = {};
     for (const c of active) {
       stats[c.competitor_id] = {

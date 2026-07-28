@@ -326,10 +326,10 @@ function resolveParticipants(compId, format, stage) {
         ORDER  BY r.position ASC
       `).all(poolStagePhase.id);
     }
-    // Fallback: no pool stage yet — return all active with no cohort
+    // Fallback: no pool stage yet — return all present with no cohort
     return db.prepare(`
       SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND format_cohort IS NULL
+      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
       ORDER BY initial_seed ASC
     `).all(compId);
   }
@@ -378,13 +378,13 @@ function resolveParticipants(compId, format, stage) {
     if (p.to == null) {
       return db.prepare(`
         SELECT id AS competitor_id FROM competitors
-        WHERE competition_id = ? AND status = 'active' AND initial_seed >= ?
+        WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed >= ?
         ORDER BY initial_seed ASC
       `).all(compId, from);
     }
     return db.prepare(`
       SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND initial_seed BETWEEN ? AND ?
+      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed BETWEEN ? AND ?
       ORDER BY initial_seed ASC
     `).all(compId, from, p.to);
   }
@@ -396,15 +396,15 @@ function resolveParticipants(compId, format, stage) {
     }
     return db.prepare(`
       SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND format_cohort IS NULL
+      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
       ORDER BY initial_seed ASC
     `).all(compId);
   }
 
-  // ── Fallback: all active competitors ────────────────────────────────────
+  // ── Fallback: all present competitors ───────────────────────────────────
   return db.prepare(`
     SELECT id AS competitor_id FROM competitors
-    WHERE competition_id = ? AND status = 'active'
+    WHERE competition_id = ? AND status = 'active' AND checked_in = 1
     ORDER BY initial_seed ASC
   `).all(compId);
 }
@@ -457,7 +457,7 @@ function _resolveCohort(compId, spec) {
   return spec.pairedLotDraw ? _pairedLotDraw(rows) : rows;
 }
 
-// Assign initial_exempt cohort to the top N active competitors by initial_seed.
+// Assign initial_exempt cohort to the top N present competitors by initial_seed.
 // Idempotent: skips if already assigned.
 function _ensureInitialExemptions(compId, n, cohort) {
   const already = db.prepare(
@@ -467,7 +467,7 @@ function _ensureInitialExemptions(compId, n, cohort) {
 
   const top = db.prepare(`
     SELECT id FROM competitors
-    WHERE competition_id = ? AND status = 'active' AND format_cohort IS NULL
+    WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
     ORDER BY initial_seed ASC
     LIMIT ?
   `).all(compId, n);
@@ -504,7 +504,7 @@ function _lastPoolSeeding(compId) {
   if (!last) {
     return db.prepare(`
       SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active'
+      WHERE competition_id = ? AND status = 'active' AND checked_in = 1
       ORDER BY initial_seed ASC
     `).all(compId);
   }
@@ -529,7 +529,7 @@ function _combinedSeeding(compId) {
   if (!finishedPhases.length) {
     return db.prepare(`
       SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active'
+      WHERE competition_id = ? AND status = 'active' AND checked_in = 1
       ORDER BY initial_seed ASC
     `).all(compId);
   }
@@ -717,7 +717,7 @@ function closeFormatDE(phaseId, survivorTarget, survivorCohort) {
 // ---------------------------------------------------------------------------
 function validateCounts(compId, format) {
   const N = db.prepare(
-    "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active'"
+    "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active' AND checked_in = 1"
   ).get(compId).n;
 
   for (const stage of format.stages) {

@@ -285,6 +285,70 @@ single `<div>` (or use CSS to achieve the layout without extra DOM siblings).
 - Eligibility filter (gender + weapon + age)
 - Auto-seed from national ranking
 - UI: `public/tournaments.html`, `public/competition-detail.html`
+- **Presence gate on first-round creation (added 2026-07-28):** every competitor's
+  presence is already tracked by two existing, pre-built fields — `checked_in`
+  (0/1, migration `009_checkin.sql`) and `status` (`'active'`/`'withdrawn'`/…) —
+  giving three explicit states `checkin.html` already surfaces: present
+  (`checked_in=1`), withdrawn (`status='withdrawn'`), and unknown/"not yet"
+  (`checked_in=0 && status='active'`, the default before anyone touches check-in).
+  What was missing: phase creation never looked at `checked_in` at all — it drew
+  from every `status='active'` competitor regardless of presence. Fixed in
+  `services/phases.js`:
+  - `Phase.calcOptions`'s and `Phase.create`'s no-format-stage fallback, and
+    `Phase._getDeSeeding`'s no-finished-pool-phase fallback, all now filter to
+    `status='active' && checked_in=1` — present only. Applies to *every*
+    manually-created round, not just the first, but is a no-op for phase 2+ in
+    practice: a survivor of an earlier round is already `checked_in=1` from
+    having been included then, so this can never re-exclude someone legitimately
+    still in the competition.
+  - **Format-stage-driven participant resolution — initially left out, then
+    fixed the same day after real use caught it.** The first pass deliberately
+    skipped `Format.resolveParticipants` (used once a competition has a format
+    assigned), reasoning it had too many branches to touch safely in one pass.
+    The user then hit exactly this gap for real (`club-level-pools` →
+    `pool-level-pools.json`'s `pools_1` stage, `participants.source: "initial"`)
+    — pools got created with unknown-presence fencers included, no warning,
+    because format-driven creation never goes through `Phase.create`'s fixed
+    fallback at all. Every raw-roster query in `services/formats.js` now also
+    requires `checked_in = 1`: `resolveParticipants`'s `active_remainder`
+    fallback, both `rank_range` branches (not the `basedOn: 'last_pool'`
+    variant — that reads a finished phase's `rankings`, survivors already
+    checked in), `source: 'initial'`, and the final fallback;
+    `_ensureInitialExemptions` (the GP-format "top 16 preliminary-exempt seeds"
+    selection); `_lastPoolSeeding`'s and `_combinedSeeding`'s
+    no-finished-pool-phase fallbacks; and `validateCounts`'s total-N check (so
+    the format-compatibility validation before applying a format matches what
+    will actually be entered). `services/phases.js`'s own `_combinedSeeding`
+    (DE `seedingMethod: 'combined'`) got the same fix — it was padding the
+    combined-seeding stat table with 0-victory entries for competitors who'd
+    never even been checked in, and thus never entered any pool bout.
+    Deliberately **not** touched: anything reading from `rankings` (a finished
+    phase's actual results — survivors, presence already established by
+    definition) and `getFormatPlan`'s stage-participant-count *display*
+    estimates (`_estimateCount`, and its `N` denominator at line ~790) — those
+    intentionally represent the format's total original field size across its
+    whole lifecycle, a different semantic from "who enters the very next
+    phase," and touching them risked subtly wrong cosmetic counts elsewhere in
+    the stage-plan UI for no behavioral benefit.
+  - Verified against the actual format that failed (`club-level-pools`, mixed
+    10 competitors/6 present) and a realistic GP-format scenario (20
+    competitors, exclude-top-16 exemption, 15 present) — both now correctly
+    resolve only present fencers into the stage.
+  - Error messages updated to say "present" rather than "active" for the
+    no-format branch specifically (`calcOptions`'s), pointing the operator at
+    `checkin.html` rather than leaving a bare count-too-low error.
+  - `competition-detail.html`: before submitting the competition's *first*
+    round (pool or DE — gated on `phases.length === 0`; later rounds don't
+    warn, since the server-side filter is already a no-op for them), a modal
+    warns if any active competitor has no explicit presence status, naming the
+    count and linking to `checkin.html`. Cancel aborts; "Continue with present
+    fencers only" proceeds knowing unresolved fencers will be silently
+    excluded — mirrors the `{open, onContinue}` gate-modal pattern already
+    established for `opp2.html`'s no-start-time warning.
+  - `checkin.html` gained a persistent banner (shown only while `unknownCount >
+    0`) explaining the same thing proactively: mark absentees **Withdrawn**
+    rather than leaving them unresolved, since unresolved fencers are silently
+    dropped, not merely deferred.
 - **`referee_separation` flag (added 2026-07-27, storage/UI only):** a `competitions`
   column (migration `032_competition_referee_separation.sql`) recording which fencer
   attribute(s) — `nationality`, `club`, both (`nationality,club`), or none (`''`/`null`)
@@ -2001,7 +2065,10 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 ### 1. Run a full tournament locally (no cloud needed)
 - Direct competition import — federation/FIE start lists without touching the local people DB
   - Engarde XML format now fully understood (see `docs/GP/` for reference files); move this off "out of scope"
-- Registration desk — review `checkin.html` for competition-day check-in completeness
+- ~~Registration desk — review `checkin.html` for competition-day check-in completeness~~ —
+  **reviewed and wired into phase creation, 2026-07-28** — see "Presence gate on first-round
+  creation" under Competitions below. `checkin.html` itself (present/withdrawn toggle
+  buttons, summary counts) already existed and needed no changes beyond a guidance banner.
 - Card reasons — FIE t.170 text (English + French) and decision attribution (which
   official — referee/referee2/assessor — made the call) are both done; still open:
   store the spec `ts` field instead of server datetime, and the match clock value
