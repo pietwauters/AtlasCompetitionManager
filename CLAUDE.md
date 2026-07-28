@@ -2092,6 +2092,38 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
   risk, the project's own "prepared statements must be module-level" rule violated across
   roughly 80% of `services/`, and three files that grew into god-files by accretion
   rather than extraction. Being tackled one item at a time.
+- **Mechanical checks + KPI reference added, same day, after a discussion on how this
+  keeps happening.** A written rule alone hadn't been enough — the module-level
+  prepared-statement rule was already in this file and still got violated across most
+  of `services/`, which is exactly why: a rule that depends on remembering to
+  self-check has no enforcement mechanism. `scripts/check-architecture.sh` (calling
+  `scripts/check-circular-requires.js` for the require-graph piece) now scripts every
+  check that *can* be reduced to grep/awk — file size thresholds, prepared-statement
+  hoisting, raw SQL confined to `services/`, no `ALTER TABLE` outside migrations,
+  `'use strict'` presence, duplicate function/method names in one file, circular
+  requires/layering — and prints a warning/hard-fail summary in under a second. Run it
+  before committing any change under `services/`, `routes/`, `lib/`, or
+  `public/*.html`. **Caught two real things immediately on its first run**: the
+  already-known `opp2.html` `pendingSlotCount` duplicate (verbatim, lines ~1173/~1997),
+  and a genuinely new finding the manual review had missed — `routes/opp2.js`,
+  `routes/pools.js`, `routes/teamMatches.js`, and `routes/tournaments.js` all call
+  `db.prepare()` directly instead of going through a service, violating the "raw SQL
+  confined to services/" rule. Neither fixed yet — this pass was scoped to building the
+  checker, not clearing its findings; both are now tracked backlog. The
+  circular-require checker treats a file requiring itself (e.g.
+  `services/teamMatches.js:493`'s lazy self-reference, safe because Node's module cache
+  already holds the fully-assigned exports by call time) as a benign idiom, not a
+  violation — only cross-file cycles are flagged. `docs/architecture-kpis.md` is the
+  full KPI reference — mechanical checks (covered by the script) plus judgment-based
+  ones that need an actual read of the file (domain cohesion, side-effect transparency,
+  transaction correctness, SSE write safety, filesystem-read caching, cross-file
+  algorithm duplication, verification-before-done, documentation currency) — reserved
+  for periodic, explicitly-triggered reviews rather than every commit, since reasoning
+  about a whole file's cohesion for every small change would be disproportionate. Also
+  agreed: if a file crosses a size threshold *during* an unrelated feature commit, flag
+  it and ask whether to split now or defer, rather than letting it accumulate quietly
+  until another review is explicitly requested (which is exactly how `pipeline.js`/
+  `phases.js`/`opp2.html` got as large as they did in the first place).
   - **Correctness bug — `_combinedSeeding` duplicated and drifted — FIXED 2026-07-28.**
     Was: same algorithm in `services/phases.js:567` and `services/formats.js:522` (sum
     bout stats across finished pool phases, sort by victory-ratio/indicator/touches),
@@ -2310,6 +2342,8 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | `public/opp2.html` | Pipeline builder, live piste status, piste + referee Gantt charts |
 | `public/referee-schedule.html` | By-piste / by-referee schedule views |
 | `scripts/sync-spec.sh` | Diff/update `docs/level2.md` against the canonical upstream spec |
+| `scripts/check-architecture.sh` | Mechanical architecture/code-quality checks — run before committing any change under `services/`, `routes/`, `lib/`, or `public/*.html`. See `docs/architecture-kpis.md` |
+| `docs/architecture-kpis.md` | Full architecture/code-quality KPI reference — mechanical (scripted) + judgment-based (periodic review) |
 
 ---
 
