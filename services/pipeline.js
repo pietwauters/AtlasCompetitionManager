@@ -90,6 +90,76 @@ function partitionToRange(partition, tableau) {
   return [lo, hi];
 }
 
+// Inverse of partitionToRange: encode a 1-based [lo, hi] range in [1, n] back
+// to its canonical partition code, or null if [lo, hi] doesn't align with a
+// binary-tree node (mirrors public/opp2.html's own rangeToPartition, used
+// there to validate a bout-range selection before ever submitting it).
+function rangeToPartition(lo, hi, n) {
+  if (lo === 1 && hi === n) return 'full';
+  const loChars = ['A', '1', 'a', 'c', 'e', 'g'];
+  const hiChars = ['B', '2', 'b', 'd', 'f', 'h'];
+  let lo_ = 1, hi_ = n, code = '', depth = 0;
+  while (lo_ < hi_) {
+    const mid = Math.floor((lo_ + hi_) / 2);
+    if (lo >= lo_ && hi <= mid)          { code += loChars[depth]; hi_ = mid; }
+    else if (lo >= mid + 1 && hi <= hi_) { code += hiChars[depth]; lo_ = mid + 1; }
+    else break;
+    depth++;
+  }
+  return (lo_ === lo && hi_ === hi) ? code : null;
+}
+
+// Is `partition` an actual, structurally valid subdivision code for this
+// tableau — not just a string partitionToRange happens not to crash on?
+// partitionToRange alone can't tell: it silently tolerates garbage (unknown
+// characters are just treated as "upper half", and an over-long string can
+// walk lo past hi into an empty/invalid range) rather than rejecting it.
+// Added 2026-07-28 (architecture review) — previously opp2.html's own
+// rangeToPartition-returning-null check was the *only* validation of this
+// anywhere, and it only ever ran client-side; Pipeline.addSlot accepted any
+// partition string a request happened to include.
+function isValidPartition(partition, tableau) {
+  if (!partition || partition === 'full') return true;
+  const n = tableau / 2;
+  const [lo, hi] = partitionToRange(partition, tableau);
+  if (!(lo >= 1 && hi <= n && lo <= hi)) return false;
+  return rangeToPartition(lo, hi, n) === partition;
+}
+
+// ── Referee/official double-booking enforcement ────────────────────────────
+// public/opp2.html's conflict-detection modal mirrors this (same window/
+// overlap math) but is client-side only — added here 2026-07-28 (architecture
+// review) because updateSlot previously persisted whatever referee/official
+// fields a client sent with zero verification, making the modal real UX but
+// not an actual constraint. Any other caller of the PATCH route could
+// double-book a referee with no pushback at all.
+const ROLE_FIELDS = {
+  referee_id:         'Referee',
+  referee2_id:        'Referee 2',
+  video_assistant_id: 'Video Assistant',
+  assessor1_id:        'Assessor 1',
+  assessor2_id:        'Assessor 2',
+};
+
+function addMinutes(hhmm, mins) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = (((h * 60 + m + Math.round(mins)) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// A slot's [start, end) window for overlap purposes, or null if it has no
+// scheduled_start at all — nothing to double-book against (mirrors
+// opp2.html's _slotWindow; the +30min fallback matches its final fallback
+// for a slot with no computable predicted_end).
+function slotWindow(slot) {
+  if (!slot.scheduled_start) return null;
+  return { start: slot.scheduled_start, end: slot.predicted_end || addMinutes(slot.scheduled_start, 30) };
+}
+
+function windowsOverlap(a, b) {
+  return a.start < b.end && b.start < a.end;
+}
+
 const Pipeline = {
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -278,6 +348,9 @@ const Pipeline = {
     if (data.type === 'de' && (!data.phase_id || !data.tableau)) {
       throw new Error('phase_id and tableau are required for a DE slot');
     }
+    if (data.type === 'de' && data.partition && !isValidPartition(data.partition, data.tableau)) {
+      throw new Error(`Invalid partition "${data.partition}" for tableau ${data.tableau}`);
+    }
 
     return db.transaction(() => {
       // A DE round (phase_id + bracket + de_round/tableau + partition) can only live
@@ -397,6 +470,43 @@ const Pipeline = {
     const current = this.findById(id);
     if (!current) return null;
     const m = { ...current, ...data };
+
+    // Server-side enforcement of referee/official double-booking (see
+    // ROLE_FIELDS comment above) — only when a role field is actually being
+    // assigned a non-null value, and only when this slot has a
+    // scheduled_start (no window, nothing to conflict-check — same "can't
+    // verify without a start time" gate opp2.html's own warning modal uses).
+    const roleFieldsBeingSet = Object.keys(ROLE_FIELDS).filter(f => f in data && data[f] != null);
+    if (roleFieldsBeingSet.length) {
+      const allStrips = this.findAllStrips();
+      let targetSlot = null;
+      outer: for (const strip of allStrips) {
+        for (const s of strip.slots) { if (s.id === Number(id)) { targetSlot = s; break outer; } }
+      }
+      const window = targetSlot ? slotWindow(targetSlot) : null;
+      if (window) {
+        for (const field of roleFieldsBeingSet) {
+          const refereeId = data[field];
+          for (const strip of allStrips) {
+            for (const other of strip.slots) {
+              if (other.id === Number(id)) continue;
+              const otherWindow = slotWindow(other);
+              if (!otherWindow || !windowsOverlap(window, otherWindow)) continue;
+              for (const otherField of Object.keys(ROLE_FIELDS)) {
+                if (other[otherField] != null && String(other[otherField]) === String(refereeId)) {
+                  throw Object.assign(new Error(
+                    `${ROLE_FIELDS[field]} assignment conflicts: this referee is already assigned as ` +
+                    `${ROLE_FIELDS[otherField]} on ${strip.name || ('Piste ' + strip.strip_number)} ` +
+                    `(${other.scheduled_start}–${other.predicted_end || '?'}), which overlaps this slot's schedule.`
+                  ), { status: 409 });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     const OFFICIAL_ROLES = {
       referee2_id:         'referee2',
       video_assistant_id:  'video_assistant',

@@ -306,7 +306,7 @@ function resolveParticipants(compId, format, stage) {
 
   // ── Combined seeding (two-pool-rounds final) ─────────────────────────────
   if (p.seedingMethod === 'combined') {
-    return _combinedSeeding(compId);
+    return combinedSeeding(compId);
   }
 
   // ── Last pool seeding (single phase, active competitors only) ────────────
@@ -518,8 +518,15 @@ function _lastPoolSeeding(compId) {
   `).all(last.id);
 }
 
-// Combined seeding across all finished pool phases (same logic as phases._combinedSeeding)
-function _combinedSeeding(compId) {
+// Combined seeding across all finished pool phases: aggregate bout stats,
+// re-rank using FIE criteria (victory ratio, indicator, touches scored,
+// touches received, initial seed), return present competitors in that order.
+// The single shared implementation for both format-driven combined-seeding
+// stages (resolveParticipants below) and services/phases.js's DE
+// seedingMethod: 'combined' (Phase._getDeSeeding calls this directly rather
+// than keeping its own copy — see the 2026-07-28 architecture review, which
+// found the two copies had drifted: only this one filtered by checked_in).
+function combinedSeeding(compId) {
   const finishedPhases = db.prepare(`
     SELECT id FROM phases
     WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
@@ -534,9 +541,12 @@ function _combinedSeeding(compId) {
     `).all(compId);
   }
 
+  // Present competitors only — a never-checked-in fencer (so never entered
+  // into any pool) would otherwise still show up with a padded
+  // 0-victories/0-matches stat line and occupy a DE bracket slot.
   const active = db.prepare(`
     SELECT id AS competitor_id, initial_seed FROM competitors
-    WHERE competition_id = ? AND status = 'active'
+    WHERE competition_id = ? AND status = 'active' AND checked_in = 1
   `).all(compId);
 
   const stats = {};
@@ -919,5 +929,6 @@ module.exports = {
   validateCounts,
   getFormatPlan,
   assertNextStage,
+  combinedSeeding,
   getTerminalStages,
 };

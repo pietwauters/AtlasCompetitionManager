@@ -1415,15 +1415,19 @@ function app() {
       const m = this.conflictModal;
       if (!m.order) return;
 
-      await this.updateSlot(m.currentSlot.id, { [m.field]: m.refereeId });
-
       const firstSlot  = m.order === 'current-first' ? m.currentSlot : m.otherSlot;
       const secondSlot = m.order === 'current-first' ? m.otherSlot   : m.currentSlot;
       const firstWin = this._slotWindow(firstSlot);
       if (firstWin) {
-        // Remember what this slot's start time was before the push, and
-        // which referee/slot the conflict was against, so a later change
-        // that removes the conflict can offer to restore it (see
+        // Push the later slot's start time BEFORE assigning the referee
+        // below — the server now enforces double-booking itself
+        // (services/pipeline.js's updateSlot, 2026-07-28 architecture
+        // review), so assigning the referee while the two slots still
+        // genuinely overlap would be rejected. Pushing first eliminates the
+        // overlap so the assignment that follows is always clean.
+        // Also remembers what this slot's start time was before the push,
+        // and which referee/slot the conflict was against, so a later
+        // change that removes the conflict can offer to restore it (see
         // _checkConflictResolutions).
         await this._patchSlot(secondSlot.id, {
           scheduled_start:         firstWin.end,
@@ -1432,6 +1436,8 @@ function app() {
           conflict_paired_slot_id: firstSlot.id,
         });
       }
+
+      await this.updateSlot(m.currentSlot.id, { [m.field]: m.refereeId });
       await this.loadStrips();
 
       if (m.cascade) {

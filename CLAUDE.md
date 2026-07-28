@@ -2085,6 +2085,178 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 - Per-bout scheduled time: Engarde assigns `Heure` per individual DE bout (across strips). Atlas schedules at slot (round) level. Deriving per-bout times from slot data is sufficient for now.
 
 ### 3. Architecture / code hygiene
+- **Architecture review, 2026-07-28** — a full health-check ("small files, clean
+  functions, no obscure side effects, clean separation of duties") across the backend and
+  the largest frontend file. Two-line summary: one live correctness bug (**fixed same
+  day**, see below), two client/server logic-duplication gaps with real drift/enforcement
+  risk, the project's own "prepared statements must be module-level" rule violated across
+  roughly 80% of `services/`, and three files that grew into god-files by accretion
+  rather than extraction. Being tackled one item at a time.
+  - **Correctness bug — `_combinedSeeding` duplicated and drifted — FIXED 2026-07-28.**
+    Was: same algorithm in `services/phases.js:567` and `services/formats.js:522` (sum
+    bout stats across finished pool phases, sort by victory-ratio/indicator/touches),
+    but `phases.js`'s copy filtered competitors to `status='active' AND checked_in=1`
+    while `formats.js`'s copy only filtered `status='active'` for its main aggregation
+    query — reopening the exact bug the presence-gate work had just closed. Fixed by
+    collapsing to one implementation: `services/formats.js`'s copy (renamed
+    `_combinedSeeding` → `combinedSeeding`, exported) is now canonical — its missing
+    `checked_in=1` filter added — and `services/phases.js`'s `_getDeSeeding` calls
+    `Format.combinedSeeding(compId)` instead of keeping its own copy (safe direction:
+    `phases.js` already requires `formats.js`; the reverse never happens, so no new
+    circular require). Verified: both call paths (`Format.combinedSeeding` directly, and
+    via `Phase._getDeSeeding(compId, 'combined')`) now return identical results on a
+    real closed-pool-phase scenario; the GP-format regression case (20 competitors,
+    exclude-top-16) still resolves correctly.
+  - **Referee double-booking conflict detection was entirely client-side, with no
+    server enforcement — FIXED 2026-07-28.** Was: `Pipeline.updateSlot` blindly
+    persisted whatever `referee_id`/`conflict_*` fields the client sent — the conflict
+    modal in `public/opp2.html` was real UX but not an actual constraint. Fixed by
+    adding the same overlap check server-side, reusing `findAllStrips()`'s already-
+    computed `predicted_end` (rather than re-deriving `effective_minutes_per_bout`/
+    `bout_count` a second time): `services/pipeline.js` gained module-level
+    `ROLE_FIELDS`/`addMinutes`/`slotWindow`/`windowsOverlap` helpers, and `updateSlot`
+    now throws (`status: 409`) if any of the 5 officiating fields being set
+    (`referee_id`/`referee2_id`/`video_assistant_id`/`assessor1_id`/`assessor2_id`)
+    would double-book that person against a genuinely time-overlapping slot elsewhere.
+    Skipped (no throw) when: the value being set is null (clearing an assignment can
+    never conflict), or the target slot has no `scheduled_start` (nothing to check
+    against — same "can't verify without a start time" reasoning as the existing
+    client-side warning modal). `routes/opp2.js`'s `PATCH /pipeline/slots/:id` now
+    wraps the call in try/catch to surface the message instead of a generic 500.
+    **A real sequencing bug had to be fixed to make this safe**: `opp2.html`'s
+    `applyConflictResolution()` used to assign the referee *first*, then push the
+    other slot's schedule to eliminate the overlap — meaning the referee-assignment
+    PATCH itself was sent while the overlap still genuinely existed, which the new
+    server check would have rejected, breaking the very flow it's meant to support.
+    Fixed by reordering: push the schedule first, assign the referee second, so by the
+    time the assignment PATCH is sent the overlap is already gone. Verified: a genuine
+    overlapping assignment is rejected with a clear message; an adjacent (touching,
+    non-overlapping) one is allowed; clearing an assignment always bypasses the check;
+    a slot with no `scheduled_start` skips validation; and the corrected
+    push-then-assign sequence succeeds end-to-end against the new server check.
+  - **DE partition-range server-side validation — FIXED 2026-07-28.** Was:
+    `opp2.html`'s `boutRangeForPartition` duplicated `services/pipeline.js`'s
+    `partitionToRange` (forward direction only), and the inverse encoders
+    (`rangeToPartition`, `partitionForBoutIndex`) existed **only client-side** —
+    `rangeToPartition` returning `null` was the *only* validation that a submitted bout
+    range was structurally valid (`submitAddSlot`), and `Pipeline.addSlot` never
+    re-checked partition alignment server-side; any `partition` string reached the DB
+    unvalidated via `POST /api/opp2/pipeline/strip/:id`. Fixed by adding a server-side
+    mirror of the client's `rangeToPartition(lo, hi, n)` plus a new
+    `isValidPartition(partition, tableau)` to `services/pipeline.js` (both plain
+    module-level functions next to the existing `partitionToRange`), and a new check in
+    `addSlot` right after the existing phantom-slot-type checks: `data.type === 'de' &&
+    data.partition && !isValidPartition(...)` throws. `isValidPartition` can't just
+    bounds-check `partitionToRange`'s output — that function tolerates garbage inputs
+    (an unrecognized character is silently treated as "upper half," and an over-long
+    string can walk `lo` past `hi`) — so it round-trips: compute `[lo, hi]` via
+    `partitionToRange`, then re-encode via the new `rangeToPartition` and require the
+    result to equal the original string, which is the only way to confirm the string is
+    the *canonical* code for a real binary-tree node rather than some other string that
+    happens to decode to valid bounds. Verified via `Pipeline.addSlot` directly: `null`,
+    `'full'`, `'A'`, `'B'`, and a max-depth `'A1'` (tableau 8) all pass through to the
+    (expected, in the test) foreign-key error; a garbage character (`'Z'`), an
+    over-long string, and a wrong-depth code (`'1'` at depth 0 for tableau 8) are all
+    rejected with a descriptive error before any DB write. Only one call site sends an
+    arbitrary client-supplied `partition` at all (`routes/opp2.js`'s `PATCH
+    /pipeline/strip/:id` → `addSlot(req.params.stripId, req.body)`, driven by
+    `opp2.html`'s DE-range picker) — the pool/team-match `addSlot` call sites
+    (`routes/pools.js`) never pass a `partition`, so they're unaffected.
+    Smaller, still-open instance of the same client-recomputes-what-the-server-already-
+    knows pattern: `opp2.html`'s `effectiveMinutes()` reimplements
+    `services/boutDurationStandards.js`'s `getEffective()` instead of asking the server.
+  - **The project's own hard rule ("prepared statements must be module-level constants")
+    is barely enforced beyond a couple of files.** Measured (total `db.prepare()` calls /
+    module-level constants): `services/formats.js` 0/41, `services/phases.js` 0/58,
+    `services/teamMatches.js` 0/57, `services/teamPhases.js` 0/31, most small CRUD
+    services 0/N. `services/pipeline.js` is 16/89 — and the inline offenders that
+    actually matter for performance are on the live bout-navigation hot path
+    (`nextBout`/`prevBout`/`pendingBoutCount`, re-prepared on every OPP2 referee-tablet
+    NEXT/PREV/END transition), not just one-off admin actions. The three services built
+    2026-07-27/28 (`services/competitionReferees.js`, `services/tournamentReferees.js`,
+    mostly `services/poolRefereeAssignment.js` — one inline call at line ~118 slipped
+    through) do follow the rule, showing it's known and applied when someone's being
+    careful, just never retrofitted onto the older ~80% of the codebase.
+  - **God files, grown by accretion rather than extraction:**
+    - `services/pipeline.js` (1150 lines) bundles slot CRUD, the live bout-cursor state
+      machine, DE partition math, officiating roster, predicted-end-time math, relay
+      resolution, and (added 2026-07-27) kiosk roster resolution. Functions named for one
+      table silently write another: `addSlot`/`markDone`/`updateSlot`/`deleteSlot`/
+      `moveToStrip` all touch `pools.strip_id` / `pools.referee_id` / `strips.status`
+      beyond `pipeline_slots`. `nextBout`/`prevBout` (~145/~110 lines each) each
+      re-derive per-slot-type (pool/team_match/DE/placement) SQL inline rather than
+      delegating to shared helpers.
+    - `services/phases.js` (986 lines) — **split 2026-07-28**, see its own entry below.
+    - `public/opp2.html` (2111 lines) — ~28 top-level data properties, 15 computed
+      getters, ~70 methods in one Alpine `app()`, clearly bundling 5+ distinct features
+      (pipeline builder, bulk-assign + modal, conflict resolution + restore modals,
+      drag-reorder, referee Gantt/schedule). Confirmed duplicate: `pendingSlotCount` is
+      defined twice, verbatim (lines ~1173 and ~1991). Modal state mostly converged on
+      one `{open, ...}` shape, except `bulkModal`, whose Cancel button sets `open=false`
+      directly inline in the template rather than through a dedicated reset function like
+      the other three modals have.
+  - **What's actually fine, confirmed rather than assumed:** no circular requires
+    anywhere (services↔services, services↔routes, lib↔services all checked); layering
+    direction is correct throughout (services never require routes or the opp2 lib;
+    `lib/opp2Client.js` correctly requires services, not the reverse); 34 migrations,
+    clean and sequential, no drift.
+  - **`services/phases.js` split — DONE 2026-07-28.** Not a clean pool/DE split, per the
+    earlier finding above: `close()`/`simulate()` both branch internally on `phase.type`
+    and needed a third home rather than fitting cleanly into either half. Final shape:
+    `services/poolPhases.js` (397 lines: `calcOptions`, `create`, `calculateRankings`,
+    plus the private `getPrevPoolRankings` helper), `services/dePhases.js` (224 lines:
+    `getDeOptions`, `createDE`, plus the private `getDeSeeding` helper), and
+    `services/phases.js` itself kept as a 408-line **orchestrator** — `findByCompetition`/
+    `findById` (genuinely shared), `close`/`simulate`/`reopen`/`delete` (the mixed-logic
+    functions that branch on type), and direct re-exports of the two split files'
+    functions (`Phase.calcOptions = PoolPhases.calcOptions`, etc.) so the external API
+    (`routes/phases.js`, `routes/phasesById.js`) needed **zero changes** — same module,
+    same method names, same signatures.
+    - **The prepared-statement hoisting was folded into this same pass**, exactly as
+      planned when deferring it earlier: every one of the original 58 inline
+      `db.prepare()` calls is now a module-level constant, split across whichever of the
+      three files actually owns that query. All three files are now 100%
+      hoisted (0 inline remaining) — confirmed by the same grep-based audit used in the
+      original review.
+    - **A JS `this`-binding hazard had to be designed around**, not just discovered:
+      `PoolPhases.create` originally called `this._getPrevPoolRankings(...)` and
+      `this.findById(...)` — if `Phase.create` were just a direct reference copy of
+      `PoolPhases.create` (`Phase.create = PoolPhases.create`), calling it as
+      `Phase.create(...)` binds `this` to `Phase`, not `PoolPhases`, so any `this.xxx()`
+      call inside would look for that method on the wrong object and throw at runtime.
+      Fixed by removing the `this`-dependency entirely from the split-out files: private
+      helpers became plain module-level functions (`getPrevPoolRankings`,
+      `getDeSeeding` — not object methods), and any place that needed `findById`'s query
+      just calls its own local `stmtPhaseById.get(id)` directly instead of `this.findById`.
+      A trivial `SELECT * FROM phases WHERE id=?` duplicated three times (once per file)
+      was judged the right tradeoff over introducing a `this`-dependent cross-file call
+      shape that would silently break depending on *how* a method happens to be invoked.
+    - **A genuinely pre-existing behavior was rediscovered, not introduced, while
+      testing the split**: `Phase.close()` unconditionally calls the pool-shaped
+      `calculateRankings` (querying `pool_competitors`/`pools`) with no `phase.type`
+      branch for the ranking computation itself — calling `close()` on a plain
+      (non-format) DE phase returns 0 rankings, always has (verified this is identical,
+      unchanged logic from the original file, not a regression). Consistent with
+      `public/de.html` having no "close" action at all — DE results are read via
+      `services/results.js` instead, `Phase.close()` is pool-oriented in practice except
+      for the one format-driven-preliminary-DE-with-`survivorTarget` case that returns
+      early via `Format.closeFormatDE`. Not fixed (out of scope for a pure split), but
+      worth knowing if DE-referee-assignment or other future DE work ever needs
+      `Phase.close()` to produce real DE rankings.
+    - **Also spotted, not fixed:** `reopen()`/`delete()` have near-duplicated (not
+      identical — `delete` has one extra `initialExemptCohort`-clearing clause and wraps
+      in `try/catch`, `reopen` doesn't) format-cohort-clearing logic. Left as encountered
+      — flagged here for a future pass, not folded into this one to keep the split's
+      diff limited to "move code, hoist statements, preserve behavior."
+    - **Verified**: a full 12-step lifecycle test (calcOptions → create → findById/
+      findByCompetition → calculateRankings → simulate → close → reopen → re-close →
+      getDeOptions → createDE → simulate → close → delete) against a plain (no-format)
+      competition, and a second 8-step test against a format-driven one (`pool-de` shape,
+      exercising `Format.resolveParticipants`/`applyPoolClose`/`closeFormatDE` and the
+      format-cohort clearing in `reopen`/`delete`) — both produced correct, expected
+      counts at every step. Also re-ran the pool-referee-auto-assignment feature's own
+      regression test against the split `Phase.create`/`calcOptions` to confirm no
+      downstream consumer broke.
 - `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
   simulated competition run over live MQTT to confirm the observed-average path behaves
   (see OPP2 section above)
@@ -2126,7 +2298,9 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | `lib/deFormation.js` | FIE DE tableau seeding (buildSeedPositions, buildDE) |
 | `lib/opp2Client.js` | OPP2 MQTT client singleton |
 | `lib/opp2Composer.js` | Builds/publishes OPP2 messages (fencers, match, score, record) |
-| `services/phases.js` | Phase create/activate/close + DE creation + simulate |
+| `services/phases.js` | Orchestrator: findById/findByCompetition, close/simulate/reopen/delete (mixed pool+DE logic), re-exports the two files below |
+| `services/poolPhases.js` | Pool-specific: calcOptions, create, calculateRankings |
+| `services/dePhases.js` | DE-specific: getDeOptions, createDE |
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |
 | `services/results.js` | Final competition results combining DE + pool |
 | `services/deLayout.js` | Builds de.html's main/repechage/placement sections incl. stripSlot (bracket, de_round, tableau, partition) for each round; `placementGroupBoutIds` resolves a placement pipeline slot to bout IDs |
