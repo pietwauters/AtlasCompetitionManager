@@ -32,6 +32,9 @@
         <div class="card" id="tournament-referees">
             <span class="loading">Loading…</span>
         </div>
+        <div class="card" id="tournament-pool-refs">
+            <span class="loading">Loading…</span>
+        </div>
     </main>
     <script>
         // Get tournament id from URL
@@ -167,6 +170,146 @@
             if (!r.ok) { const d = await r.json(); alert(d.error || 'Move failed'); return; }
             await loadTournamentReferees();
         }
+        // ── Combine pool rounds — auto-assign referees across competitions ──
+        let combinablePhases = [];
+        let selectedPhaseIds = [];
+        let allReferees = [];
+        let lastCombineResult = null;
+        let lastPoolLabels = {};
+
+        async function loadCombinablePoolPhases() {
+            const id = getTournamentId();
+            if (!id) return;
+            const [phases, refs] = await Promise.all([
+                fetch(`/api/tournaments/${id}/pool-phases`).then(r => r.json()),
+                fetch('/api/people?role=referee').then(r => r.json()).catch(() => []),
+            ]);
+            combinablePhases = phases;
+            allReferees = refs;
+            renderCombinablePoolPhases();
+        }
+
+        function poolPhaseLabel(p) {
+            return `${p.competition_name} (${p.weapon}/${p.gender}) — Round ${p.phase_order}`;
+        }
+        function refereeNameById(id) {
+            const r = allReferees.find(x => x.referee_id == id);
+            return r ? `${r.last_name}, ${r.first_name}` : `Referee ${id}`;
+        }
+        function poolLabel(poolId) {
+            return lastPoolLabels[poolId] || ('pool #' + poolId);
+        }
+        function poolBlockingDetail(p) {
+            const parts = [];
+            if (p.nationalities.length) parts.push('nationality ' + p.nationalities.join(', '));
+            if (p.clubs.length) parts.push('club ' + p.clubs.map(c => c.club_name).join(', '));
+            return parts.join(' · ') || '—';
+        }
+        function blockingSummary(s) {
+            const nats  = [...new Set(s.pools.flatMap(p => p.nationalities))];
+            const clubs = [...new Set(s.pools.flatMap(p => p.clubs.map(c => c.club_name)))];
+            const parts = [];
+            if (nats.length)  parts.push('nationality ' + nats.join(', '));
+            if (clubs.length) parts.push('club ' + clubs.join(', '));
+            return parts.join(' and ') || 'nothing in particular';
+        }
+
+        function renderCombinablePoolPhases() {
+            const rows = combinablePhases.length
+                ? combinablePhases.map(p => `
+                    <label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;border:1px solid #ddd;border-radius:5px;margin-bottom:.4rem;cursor:pointer">
+                        <input type="checkbox" ${selectedPhaseIds.includes(p.phase_id) ? 'checked' : ''} onchange="togglePhaseSelect(${p.phase_id}, this.checked)">
+                        <span>${esc(poolPhaseLabel(p))}</span>
+                        <span style="margin-left:auto;font-size:.8rem;color:#888">${p.pools_with_referee}/${p.pool_count} pool(s) have a referee</span>
+                    </label>`).join('')
+                : `<p class="empty">No pool phases in this tournament's competitions yet.</p>`;
+
+            document.getElementById('tournament-pool-refs').innerHTML = `
+                <h2 style="margin-top:0">Combine pool rounds — auto-assign referees</h2>
+                <p style="font-size:.85rem;color:#666;margin:0 0 .75rem">
+                    Select the pool rounds that run at the same time — across one or more of this
+                    tournament's competitions — to solve them together from one shared pool of
+                    referees, instead of each competition drawing only from its own roster.
+                </p>
+                ${rows}
+                <div style="margin-top:.5rem">
+                    <button class="primary" ${selectedPhaseIds.length ? '' : 'disabled'} onclick="runCombinedAutoAssign()">
+                        ⚡ Auto-assign referees across ${selectedPhaseIds.length} selected round(s)
+                    </button>
+                </div>
+                <div id="combine-result" style="margin-top:1rem"></div>
+            `;
+            if (lastCombineResult) renderCombineResult();
+        }
+
+        function togglePhaseSelect(id, checked) {
+            id = Number(id);
+            if (checked) { if (!selectedPhaseIds.includes(id)) selectedPhaseIds.push(id); }
+            else { selectedPhaseIds = selectedPhaseIds.filter(x => x !== id); }
+            renderCombinablePoolPhases();
+        }
+
+        async function runCombinedAutoAssign() {
+            const id = getTournamentId();
+            if (!id || !selectedPhaseIds.length) return;
+            const r = await fetch(`/api/tournaments/${id}/auto-assign-referees`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phase_ids: selectedPhaseIds }),
+            });
+            const data = await r.json();
+            if (!r.ok) { alert(data.error || 'Auto-assign failed'); return; }
+            lastCombineResult = data;
+
+            // Friendly "Competition Pool N" labels for the pool ids referenced
+            // in the result, built from the phases we just solved.
+            lastPoolLabels = {};
+            for (const phaseId of selectedPhaseIds) {
+                const phaseInfo = combinablePhases.find(p => p.phase_id === phaseId);
+                const pools = await fetch(`/api/phases/${phaseId}/pools`).then(r => r.json()).catch(() => []);
+                for (const pool of pools) {
+                    lastPoolLabels[pool.id] = (phaseInfo ? phaseInfo.competition_name + ' ' : '') + 'Pool ' + pool.pool_number;
+                }
+            }
+
+            await loadCombinablePoolPhases();
+        }
+
+        function renderCombineResult() {
+            const data = lastCombineResult;
+            const el = document.getElementById('combine-result');
+            if (!el) return;
+
+            let html = `<div style="font-size:.9rem;margin-bottom:.5rem">${data.assigned.length} pool(s) assigned.`;
+            const withConflict = data.assigned.filter(a => a.conflicts > 0).length;
+            if (withConflict) html += ` <span style="color:#856404">${withConflict} had an unavoidable nationality/club conflict.</span>`;
+            html += `</div>`;
+
+            if (data.shortfalls && data.shortfalls.length) {
+                html += `<div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Why some pools couldn't get a clean referee</div>`;
+                html += data.shortfalls.map(s => `
+                    <div style="font-size:.85rem;padding:.5rem .6rem;background:#fde8e8;border:1px solid #f1a9a9;border-radius:5px;margin-bottom:.4rem">
+                        <div>${s.pools.map(p => poolLabel(p.pool_id)).join(', ')} could only draw from
+                        <strong>${s.compatible_referee_ids.length}</strong> referee(s) satisfying
+                        ${s.threshold === 0 ? 'a fully clean assignment' : ('at most ' + s.threshold + ' violated criterion/criteria')}.</div>
+                        ${s.pools.map(p => `
+                            <div style="font-size:.8rem;color:#555;margin:.15rem 0 0 .5rem">
+                                ${esc(poolLabel(p.pool_id))}: ${esc(poolBlockingDetail(p))}
+                            </div>`).join('')}
+                        <div style="color:#922b21;margin-top:.35rem">Short by <strong>${s.shortfall}</strong> — add ${s.shortfall} more
+                        referee(s) avoiding ${esc(blockingSummary(s))} to resolve this
+                        (${s.compatible_referee_ids.map(refereeNameById).join(', ') || 'none currently qualify'} already do).</div>
+                    </div>`).join('');
+            }
+
+            if (data.unassigned && data.unassigned.length) {
+                html += `<div style="font-size:.85rem;color:#922b21">
+                    ${data.unassigned.length} pool(s) got no referee at all: ${data.unassigned.map(poolLabel).join(', ')}.
+                    Not enough referees registered across the selected competitions.</div>`;
+            }
+
+            el.innerHTML = html;
+        }
+
         async function loadTournamentDetail() {
             const id = getTournamentId();
             if (!id) return;
@@ -191,6 +334,7 @@
         function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         window.addEventListener('DOMContentLoaded', loadTournamentDetail);
         window.addEventListener('DOMContentLoaded', loadTournamentReferees);
+        window.addEventListener('DOMContentLoaded', loadCombinablePoolPhases);
     </script>
     <script src="/js/nav.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

@@ -462,6 +462,74 @@ choice of procedure, not a spec-mandated one:
   (`POST /api/phases/:id/auto-assign-referees`), reports how many were assigned, how
   many had an unavoidable conflict, and how many pools were left unassigned.
 
+**Shortfall diagnostics (added 2026-07-28) — "how to solve the unmatchable pools":**
+when pools can't all get a clean referee, `autoAssign` doesn't just report a flat
+unassigned count — it reports *why*, using the same Hall's-theorem deficiency
+certificate discussed with the user while designing this feature. At every threshold
+stage where some pools remain unmatched, `lib/bipartiteMatching.js`'s new
+`findDeficientSet(numLeft, numRight, adjacency, matchLeft)` does a BFS over alternating
+paths from the unmatched pools (the standard Kőnig's-theorem construction) to find:
+`S` — every pool caught in that same irreducible cluster (not just the literally-
+unmatched ones: a pool that *did* get a referee can still be part of the cluster, if a
+different rearrangement could have shifted the shortfall onto it instead) — and `T` —
+the referees compatible with that whole cluster. `|S| − |T|` is provably the exact
+shortfall (a short standard proof: every referee in `T` is necessarily matched, each to
+a distinct pool already counted in `S`, so `S` = unmatched pools + one pool per referee
+in `T`). This is genuinely free — no separate search, just extra bookkeeping on the
+same BFS already needed to know the matching is stuck. Verified against a hand-built
+3-pools/2-referees case matching the theorem by hand, and against a real combined-phase
+scarcity scenario (below) spanning two competitions' pools in one cluster. Surfaced in
+`phase.html` as a result modal (not just the notice bar, given how much there can be to
+say) and, in the combined view, on `tournaments-detail.html`.
+
+**Extended same day: naming *what kind* of referee is missing, not just how many.**
+Knowing a cluster is short by N referees doesn't tell a director who to go recruit —
+so each shortfall's `pools` array carries `{pool_id, criteria, nationalities, clubs}`
+per pool: the actual distinct nationalities and clubs (`club_id`+`club_name`) present
+among that pool's fencers (`poolAttributes()` helper). The UI derives a plain-language
+summary from this (`blockingSummary`/`poolBlockingDetail` in both `phase.html` and
+`tournaments-detail.html`) — e.g. *"add 1 more referee(s) avoiding nationality BEL and
+club Club Gent, Club Bruxelles, ... to resolve this."* Also fixed while building this:
+the threshold loop now `break`s as soon as `remainingReferees` is fully exhausted —
+relaxing the conflict tolerance further can never help once there are literally zero
+referees left, so without this the identical shortfall was being reported once per
+remaining threshold level (up to 3× duplicated in the nationality+club case), found by
+the test scenario itself before it reached the UI. Result shape:
+`shortfalls: [{threshold, pools: [{pool_id, criteria, nationalities, clubs}, ...],
+compatible_referee_ids, shortfall}]`.
+
+**Combined multi-competition pool referee auto-assignment (added 2026-07-28):**
+`autoAssign` now takes a phase id *or an array of phase ids* — solving several
+competitions' pool rounds as a single, larger bipartite-matching problem when they run
+at the same time (e.g. a foil and an épée competition in the same tournament, both
+fencing their pool round simultaneously on different strips). Genuinely useful, not
+just bigger: solved separately, one competition can "hog" a referee that was its only
+clean option for one pool while it had other clean options available elsewhere,
+starving the other competition of that referee for a pool that had no alternative;
+solved jointly, the matching optimizes globally and avoids that. Each pool keeps its
+*own* competition's `referee_separation` criteria (competitions in the same tournament
+aren't required to agree on nationality vs club), and the referee pool is the union of
+every involved competition's effective roster (`services/competitionReferees.js`),
+deduplicated by `referee_id` (the same physical referee registered to two competitions
+in the tournament counts once, not twice). **Still scoped to "these pools run at the
+same time," asserted by whoever selects the phases — not verified against real
+schedule data**, same limitation as the single-phase version; combining phases that
+don't actually overlap in time would be safe here (nothing double-books) but wastes the
+opportunity the joint solve is for.
+- `PoolRefereeAssignment.listCombinablePoolPhases(tournamentId)` — every pool phase
+  belonging to a competition in the tournament, with pool count and how many already
+  have a referee, for the picker UI.
+- Routes: `GET /api/tournaments/:id/pool-phases`, `POST
+  /api/tournaments/:id/auto-assign-referees` (body `{phase_ids: [...]}`) — the latter
+  verifies every phase actually belongs to a competition in that tournament before
+  running (`routes/tournaments.js`), rejecting cross-tournament phase ids.
+- UI: new "Combine pool rounds — auto-assign referees" card on `tournaments-detail.html`
+  — checkboxes over every pool phase in the tournament, run the combined solve, and the
+  same shortfall/conflict/unassigned diagnostics as `phase.html`, with pool labels
+  resolved to "`<competition name>` Pool `<number>`" by fetching each selected phase's
+  own pool list after the solve (this page has no other source of pool numbers, since
+  the phase-list endpoint only returns per-phase aggregates).
+
 ### Pool phase (complete)
 - FIE serpentine seeding + separation (nationality for FIE formats; club also supported for
   non-FIE rule files — see "Pool formation" above)

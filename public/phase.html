@@ -143,6 +143,72 @@
     </div>
   </div>
 
+  <!-- Auto-assign referees result -->
+  <div class="modal-backdrop" x-show="assignResultOpen" @click.self="assignResultOpen=false">
+    <div class="modal-box" style="width:min(560px,94vw)">
+      <h3 style="margin:0 0 1rem">Auto-assign referees — result</h3>
+      <p style="font-size:.9rem;margin:0 0 .75rem">
+        <span x-text="assignResult?.assigned?.length||0"></span> pool(s) assigned.
+        <span x-show="assignResult?.assigned?.some(a=>a.conflicts>0)" style="color:#856404">
+          <span x-text="assignResult.assigned.filter(a=>a.conflicts>0).length"></span> had an unavoidable nationality/club conflict.
+        </span>
+      </p>
+
+      <template x-if="assignResult?.assigned?.some(a=>a.conflicts>0)">
+        <div style="margin-bottom:1rem">
+          <div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Assigned with a conflict</div>
+          <template x-for="a in assignResult.assigned.filter(a=>a.conflicts>0)" :key="a.pool_id">
+            <div style="font-size:.85rem;padding:.4rem .6rem;background:#fff8e1;border:1px solid #ffc107;border-radius:5px;margin-bottom:.35rem">
+              Pool <span x-text="poolNumberById(a.pool_id)"></span> — <span x-text="refereeName(a.referee_id)"></span>
+              (<span x-text="a.conflicts"></span> criterion violated)
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="assignResult?.shortfalls?.length">
+        <div style="margin-bottom:1rem">
+          <div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Why some pools couldn't get a clean referee</div>
+          <template x-for="(s, i) in assignResult.shortfalls" :key="i">
+            <div style="font-size:.85rem;padding:.5rem .6rem;background:#fde8e8;border:1px solid #f1a9a9;border-radius:5px;margin-bottom:.4rem">
+              <div>
+                Pool<span x-text="s.pools.length>1?'s':''"></span>
+                <span x-text="s.pools.map(p=>poolNumberById(p.pool_id)).join(', ')"></span>
+                <span x-text="s.pools.length>1?'together':''"></span>
+                could only draw from
+                <strong x-text="s.compatible_referee_ids.length"></strong> referee(s) satisfying
+                <span x-text="s.threshold===0?'a fully clean assignment':('at most '+s.threshold+' violated criterion/criteria')"></span>.
+              </div>
+              <template x-for="p in s.pools" :key="p.pool_id">
+                <div style="font-size:.8rem;color:#555;margin:.15rem 0 0 .5rem">
+                  Pool <span x-text="poolNumberById(p.pool_id)"></span>: <span x-text="poolBlockingDetail(p)"></span>
+                </div>
+              </template>
+              <div style="color:#922b21;margin-top:.35rem">
+                Short by <strong x-text="s.shortfall"></strong> — add
+                <span x-text="s.shortfall"></span> more referee(s) avoiding
+                <span x-text="blockingSummary(s)"></span> to resolve this
+                (<span x-text="s.compatible_referee_ids.map(id=>refereeName(id)).join(', ')||'none currently qualify'"></span> already do).
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="assignResult?.unassigned?.length">
+        <div style="font-size:.85rem;color:#922b21;margin-bottom:1rem">
+          <span x-text="assignResult.unassigned.length"></span> pool(s) got no referee at all:
+          Pool <span x-text="assignResult.unassigned.map(id=>poolNumberById(id)).join(', ')"></span>.
+          Not enough referees registered for this competition — add more to the roster or assign these by hand.
+        </div>
+      </template>
+
+      <div style="display:flex;justify-content:flex-end">
+        <button class="primary" @click="assignResultOpen=false">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Live rankings -->
   <div class="card" x-show="rankings.length>0">
     <h2 style="margin-top:0">
@@ -191,6 +257,7 @@ function app() {
     notice:{text:'',error:false},
     closeMethod:'rule', closeValue:'', closeRoundTo:'',
     assignOpen:false, assignPool:null, assignStripId:'', assignRefId:'',
+    assignResultOpen:false, assignResult:null,
     manualTieBreak: false,
 
     get allBoutsComplete() {
@@ -262,12 +329,32 @@ function app() {
       const r = await fetch('/api/phases/'+phaseId+'/auto-assign-referees', { method: 'POST' });
       const data = await r.json();
       if (!r.ok) { this.showNotice(data.error || 'Auto-assign failed', true); return; }
-      let msg = 'Assigned '+data.assigned.length+' referee(s)';
-      const withConflict = data.assigned.filter(a => a.conflicts > 0).length;
-      if (withConflict) msg += ' ('+withConflict+' with an unavoidable nationality/club conflict)';
-      if (data.unassigned.length) msg += ' — '+data.unassigned.length+' pool(s) left unassigned: not enough referees in the roster';
-      this.showNotice(msg, data.unassigned.length > 0);
+      this.assignResult = data;
+      this.assignResultOpen = true;
       await this.loadPhase();
+    },
+
+    poolNumberById(id) {
+      const p = this.pools.find(x => x.id === id);
+      return p ? p.pool_number : id;
+    },
+    refereeName(id) {
+      const r = this.referees.find(x => x.referee_id == id);
+      return r ? r.last_name+', '+r.first_name : 'Referee '+id;
+    },
+    poolBlockingDetail(p) {
+      const parts = [];
+      if (p.nationalities.length) parts.push('nationality '+p.nationalities.join(', '));
+      if (p.clubs.length) parts.push('club '+p.clubs.map(c=>c.club_name).join(', '));
+      return parts.join(' · ') || '—';
+    },
+    blockingSummary(s) {
+      const nats  = [...new Set(s.pools.flatMap(p => p.nationalities))];
+      const clubs = [...new Set(s.pools.flatMap(p => p.clubs.map(c => c.club_name)))];
+      const parts = [];
+      if (nats.length)  parts.push('nationality '+nats.join(', '));
+      if (clubs.length) parts.push('club '+clubs.join(', '));
+      return parts.join(' and ') || 'nothing in particular';
     },
 
     async reopenPhase() {
