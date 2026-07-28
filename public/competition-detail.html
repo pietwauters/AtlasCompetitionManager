@@ -826,7 +826,8 @@ function app() {
       if(!confirm('Delete this round and all its pools and bouts?'))return;
       const r = await fetch('/api/competitions/'+compId+'/phases/'+ph.id,{method:'DELETE'});
       if(!r.ok){this.showNotice('Delete failed',true);return;}
-      this.showNotice('Round deleted'); await this.loadPhases();
+      this.showNotice('Round deleted');
+      await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
     formatOption(opt) {
       const counts={};
