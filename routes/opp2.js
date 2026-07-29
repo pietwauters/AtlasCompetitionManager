@@ -158,11 +158,7 @@ router.patch('/bout-standards/:weapon/:gender/:phase_type', adminOnly, (req, res
   const { minutes_per_bout } = req.body;
   if (!minutes_per_bout || minutes_per_bout < 1)
     return res.status(400).json({ error: 'minutes_per_bout must be >= 1' });
-  const db = require('../db');
-  db.prepare(`
-    UPDATE bout_duration_standards SET minutes_per_bout = ?
-    WHERE weapon = ? AND gender = ? AND phase_type = ?
-  `).run(minutes_per_bout, weapon, gender, phase_type);
+  BoutDurationStandards.setDefault(weapon, gender, phase_type, minutes_per_bout);
   res.json({ ok: true });
 });
 

@@ -4,7 +4,6 @@ const express    = require('express');
 const TeamMatch  = require('../services/teamMatches');
 const TeamPhase  = require('../services/teamPhases');
 const SSE        = require('../lib/sse');
-const db         = require('../db');
 
 const router = express.Router();
 
@@ -98,8 +97,8 @@ router.patch('/relays/:id', (req, res) => {
       rightTouches: Number(right_touches),
       timeExpired:  time_expired ? 1 : 0,
     });
-    const relay = db.prepare('SELECT team_match_id FROM relays WHERE id = ?').get(req.params.id);
-    if (relay) SSE.emit(String(relay.team_match_id), 'relay-updated', {});
+    const teamMatchId = TeamMatch.teamMatchIdForRelay(req.params.id);
+    if (teamMatchId) SSE.emit(String(teamMatchId), 'relay-updated', {});
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -109,8 +108,8 @@ router.patch('/relays/:id', (req, res) => {
 router.post('/relays/:id/undo', (req, res) => {
   try {
     const result = TeamMatch.undo(req.params.id);
-    const relay = db.prepare('SELECT team_match_id FROM relays WHERE id = ?').get(req.params.id);
-    if (relay) SSE.emit(String(relay.team_match_id), 'relay-updated', {});
+    const teamMatchId = TeamMatch.teamMatchIdForRelay(req.params.id);
+    if (teamMatchId) SSE.emit(String(teamMatchId), 'relay-updated', {});
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

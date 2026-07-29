@@ -75,6 +75,19 @@ const PoolRefereeAssignment = {
     return stmtCombinablePoolPhases.all(Number(tournamentId));
   },
 
+  // Which of the given phase ids actually belong to a competition in this
+  // tournament — used to reject a combined auto-assign request spanning
+  // phases from a different tournament before ever calling autoAssign.
+  phasesOwnedByTournament(tournamentId, phaseIds) {
+    const placeholders = phaseIds.map(() => '?').join(',');
+    // dynamic-sql-ok: IN(...) placeholder count varies with phaseIds.length
+    return db.prepare(`
+      SELECT ph.id FROM phases ph
+      JOIN competitions c ON c.id = ph.competition_id
+      WHERE c.tournament_id = ? AND ph.id IN (${placeholders})
+    `).all(Number(tournamentId), ...phaseIds);
+  },
+
 
   // Assigns a referee to every pool across one or more phases (all treated
   // as running at the same time, so no two pools may share a referee — see

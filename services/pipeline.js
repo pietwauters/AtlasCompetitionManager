@@ -47,6 +47,12 @@ const stmtOfficialsForSlot = db.prepare(`
 // Identical SQL text used at multiple call sites shares one statement
 // object rather than being re-declared per call site.
 const stmtFindByPool = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?');
+const stmtSlotForPoolOnStrip = db.prepare(
+  'SELECT id FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
+);
+const stmtSlotsForPoolOrdered = db.prepare(
+  'SELECT id, strip_id FROM pipeline_slots WHERE pool_id = ? ORDER BY slot_order'
+);
 const stmtFindByPhaseQuery = db.prepare(`
   SELECT ps.*, st.name AS strip_name, st.strip_number
   FROM pipeline_slots ps
@@ -559,6 +565,19 @@ const Pipeline = {
 
   findByPool(poolId) {
     return stmtFindByPool.get(poolId) || null;
+  },
+
+  // Whether a pipeline slot already exists for this (pool, strip) pair —
+  // used when distributing a pool's bouts across multiple strips to decide
+  // whether a secondary slot still needs creating.
+  slotForPoolOnStrip(poolId, stripId) {
+    return stmtSlotForPoolOnStrip.get(poolId, stripId) || null;
+  },
+
+  // Every pipeline slot for a pool, in slot_order (primary first) — used to
+  // reconcile a pool's multi-strip distribution against a new strip list.
+  slotsForPool(poolId) {
+    return stmtSlotsForPoolOrdered.all(poolId);
   },
 
   // All DE pipeline slots for a phase, with strip names. Used by de.html.

@@ -2108,8 +2108,33 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
   and a genuinely new finding the manual review had missed — `routes/opp2.js`,
   `routes/pools.js`, `routes/teamMatches.js`, and `routes/tournaments.js` all call
   `db.prepare()` directly instead of going through a service, violating the "raw SQL
-  confined to services/" rule. Neither fixed yet — this pass was scoped to building the
-  checker, not clearing its findings; both are now tracked backlog. The
+  confined to services/" rule. Neither fixed at the time — that pass was scoped to
+  building the checker, not clearing its findings — **both now done, 2026-07-29:**
+  `routes/opp2.js`'s bout-standards `UPDATE` moved to a new
+  `BoutDurationStandards.setDefault()`; `routes/tournaments.js`'s dynamic
+  ownership-check `IN(...)` query moved to a new
+  `PoolRefereeAssignment.phasesOwnedByTournament()` (kept the `dynamic-sql-ok` marker,
+  since the placeholder count still genuinely varies with the phase-id list); the two
+  identical `SELECT team_match_id FROM relays WHERE id = ?` lookups in
+  `routes/teamMatches.js` (used only to pick an SSE channel after `updateRelay`/`undo`)
+  collapsed into one `TeamMatch.teamMatchIdForRelay()`; and `routes/pools.js`'s
+  `/distribute` endpoints — the most involved of the four, mixing raw strip/
+  pipeline-slot existence checks with real business logic — split across three new
+  service methods: `Pipeline.slotForPoolOnStrip()`, `Pipeline.slotsForPool()` (both
+  simple lookups), and `Pool.resetDistribution()` (the DELETE endpoint's 3-statement
+  reset, previously three unwrapped raw writes in the route — now wrapped in a single
+  `db.transaction()`, closing a latent gap against CLAUDE.md's own "multiple DB writes
+  that belong together must use a transaction" rule that had gone unnoticed until this
+  move surfaced it). The strip-existence check now reuses the existing
+  `Strip.findById`, and the "mark this newly-assigned secondary strip as `assigned`"
+  write now goes through `Strip.update()` instead of a raw one-column `UPDATE` (verified
+  `Strip.update`'s current-row-merge behavior leaves `name`/`strip_number`/
+  `network_state` untouched, matching the original raw query's effect exactly).
+  Verified end-to-end against real throwaway pools/strips/tournaments — primary+
+  secondary slot creation, distribution, reset, ownership-check (real and fake phase
+  ids), and relay-to-match resolution (real and fake relay ids) all behave identically
+  to the original inline SQL. `./scripts/check-architecture.sh` now reports 0 hard-rule
+  failures across the whole codebase. The
   circular-require checker treats a file requiring itself (e.g.
   `services/teamMatches.js:493`'s lazy self-reference, safe because Node's module cache
   already holds the fully-assigned exports by call time) as a benign idiom, not a

@@ -70,6 +70,7 @@ const stmtRelaysForMatch = db.prepare(
   'SELECT * FROM relays WHERE team_match_id = ? ORDER BY relay_number'
 );
 const stmtRelayById = db.prepare('SELECT * FROM relays WHERE id = ?');
+const stmtTeamMatchIdForRelay = db.prepare('SELECT team_match_id FROM relays WHERE id = ?');
 const stmtInsertRelayHistory = db.prepare(`
   INSERT INTO relay_history (relay_id, left_touches, right_touches, time_expired, status)
   VALUES (?, ?, ?, ?, ?)
@@ -505,6 +506,12 @@ const TeamMatch = {
       const winnerId = Math.random() < 0.5 ? finalMatch.left_team_id : finalMatch.right_team_id;
       this.recordTiebreakWinner(matchId, winnerId);
     }
+  },
+
+  // Which match a relay belongs to — used by routes/teamMatches.js to know
+  // which SSE channel to emit 'relay-updated' on after updateRelay/undo.
+  teamMatchIdForRelay(relayId) {
+    return stmtTeamMatchIdForRelay.get(relayId)?.team_match_id ?? null;
   },
 };
 

@@ -3,8 +3,8 @@ const express  = require('express');
 const Pool     = require('../services/pools');
 const Bout     = require('../services/bouts');
 const Pipeline = require('../services/pipeline');
+const Strip    = require('../services/strips');
 const SSE      = require('../lib/sse');
-const db       = require('../db');
 
 const router = express.Router();
 
@@ -65,33 +65,24 @@ router.post('/:id/distribute', (req, res) => {
 
     // Ensure all strips exist.
     for (const sid of strip_ids) {
-      const s = db.prepare('SELECT id FROM strips WHERE id = ?').get(sid);
-      if (!s) return res.status(400).json({ error: `Strip ${sid} not found` });
+      if (!Strip.findById(sid)) return res.status(400).json({ error: `Strip ${sid} not found` });
     }
 
     // Ensure primary strip has (or gets) a pipeline slot.
-    const primarySlotExists = db.prepare(
-      'SELECT id FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
-    ).get(pool.id, strip_ids[0]);
-    if (!primarySlotExists) {
+    if (!Pipeline.slotForPoolOnStrip(pool.id, strip_ids[0])) {
       Pipeline.addSlot(strip_ids[0], { type: 'pool', pool_id: pool.id });
     }
 
     // Create secondary pipeline slots for strips 2..N.
     for (let i = 1; i < strip_ids.length; i++) {
-      const exists = db.prepare(
-        'SELECT id FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
-      ).get(pool.id, strip_ids[i]);
-      if (!exists) {
+      if (!Pipeline.slotForPoolOnStrip(pool.id, strip_ids[i])) {
         Pipeline.addSlot(strip_ids[i], { type: 'pool', pool_id: pool.id, secondary: true });
-        db.prepare('UPDATE strips SET status = ? WHERE id = ?').run('assigned', strip_ids[i]);
+        Strip.update(strip_ids[i], { status: 'assigned' });
       }
     }
 
     // Remove slots for strips that are no longer in the list.
-    const existingSlots = db.prepare(
-      'SELECT id, strip_id FROM pipeline_slots WHERE pool_id = ?'
-    ).all(pool.id);
+    const existingSlots = Pipeline.slotsForPool(pool.id);
     for (const slot of existingSlots) {
       if (!strip_ids.includes(slot.strip_id)) {
         Pipeline.deleteSlot(slot.id);
@@ -111,14 +102,10 @@ router.delete('/:id/distribute', (req, res) => {
     const pool = Pool.findById(req.params.id);
     if (!pool) return res.status(404).json({ error: 'Pool not found' });
 
-    db.prepare('UPDATE bouts SET strip_id = NULL WHERE pool_id = ?').run(pool.id);
-    db.prepare('DELETE FROM pool_rest_flags WHERE pool_id = ?').run(pool.id);
-    db.prepare('UPDATE pools SET strip_count = 0, dynamic_reorder = 0 WHERE id = ?').run(pool.id);
+    Pool.resetDistribution(pool.id);
 
     // Remove all pipeline slots except the primary (lowest slot_order).
-    const slots = db.prepare(
-      'SELECT id, strip_id FROM pipeline_slots WHERE pool_id = ? ORDER BY slot_order'
-    ).all(pool.id);
+    const slots = Pipeline.slotsForPool(pool.id);
     for (let i = 1; i < slots.length; i++) {
       Pipeline.deleteSlot(slots[i].id);
     }

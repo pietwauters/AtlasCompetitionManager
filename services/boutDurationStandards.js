@@ -27,6 +27,10 @@ const stmtResetObserved = db.prepare(`
   SET sample_count = 0, observed_average = NULL
   WHERE weapon = ? AND gender = ? AND phase_type = ?
 `);
+const stmtSetDefault = db.prepare(`
+  UPDATE bout_duration_standards SET minutes_per_bout = ?
+  WHERE weapon = ? AND gender = ? AND phase_type = ?
+`);
 
 const BoutDurationStandards = {
   getAll() {
@@ -57,6 +61,11 @@ const BoutDurationStandards = {
 
   resetObserved(weapon, gender, phaseType) {
     stmtResetObserved.run(weapon, gender, phaseType);
+  },
+
+  // Update the configured default minutes/bout (director-editable via admin UI).
+  setDefault(weapon, gender, phaseType, minutesPerBout) {
+    stmtSetDefault.run(minutesPerBout, weapon, gender, phaseType);
   },
 };
 

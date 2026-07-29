@@ -2,7 +2,6 @@
 const express                = require('express');
 const Tournament             = require('../services/tournaments');
 const PoolRefereeAssignment  = require('../services/poolRefereeAssignment');
-const db                     = require('../db');
 
 const router = express.Router();
 
@@ -54,12 +53,7 @@ router.post('/:id/auto-assign-referees', (req, res) => {
     if (!Array.isArray(phaseIds) || !phaseIds.length) {
       return res.status(400).json({ error: 'phase_ids must be a non-empty array' });
     }
-    const placeholders = phaseIds.map(() => '?').join(',');
-    const owned = db.prepare(`
-      SELECT ph.id FROM phases ph
-      JOIN competitions c ON c.id = ph.competition_id
-      WHERE c.tournament_id = ? AND ph.id IN (${placeholders})
-    `).all(req.params.id, ...phaseIds);
+    const owned = PoolRefereeAssignment.phasesOwnedByTournament(req.params.id, phaseIds);
     if (owned.length !== phaseIds.length) {
       return res.status(400).json({ error: 'One or more phases do not belong to this tournament' });
     }

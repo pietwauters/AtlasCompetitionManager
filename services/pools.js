@@ -137,6 +137,20 @@ const Pool = {
     return stmtRestFlags.all(poolId);
   },
 
+  // Undo a multi-strip distribution: clear each bout's strip_id, drop the
+  // rest-flag rows, and reset the pool's own strip_count/dynamic_reorder
+  // metadata. Reuses distributeToStrips' own reset statements so the two
+  // code paths can't drift on what "reset" means. Wrapped in a transaction —
+  // these three writes must succeed or fail together, or a mid-crash leaves
+  // bouts.strip_id cleared but pools.strip_count stale (or vice versa).
+  resetDistribution(poolId) {
+    db.transaction(() => {
+      stmtResetBoutStrips.run(poolId);
+      stmtDeleteRestFlags.run(poolId);
+      stmtSetPoolStripMeta.run(0, 0, poolId);
+    })();
+  },
+
   // Only referee_id is a direct pool attribute. Strip assignment is owned
   // by the pipeline — use Pipeline.addSlot / Pipeline.deleteSlot for that.
   //
