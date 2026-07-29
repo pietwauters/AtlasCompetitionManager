@@ -23,24 +23,26 @@
   .kiosk-clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
   .kiosk-body { flex: 1 1 auto; min-height: 0; }
   .kiosk-col-head {
-    display: grid; grid-template-columns: 6rem 1fr 8rem;
+    display: grid; grid-template-columns: 6rem 8rem 10rem 1fr;
     padding: .6rem 2rem;
     font-size: .85rem; text-transform: uppercase; letter-spacing: .05em;
     color: var(--clr-text-muted); font-weight: 700;
     background: var(--clr-th-bg); border-bottom: 2px solid var(--clr-border);
   }
   .kiosk-row {
-    display: grid; grid-template-columns: 6rem 1fr 8rem;
+    display: grid; grid-template-columns: 6rem 8rem 10rem 1fr;
     align-items: center;
     padding: 1.1rem 2rem;
     border-bottom: 1px solid var(--clr-border);
   }
+  .kiosk-row:nth-child(even) { background: var(--clr-th-bg); }
   .kiosk-piste {
     text-align: center; font-weight: 700; font-size: 1.6rem; color: var(--clr-brand);
   }
+  .kiosk-pool { font-size: 1.15rem; color: var(--clr-text-muted); }
   .kiosk-name { font-weight: 700; font-size: 1.4rem; }
-  .kiosk-sub { font-size: 1rem; color: var(--clr-text-muted); margin-top: .15rem; }
-  .kiosk-time { text-align: right; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 700; }
+  .kiosk-name .kiosk-nat { font-weight: 400; color: var(--clr-text-muted); }
+  .kiosk-time { font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 700; }
   .kiosk-empty { padding: 4rem 2rem; text-align: center; font-size: 1.5rem; color: var(--clr-text-muted); }
   .kiosk-setup { padding: 3rem 2rem; max-width: 32rem; margin: 0 auto; }
   .kiosk-setup h2 { margin: 0 0 1rem; }
@@ -62,8 +64,9 @@
 <div class="kiosk-body" id="root">
   <div class="kiosk-col-head">
     <div>Piste</div>
+    <div>Start</div>
+    <div>Pool</div>
     <div>Fencer</div>
-    <div style="text-align:right">Start</div>
   </div>
   <div class="kiosk-viewport" id="viewport">
     <div class="kiosk-track" id="track">
@@ -123,11 +126,11 @@
     content.innerHTML = rows.length ? rows.map(f => `
       <div class="kiosk-row">
         <div class="kiosk-piste">${f.assignment.strip_number ?? '—'}</div>
-        <div>
-          <div class="kiosk-name">${escapeHtml(f.last_name)} ${escapeHtml(f.first_name)}</div>
-          <div class="kiosk-sub">${escapeHtml([f.club_name, f.nationality].filter(Boolean).join(' · '))}${f.club_name || f.nationality ? ' — ' : ''}${escapeHtml(slotLabel(f.assignment))}</div>
-        </div>
         <div class="kiosk-time">${f.assignment.scheduled_start || '—'}</div>
+        <div class="kiosk-pool">${escapeHtml(slotLabel(f.assignment))}</div>
+        <div>
+          <div class="kiosk-name">${escapeHtml(f.last_name)} ${escapeHtml(f.first_name)}${f.nationality ? ` <span class="kiosk-nat">${escapeHtml(f.nationality)}</span>` : ''}${f.club_name ? ` <span class="kiosk-nat">${escapeHtml(f.club_name)}</span>` : ''}</div>
+        </div>
       </div>
     `).join('') : '<div class="kiosk-empty">No fencers currently scheduled.</div>';
 
