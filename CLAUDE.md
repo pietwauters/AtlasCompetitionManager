@@ -2272,14 +2272,15 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
     `feedback_live_db_test_safety` for a lesson learned earlier the same session
     about being crash-safe when doing this).
   - **God files, grown by accretion rather than extraction:**
-    - `services/pipeline.js` (1150 lines) bundles slot CRUD, the live bout-cursor state
-      machine, DE partition math, officiating roster, predicted-end-time math, relay
-      resolution, and (added 2026-07-27) kiosk roster resolution. Functions named for one
-      table silently write another: `addSlot`/`markDone`/`updateSlot`/`deleteSlot`/
-      `moveToStrip` all touch `pools.strip_id` / `pools.referee_id` / `strips.status`
-      beyond `pipeline_slots`. `nextBout`/`prevBout` (~145/~110 lines each) each
-      re-derive per-slot-type (pool/team_match/DE/placement) SQL inline rather than
-      delegating to shared helpers.
+    - `services/pipeline.js` (1150 lines, grew to 1348 by the time it was split) bundled
+      slot CRUD, the live bout-cursor state machine, DE partition math, officiating
+      roster, predicted-end-time math, relay resolution, and (added 2026-07-27) kiosk
+      roster resolution. Functions named for one table silently wrote another:
+      `addSlot`/`markDone`/`updateSlot`/`deleteSlot`/`moveToStrip` all touch
+      `pools.strip_id` / `pools.referee_id` / `strips.status` beyond `pipeline_slots`.
+      `nextBout`/`prevBout` (~145/~110 lines each) each re-derived per-slot-type
+      (pool/team_match/DE/placement) SQL inline rather than delegating to shared
+      helpers. **Split 2026-07-29** — see its own entry below.
     - `services/phases.js` (986 lines) — **split 2026-07-28**, see its own entry below.
     - `public/opp2.html` (2111 lines) — ~28 top-level data properties, 15 computed
       getters, ~70 methods in one Alpine `app()`, clearly bundling 5+ distinct features
@@ -2351,6 +2352,72 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
       counts at every step. Also re-ran the pool-referee-auto-assignment feature's own
       regression test against the split `Phase.create`/`calcOptions` to confirm no
       downstream consumer broke.
+  - **`services/pipeline.js` split — DONE 2026-07-29.** The last open architecture-review
+    item. Split into four files by concern, none of which needed a mixed-logic
+    orchestrator the way `phases.js` did — every method belonged cleanly to exactly one
+    of:
+    - `services/pipelineSlots.js` (620 lines) — slot CRUD (`findById`, `addSlot`,
+      `updateSlot`, `reorder`, `deleteSlot`, `batchReorder`, `moveToStrip`,
+      `slotForPoolOnStrip`, `slotsForPool`, `findByPool`/`findByPhase`/`findByStrip`/
+      `findAllForReferee`/`findAllStrips`), officiating roster (`refereeName`,
+      `getOfficials`, `setOfficial`), and the referee/official double-booking
+      enforcement (`ROLE_FIELDS`/`slotWindow`/`windowsOverlap`) `updateSlot` uses.
+    - `services/pipelineNav.js` (516 lines) — the live OPP2 bout-navigation hot path:
+      `activeSlot`/`markActive`/`markDone`/`recoverStaleSlot`, `pendingBoutCount`,
+      `nextBout`/`nextBoutsAhead`/`prevBout`, `resolveDeSlot`, and the relay-resolution
+      helpers (`_resolveRelayFencer` — part of the real external API, called directly
+      by `lib/opp2Composer.js`, not just internally — and `buildRelayBout`).
+    - `services/pipelineRosters.js` (132 lines) — `competitorsForSlot`/
+      `fencersForCompetition` (kiosk waiting-room displays).
+    - `lib/deSlotMath.js` (134 lines, new) — pure DE tableau/partition/de_round math
+      (`DE_BOUT_ORDER`, `tableauToDeRound`, `partitionToRange`, `rangeToPartition`,
+      `isValidPartition`, `deSlotParams`, `fillDeBoutCount`) shared by all three
+      services files above — pulled into `lib/` (not another `services/` file) since
+      it's pure algorithm with no business-CRUD shape, matching the existing
+      `lib/poolFormation.js`/`lib/deFormation.js`/`lib/boutOrder.js` convention. One
+      function (`tableauToDeRound`) does run a DB query — precedented by
+      `lib/opp2Client.js`/`lib/opp2Composer.js` also touching `db` directly; CLAUDE.md's
+      layering rule is about require *direction* (lib may require services, never the
+      reverse), not about lib being forbidden from touching the database at all.
+    - `services/pipeline.js` itself is now a 39-line pure re-export
+      (`module.exports = { ...PipelineSlots, ...PipelineNav, ...PipelineRosters }`) —
+      unlike the `phases.js` split, there was no genuinely mixed/shared logic that
+      needed an orchestrator to retain; every method sorted cleanly into exactly one of
+      the three files. **Zero external API change** — every existing caller
+      (`routes/opp2.js`/`routes/pools.js`, `lib/opp2Client.js`, `lib/opp2Composer.js`,
+      `services/pools.js`) still does `require('./pipeline')`/`require('../services/pipeline')`
+      and calls `Pipeline.methodName(...)` exactly as before.
+    - **Avoided the `phases.js` split's `this`-binding hazard from the start, rather
+      than hitting it and fixing it after the fact.** Every one of the original file's
+      ~30 `this.xxx()` cross-method calls was converted to either a direct plain-function
+      call (same file), a call through the file's own exported const by name (e.g.
+      `PipelineSlots.findById(...)` from inside another `PipelineSlots` method — safe
+      because the const is fully defined by the time any method actually executes, only
+      *not* yet defined at parse time, which doesn't matter for calls that only happen
+      later at runtime), or an explicit `require()` of whichever sibling file actually
+      owns the target method (`pipelineNav.js` requires `pipelineSlots.js` for
+      `findById`; `pipelineRosters.js` requires `pipelineSlots.js` for `findAllStrips`).
+      Since nothing in any split file depends on the caller's `this`, the orchestrator's
+      `{...A, ...B, ...C}` re-export is safe regardless of how external callers invoke
+      the merged methods — the exact hazard the `phases.js` split had to design around
+      *after* hitting it doesn't arise here at all.
+    - **Verified**: full pool-phase lifecycle (`addSlot` → `findByStrip` →
+      `pendingBoutCount` → `nextBout`/`prevBout` forward+backward →
+      `competitorsForSlot` → `fencersForCompetition` → `updateSlot` → `deleteSlot`),
+      full DE-phase lifecycle (`createDE` → `addSlot` → `nextBout` →
+      `resolveDeSlot`), full team-match lifecycle (draw → submit orders →
+      `nextBout` resolving real fencer names — the exact call path the same-day
+      `co.fencer_id` bug fix targeted, confirming the split didn't reintroduce it —
+      plus a direct call to `Pipeline._resolveRelayFencer` mirroring
+      `opp2Composer.js`'s own usage), officiating (`refereeName`/`setOfficial`/
+      `getOfficials`), and multi-strip distribution (`slotForPoolOnStrip`/
+      `slotsForPool`) — all against real throwaway competitions, all producing
+      identical results to the pre-split file. `scripts/check-circular-requires.js`
+      confirms no cycles (82 files, up from 78 — the 4 new files). Both live dev server
+      processes confirmed untouched throughout. `services/pipeline.js` no longer
+      appears in `check-architecture.sh`'s god-file list at all (39 lines); the three
+      new services files are "large" (500-620 lines) but under the 800-line god-file
+      threshold.
 - `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
   simulated competition run over live MQTT to confirm the observed-average path behaves
   (see OPP2 section above)
@@ -2398,7 +2465,11 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |
 | `services/results.js` | Final competition results combining DE + pool |
 | `services/deLayout.js` | Builds de.html's main/repechage/placement sections incl. stripSlot (bracket, de_round, tableau, partition) for each round; `placementGroupBoutIds` resolves a placement pipeline slot to bout IDs |
-| `services/pipeline.js` | Piste pipeline: CRUD, bout navigation, predicted-end, officials roster |
+| `services/pipeline.js` | Orchestrator: re-exports pipelineSlots/pipelineNav/pipelineRosters as one `Pipeline` API |
+| `services/pipelineSlots.js` | Slot CRUD, officiating roster, referee double-booking enforcement |
+| `services/pipelineNav.js` | Live OPP2 hot path: activeSlot/markActive/markDone, pendingBoutCount, nextBout/prevBout, relay resolution |
+| `services/pipelineRosters.js` | competitorsForSlot/fencersForCompetition (kiosk waiting-room displays) |
+| `lib/deSlotMath.js` | Pure DE tableau/partition/de_round math shared by the three pipeline files above |
 | `services/settings.js` | Key/value settings (broker URL, enabled flag) |
 | `services/cardReasons.js` | Card reason persistence, incl. official attribution |
 | `public/opp2.html` | Pipeline builder, live piste status, piste + referee Gantt charts |
