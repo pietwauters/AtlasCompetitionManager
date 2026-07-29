@@ -1,39 +1,56 @@
 'use strict';
 const db = require('../db');
 
+const stmtFindAll = db.prepare(`
+  SELECT id, name, short_name, country FROM clubs ORDER BY name
+`);
+const stmtFindAllWithCounts = db.prepare(`
+  SELECT c.id, c.name, c.short_name, c.country,
+         COUNT(p.id) AS fencer_count
+  FROM clubs c
+  LEFT JOIN people p ON p.club_id = c.id
+  GROUP BY c.id
+  ORDER BY c.name
+`);
+const stmtFindById = db.prepare('SELECT * FROM clubs WHERE id = ?');
+const stmtFindByName = db.prepare('SELECT * FROM clubs WHERE name = ? COLLATE NOCASE');
+const stmtInsertFindOrCreate = db.prepare(
+  'INSERT INTO clubs (name, country) VALUES (?, ?)'
+);
+const stmtCreate = db.prepare(`
+  INSERT INTO clubs (name, short_name, country)
+  VALUES (@name, @short_name, @country)
+`);
+const stmtUpdate = db.prepare(`
+  UPDATE clubs SET name = @name, short_name = @short_name, country = @country
+  WHERE id = @id
+`);
+const stmtFencerCountForClub = db.prepare('SELECT COUNT(*) AS n FROM people WHERE club_id = ?');
+const stmtDelete = db.prepare('DELETE FROM clubs WHERE id = ?');
+const stmtMovePeople = db.prepare('UPDATE people SET club_id = ? WHERE club_id = ?');
+
 const Club = {
   findAll() {
-    return db.prepare(`
-      SELECT id, name, short_name, country FROM clubs ORDER BY name
-    `).all();
+    return stmtFindAll.all();
   },
 
   findAllWithCounts() {
-    return db.prepare(`
-      SELECT c.id, c.name, c.short_name, c.country,
-             COUNT(p.id) AS fencer_count
-      FROM clubs c
-      LEFT JOIN people p ON p.club_id = c.id
-      GROUP BY c.id
-      ORDER BY c.name
-    `).all();
+    return stmtFindAllWithCounts.all();
   },
 
   findById(id) {
-    return db.prepare('SELECT * FROM clubs WHERE id = ?').get(id);
+    return stmtFindById.get(id);
   },
 
   findByName(name) {
-    return db.prepare('SELECT * FROM clubs WHERE name = ? COLLATE NOCASE').get(name);
+    return stmtFindByName.get(name);
   },
 
   // Find by name, create if not found. Used during CSV import.
   findOrCreate(name, country = '') {
     const existing = this.findByName(name.trim());
     if (existing) return existing;
-    const { lastInsertRowid } = db.prepare(
-      'INSERT INTO clubs (name, country) VALUES (?, ?)'
-    ).run(name.trim(), country);
+    const { lastInsertRowid } = stmtInsertFindOrCreate.run(name.trim(), country);
     return this.findById(lastInsertRowid);
   },
 
@@ -41,10 +58,7 @@ const Club = {
     const trimmed = name.trim();
     const conflict = this.findByName(trimmed);
     if (conflict) throw new Error(`A club named "${conflict.name}" already exists`);
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO clubs (name, short_name, country)
-      VALUES (@name, @short_name, @country)
-    `).run({ name: trimmed, short_name: short_name || null, country: country || '' });
+    const { lastInsertRowid } = stmtCreate.run({ name: trimmed, short_name: short_name || null, country: country || '' });
     return this.findById(lastInsertRowid);
   },
 
@@ -55,17 +69,14 @@ const Club = {
     const trimmed = merged.name.trim();
     const conflict = this.findByName(trimmed);
     if (conflict && Number(conflict.id) !== Number(id)) throw new Error(`A club named "${conflict.name}" already exists`);
-    db.prepare(`
-      UPDATE clubs SET name = @name, short_name = @short_name, country = @country
-      WHERE id = @id
-    `).run({ id: Number(id), name: trimmed, short_name: merged.short_name || null, country: merged.country || '' });
+    stmtUpdate.run({ id: Number(id), name: trimmed, short_name: merged.short_name || null, country: merged.country || '' });
     return this.findById(id);
   },
 
   delete(id) {
-    const count = db.prepare('SELECT COUNT(*) AS n FROM people WHERE club_id = ?').get(id);
+    const count = stmtFencerCountForClub.get(id);
     if (count.n > 0) throw new Error(`Club has ${count.n} fencer(s) — reassign or merge before deleting`);
-    return db.prepare('DELETE FROM clubs WHERE id = ?').run(id);
+    return stmtDelete.run(id);
   },
 
   // Move all fencers from sourceId to targetId, then delete source.
@@ -75,8 +86,8 @@ const Club = {
     const target = this.findById(targetId);
     if (!source) throw new Error('Source club not found');
     if (!target) throw new Error('Target club not found');
-    const moved = db.prepare('UPDATE people SET club_id = ? WHERE club_id = ?').run(targetId, sourceId).changes;
-    db.prepare('DELETE FROM clubs WHERE id = ?').run(sourceId);
+    const moved = stmtMovePeople.run(targetId, sourceId).changes;
+    stmtDelete.run(sourceId);
     return { moved, target };
   },
 };

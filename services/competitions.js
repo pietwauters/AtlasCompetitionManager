@@ -27,14 +27,42 @@ const stmtDEProgressCurrentRound = db.prepare(`
     AND left_id IS NOT NULL AND right_id IS NOT NULL
 `);
 
+const stmtAgeCategoriesForCompetition = db.prepare(`
+  SELECT ac.* FROM age_categories ac
+  JOIN competition_age_categories cac ON cac.age_category_id = ac.id
+  WHERE cac.competition_id = ?
+  ORDER BY COALESCE(ac.max_age, 999)
+`);
+const stmtFindByIdRaw = db.prepare(`
+  SELECT c.*, t.name AS tournament_name
+  FROM competitions c
+  LEFT JOIN tournaments t ON t.id = c.tournament_id
+  WHERE c.id = ?
+`);
+const stmtCreate = db.prepare(`
+  INSERT INTO competitions (tournament_id, name, weapon, gender, date, status, is_team, format_id, referee_separation)
+  VALUES (@tournament_id, @name, @weapon, @gender, @date, @status, @is_team, @format_id, @referee_separation)
+`);
+const stmtRawById = db.prepare('SELECT * FROM competitions WHERE id = ?');
+const stmtUpdate = db.prepare(`
+  UPDATE competitions SET tournament_id=@tournament_id, name=@name,
+    weapon=@weapon, gender=@gender, date=@date, status=@status, is_team=@is_team,
+    format_id=@format_id, format_params=@format_params, referee_separation=@referee_separation
+  WHERE id=@id
+`);
+const stmtDeleteAgeCategories = db.prepare('DELETE FROM competition_age_categories WHERE competition_id = ?');
+const stmtInsertAgeCategory = db.prepare(
+  'INSERT INTO competition_age_categories (competition_id, age_category_id) VALUES (?, ?)'
+);
+const stmtArchive = db.prepare("UPDATE competitions SET status='archived' WHERE id=?");
+const stmtDeleteBoutsForCompetition = db.prepare(`
+  DELETE FROM bouts WHERE phase_id IN (SELECT id FROM phases WHERE competition_id = ?)
+`);
+const stmtDeleteCompetition = db.prepare('DELETE FROM competitions WHERE id = ?');
+
 function withAgeCategories(comp) {
   if (!comp) return null;
-  comp.age_categories = db.prepare(`
-    SELECT ac.* FROM age_categories ac
-    JOIN competition_age_categories cac ON cac.age_category_id = ac.id
-    WHERE cac.competition_id = ?
-    ORDER BY COALESCE(ac.max_age, 999)
-  `).all(comp.id);
+  comp.age_categories = stmtAgeCategoriesForCompetition.all(comp.id);
   return comp;
 }
 
@@ -46,6 +74,7 @@ const Competition = {
     if (!include_archived){ conditions.push("c.status != 'archived'"); }
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
 
+    // dynamic-sql-ok: WHERE clause built from optional filters, can't be a fixed statement
     const comps = db.prepare(`
       SELECT c.*, t.name AS tournament_name,
         COUNT(comp.id) AS competitor_count
@@ -61,6 +90,7 @@ const Competition = {
 
     // One query for all age categories — avoids N+1 on the list page.
     const placeholders = comps.map(() => '?').join(',');
+    // dynamic-sql-ok: IN(...) placeholder count varies with comps.length
     const cats = db.prepare(`
       SELECT cac.competition_id, ac.*
       FROM age_categories ac
@@ -79,20 +109,12 @@ const Competition = {
   },
 
   findById(id) {
-    const comp = db.prepare(`
-      SELECT c.*, t.name AS tournament_name
-      FROM competitions c
-      LEFT JOIN tournaments t ON t.id = c.tournament_id
-      WHERE c.id = ?
-    `).get(id);
+    const comp = stmtFindByIdRaw.get(id);
     return withAgeCategories(comp);
   },
 
   create({ tournament_id, name, weapon, gender, date, status, age_category_ids, is_team, format_id, referee_separation }) {
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO competitions (tournament_id, name, weapon, gender, date, status, is_team, format_id, referee_separation)
-      VALUES (@tournament_id, @name, @weapon, @gender, @date, @status, @is_team, @format_id, @referee_separation)
-    `).run({
+    const { lastInsertRowid } = stmtCreate.run({
       tournament_id: tournament_id || null,
       name, weapon, gender,
       date: date || null,
@@ -108,15 +130,10 @@ const Competition = {
   },
 
   update(id, fields) {
-    const current = db.prepare('SELECT * FROM competitions WHERE id = ?').get(id);
+    const current = stmtRawById.get(id);
     if (!current) return null;
     const m = { ...current, ...fields };
-    db.prepare(`
-      UPDATE competitions SET tournament_id=@tournament_id, name=@name,
-        weapon=@weapon, gender=@gender, date=@date, status=@status, is_team=@is_team,
-        format_id=@format_id, format_params=@format_params, referee_separation=@referee_separation
-      WHERE id=@id
-    `).run({ id: Number(id), tournament_id: m.tournament_id || null,
+    stmtUpdate.run({ id: Number(id), tournament_id: m.tournament_id || null,
              name: m.name, weapon: m.weapon, gender: m.gender,
              date: m.date || null, status: m.status,
              is_team: fields.is_team !== undefined ? (fields.is_team ? 1 : 0) : (current.is_team || 0),
@@ -134,17 +151,14 @@ const Competition = {
   // Replace all age categories for a competition.
   setAgeCategories(compId, categoryIds) {
     const run = db.transaction(() => {
-      db.prepare('DELETE FROM competition_age_categories WHERE competition_id = ?').run(compId);
-      const insert = db.prepare(
-        'INSERT INTO competition_age_categories (competition_id, age_category_id) VALUES (?, ?)'
-      );
-      for (const catId of categoryIds) insert.run(compId, catId);
+      stmtDeleteAgeCategories.run(compId);
+      for (const catId of categoryIds) stmtInsertAgeCategory.run(compId, catId);
     });
     run();
   },
 
   archive(id) {
-    return db.prepare("UPDATE competitions SET status='archived' WHERE id=?").run(id);
+    return stmtArchive.run(id);
   },
 
   // Returns competitions that have an active phase, with progress.
@@ -168,10 +182,8 @@ const Competition = {
     const run = db.transaction(() => {
       // bouts.left_id/right_id are RESTRICT — delete bouts first so the
       // cascade from competitors can proceed without hitting the constraint.
-      db.prepare(`
-        DELETE FROM bouts WHERE phase_id IN (SELECT id FROM phases WHERE competition_id = ?)
-      `).run(id);
-      return db.prepare('DELETE FROM competitions WHERE id = ?').run(id);
+      stmtDeleteBoutsForCompetition.run(id);
+      return stmtDeleteCompetition.run(id);
     });
     return run();
   },

@@ -83,33 +83,69 @@ function toHandedness(raw) {
 // Core import
 // ---------------------------------------------------------------------------
 
+const stmtFindTournament = db.prepare(`
+  SELECT id FROM tournaments
+  WHERE championship = ? AND name = ? AND fie_season = ?
+  LIMIT 1
+`);
+const stmtInsertTournament = db.prepare(`
+  INSERT INTO tournaments (name, championship, fie_season, organizing_federation, status)
+  VALUES (@name, @championship, @season, @federation, 'open')
+`);
+const stmtFindCompetitionByFieId = db.prepare('SELECT id FROM competitions WHERE fie_id = ?');
+const stmtInsertCompetition = db.prepare(`
+  INSERT INTO competitions
+    (tournament_id, name, weapon, gender, date, fie_id, seeding_issuer, status)
+  VALUES
+    (@tournament_id, @name, @weapon, @gender, @date, @fie_id, @seeding_issuer, 'draft')
+`);
+const stmtFindCompetitorByFieId = db.prepare(
+  'SELECT id FROM competitors WHERE competition_id = ? AND fie_id = ?'
+);
+const stmtUpdateCompetitor = db.prepare(`
+  UPDATE competitors SET
+    last_name = @last_name, first_name = @first_name,
+    date_of_birth = @date_of_birth, gender = @gender,
+    nationality = @nationality, handedness = @handedness,
+    fie_licence = @fie_licence,
+    seeding_position = @seeding_position,
+    seeding_points   = @seeding_points,
+    seeding_issuer   = @seeding_issuer
+  WHERE id = @id
+`);
+const stmtInsertCompetitor = db.prepare(`
+  INSERT INTO competitors
+    (competition_id, last_name, first_name, date_of_birth, gender,
+     nationality, fie_id, handedness, fie_licence,
+     seeding_position, seeding_points, seeding_issuer, status)
+  VALUES
+    (@competition_id, @last_name, @first_name, @date_of_birth, @gender,
+     @nationality, @fie_id, @handedness, @fie_licence,
+     @seeding_position, @seeding_points, @seeding_issuer, 'active')
+`);
+const stmtActiveCompetitorsForSeeding = db.prepare(`
+  SELECT id FROM competitors
+  WHERE competition_id = ? AND status = 'active'
+  ORDER BY CASE WHEN seeding_position IS NULL THEN 1 ELSE 0 END,
+           seeding_position ASC, last_name, first_name
+`);
+const stmtSetInitialSeed = db.prepare('UPDATE competitors SET initial_seed = ? WHERE id = ?');
+
 const findOrCreateTournament = db.transaction((championship, titreLong, season, federation) => {
-  const existing = db.prepare(`
-    SELECT id FROM tournaments
-    WHERE championship = ? AND name = ? AND fie_season = ?
-    LIMIT 1
-  `).get(championship, titreLong, season);
+  const existing = stmtFindTournament.get(championship, titreLong, season);
   if (existing) return existing.id;
 
-  const { lastInsertRowid } = db.prepare(`
-    INSERT INTO tournaments (name, championship, fie_season, organizing_federation, status)
-    VALUES (@name, @championship, @season, @federation, 'open')
-  `).run({ name: titreLong, championship, season, federation });
+  const { lastInsertRowid } = stmtInsertTournament.run({ name: titreLong, championship, season, federation });
   return lastInsertRowid;
 });
 
 const findOrCreateCompetition = db.transaction((tournamentId, attrs, weapon) => {
   if (attrs.ID) {
-    const existing = db.prepare('SELECT id FROM competitions WHERE fie_id = ?').get(Number(attrs.ID));
+    const existing = stmtFindCompetitionByFieId.get(Number(attrs.ID));
     if (existing) return existing.id;
   }
 
-  const { lastInsertRowid } = db.prepare(`
-    INSERT INTO competitions
-      (tournament_id, name, weapon, gender, date, fie_id, seeding_issuer, status)
-    VALUES
-      (@tournament_id, @name, @weapon, @gender, @date, @fie_id, @seeding_issuer, 'draft')
-  `).run({
+  const { lastInsertRowid } = stmtInsertCompetition.run({
     tournament_id:   tournamentId,
     name:            attrs.TitreLong || '',
     weapon,
@@ -128,22 +164,10 @@ function upsertTireur(competitionId, t, championship) {
   const seeding_position = toPosition(t.Classement);
 
   if (fie_id) {
-    const existing = db.prepare(
-      'SELECT id FROM competitors WHERE competition_id = ? AND fie_id = ?'
-    ).get(competitionId, fie_id);
+    const existing = stmtFindCompetitorByFieId.get(competitionId, fie_id);
 
     if (existing) {
-      db.prepare(`
-        UPDATE competitors SET
-          last_name = @last_name, first_name = @first_name,
-          date_of_birth = @date_of_birth, gender = @gender,
-          nationality = @nationality, handedness = @handedness,
-          fie_licence = @fie_licence,
-          seeding_position = @seeding_position,
-          seeding_points   = @seeding_points,
-          seeding_issuer   = @seeding_issuer
-        WHERE id = @id
-      `).run({
+      stmtUpdateCompetitor.run({
         id:               existing.id,
         last_name:        t.Nom        || null,
         first_name:       t.Prenom     || null,
@@ -160,16 +184,7 @@ function upsertTireur(competitionId, t, championship) {
     }
   }
 
-  db.prepare(`
-    INSERT INTO competitors
-      (competition_id, last_name, first_name, date_of_birth, gender,
-       nationality, fie_id, handedness, fie_licence,
-       seeding_position, seeding_points, seeding_issuer, status)
-    VALUES
-      (@competition_id, @last_name, @first_name, @date_of_birth, @gender,
-       @nationality, @fie_id, @handedness, @fie_licence,
-       @seeding_position, @seeding_points, @seeding_issuer, 'active')
-  `).run({
+  stmtInsertCompetitor.run({
     competition_id:   competitionId,
     last_name:        t.Nom        || null,
     first_name:       t.Prenom     || null,
@@ -188,16 +203,10 @@ function upsertTireur(competitionId, t, championship) {
 
 // After all tireurs are imported, assign initial_seed 1..N by seeding_position.
 function assignInitialSeeds(competitionId) {
-  const rows = db.prepare(`
-    SELECT id FROM competitors
-    WHERE competition_id = ? AND status = 'active'
-    ORDER BY CASE WHEN seeding_position IS NULL THEN 1 ELSE 0 END,
-             seeding_position ASC, last_name, first_name
-  `).all(competitionId);
+  const rows = stmtActiveCompetitorsForSeeding.all(competitionId);
 
-  const upd = db.prepare('UPDATE competitors SET initial_seed = ? WHERE id = ?');
   db.transaction(() => {
-    rows.forEach((r, i) => upd.run(i + 1, r.id));
+    rows.forEach((r, i) => stmtSetInitialSeed.run(i + 1, r.id));
   })();
 }
 

@@ -2,32 +2,72 @@
 const db = require('../db');
 const { buildSeedPositions } = require('../lib/deFormation');
 
+const stmtPhaseRuleDoc = db.prepare('SELECT rule_doc FROM phases WHERE id=?');
+const stmtDeBouts = db.prepare(`
+  SELECT b.de_round, b.tableau_position, b.status, b.bracket,
+         b.left_id, b.right_id, b.winner_id, b.place_rank,
+         lc.first_name AS lf, lc.last_name AS ll, lcl.name AS lclub,
+         rc.first_name AS rf, rc.last_name AS rl, rcl.name AS rclub
+  FROM bouts b
+  LEFT JOIN competitors lc  ON lc.id  = b.left_id
+  LEFT JOIN people      lpl ON lpl.id = lc.person_id
+  LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
+  LEFT JOIN competitors rc  ON rc.id  = b.right_id
+  LEFT JOIN people      rpl ON rpl.id = rc.person_id
+  LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
+  WHERE b.phase_id = ?
+  ORDER BY b.de_round, b.tableau_position
+`);
+const stmtMaxRepRound = db.prepare(
+  "SELECT COALESCE(MAX(de_round),0) AS m FROM bouts WHERE phase_id=? AND bracket='repechage'"
+);
+const stmtDePhaseEntrantCount = db.prepare(`
+  SELECT COUNT(DISTINCT id) AS n FROM (
+    SELECT left_id  AS id FROM bouts WHERE phase_id = ? AND left_id  IS NOT NULL
+    UNION
+    SELECT right_id AS id FROM bouts WHERE phase_id = ? AND right_id IS NOT NULL
+  )
+`);
+const stmtPoolRowsAll = db.prepare(`
+  SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
+         c.first_name, c.last_name, cl.name AS club_name
+  FROM rankings r
+  JOIN competitors c  ON c.id  = r.competitor_id
+  LEFT JOIN people p  ON p.id  = c.person_id
+  LEFT JOIN clubs  cl ON cl.id = p.club_id
+  WHERE r.phase_id = ?
+  ORDER BY r.position
+`);
+const stmtPoolRowsEliminatedOnly = db.prepare(`
+  SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
+         c.first_name, c.last_name, cl.name AS club_name
+  FROM rankings r
+  JOIN competitors c  ON c.id  = r.competitor_id
+  LEFT JOIN people p  ON p.id  = c.person_id
+  LEFT JOIN clubs  cl ON cl.id = p.club_id
+  WHERE r.phase_id = ? AND r.advanced = 0
+  ORDER BY r.position
+`);
+const stmtAdvancedCount = db.prepare(
+  'SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1'
+);
+const stmtPhasesForCompetition = db.prepare(
+  'SELECT id, type, phase_order, status, format_stage FROM phases WHERE competition_id=? ORDER BY phase_order'
+);
+const stmtCompetitionFormatId = db.prepare('SELECT format_id FROM competitions WHERE id = ?');
+
 // Ranks a single DE phase in isolation — returns entries with `place` numbered
 // from 1 within that phase alone. Callers combining multiple independent
 // terminal phases (see getCompetitionResults) are responsible for offsetting.
 function rankDePhase(dePhaseId) {
   const entries = [];
 
-  const phase = db.prepare('SELECT rule_doc FROM phases WHERE id=?').get(dePhaseId);
+  const phase = stmtPhaseRuleDoc.get(dePhaseId);
   const { loadRule } = require('../lib/rules');
   const ruleDoc     = loadRule(phase.rule_doc);
   const isRepechage = !!(ruleDoc.repechage?.enabled);
 
-  const bouts = db.prepare(`
-    SELECT b.de_round, b.tableau_position, b.status, b.bracket,
-           b.left_id, b.right_id, b.winner_id, b.place_rank,
-           lc.first_name AS lf, lc.last_name AS ll, lcl.name AS lclub,
-           rc.first_name AS rf, rc.last_name AS rl, rcl.name AS rclub
-    FROM bouts b
-    LEFT JOIN competitors lc  ON lc.id  = b.left_id
-    LEFT JOIN people      lpl ON lpl.id = lc.person_id
-    LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
-    LEFT JOIN competitors rc  ON rc.id  = b.right_id
-    LEFT JOIN people      rpl ON rpl.id = rc.person_id
-    LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
-    WHERE b.phase_id = ?
-    ORDER BY b.de_round, b.tableau_position
-  `).all(dePhaseId);
+  const bouts = stmtDeBouts.all(dePhaseId);
 
   // Name/club lookup
   const info = {};
@@ -97,9 +137,7 @@ function rankDePhase(dePhaseId) {
       //   G-losers (last rep injection losers): next band
       //   F-losers, E-losers, D-losers: further bands
       const reT   = ruleDoc.repechage.reentryAt;
-      const maxRepRound = db.prepare(
-        "SELECT COALESCE(MAX(de_round),0) AS m FROM bouts WHERE phase_id=? AND bracket='repechage'"
-      ).get(dePhaseId).m;
+      const maxRepRound = stmtMaxRepRound.get(dePhaseId).m;
       const n     = maxRepRound / 2;
       const lastMainRound = n + 1;
       const finalsRounds  = Math.log2(reT);
@@ -194,26 +232,11 @@ function rankDePhase(dePhaseId) {
 // since a phase with only 2 of 16 places decided must still shift the next
 // track's ranks by its full 16, not by 2.
 function _dePhaseEntrantCount(phaseId) {
-  return db.prepare(`
-    SELECT COUNT(DISTINCT id) AS n FROM (
-      SELECT left_id  AS id FROM bouts WHERE phase_id = ? AND left_id  IS NOT NULL
-      UNION
-      SELECT right_id AS id FROM bouts WHERE phase_id = ? AND right_id IS NOT NULL
-    )
-  `).get(phaseId, phaseId).n;
+  return stmtDePhaseEntrantCount.get(phaseId, phaseId).n;
 }
 
 function fetchPoolRows(phaseId, onlyEliminated) {
-  return db.prepare(`
-    SELECT r.position AS pool_rank, r.advanced, r.competitor_id,
-           c.first_name, c.last_name, cl.name AS club_name
-    FROM rankings r
-    JOIN competitors c  ON c.id  = r.competitor_id
-    LEFT JOIN people p  ON p.id  = c.person_id
-    LEFT JOIN clubs  cl ON cl.id = p.club_id
-    WHERE r.phase_id = ? ${onlyEliminated ? 'AND r.advanced = 0' : ''}
-    ORDER BY r.position
-  `).all(phaseId);
+  return (onlyEliminated ? stmtPoolRowsEliminatedOnly : stmtPoolRowsAll).all(phaseId);
 }
 
 // Ranks any phase (pool or DE) into one shared entry shape, sorted best-to-
@@ -325,9 +348,7 @@ function _getResultsFreeForm(compId, phases) {
       seen.add(row.competitor_id);
     };
 
-    const advancedCount = db.prepare(
-      'SELECT COUNT(*) AS n FROM rankings WHERE phase_id=? AND advanced=1'
-    ).get(lastPool.id).n;
+    const advancedCount = stmtAdvancedCount.get(lastPool.id).n;
     const hasLaterPhase = phases.some(p => p.phase_order > lastPool.phase_order) || advancedCount > 0;
 
     let nextPlace;
@@ -358,11 +379,9 @@ function _getResultsFreeForm(compId, phases) {
 }
 
 function getCompetitionResults(compId) {
-  const phases = db.prepare(
-    'SELECT id, type, phase_order, status, format_stage FROM phases WHERE competition_id=? ORDER BY phase_order'
-  ).all(compId);
+  const phases = stmtPhasesForCompetition.all(compId);
 
-  const comp = db.prepare('SELECT format_id FROM competitions WHERE id = ?').get(compId);
+  const comp = stmtCompetitionFormatId.get(compId);
   let format = null;
   if (comp?.format_id) {
     const Format = require('./formats');

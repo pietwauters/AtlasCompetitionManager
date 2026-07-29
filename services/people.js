@@ -7,6 +7,32 @@ function parseWeapons(raw) {
   try { return JSON.parse(raw); } catch { return [raw]; }
 }
 
+const stmtFindById = db.prepare(`
+  SELECT p.*, c.name AS club_name
+  FROM people p
+  LEFT JOIN clubs c ON c.id = p.club_id
+  WHERE p.id = ?
+`);
+const stmtFencerForPerson = db.prepare(
+  'SELECT id, weapons, handedness, fie_statut FROM fencers WHERE person_id = ?'
+);
+const stmtRefereeForPerson = db.prepare(
+  'SELECT id, level FROM referees WHERE person_id = ?'
+);
+const stmtCreate = db.prepare(`
+  INSERT INTO people (first_name, last_name, date_of_birth, gender, nationality, club_id)
+  VALUES (@first_name, @last_name, @date_of_birth, @gender, @nationality, @club_id)
+`);
+const stmtRawById = db.prepare('SELECT * FROM people WHERE id = ?');
+const stmtUpdate = db.prepare(`
+  UPDATE people
+  SET first_name = @first_name, last_name = @last_name,
+      date_of_birth = @date_of_birth, gender = @gender,
+      nationality = @nationality, club_id = @club_id
+  WHERE id = @id
+`);
+const stmtDelete = db.prepare('DELETE FROM people WHERE id = ?');
+
 const Person = {
   // List all people with role flags and club name.
   // Filters: search (name), role ('fencer'|'referee'), club_id
@@ -27,6 +53,7 @@ const Person = {
 
     const where = wheres.length ? 'WHERE ' + wheres.join(' AND ') : '';
 
+    // dynamic-sql-ok: WHERE clause built from optional filters, can't be a fixed statement
     return db.prepare(`
       SELECT
         p.id, p.first_name, p.last_name, p.date_of_birth, p.gender,
@@ -46,31 +73,19 @@ const Person = {
 
   // Get one person with nested fencer and referee profiles.
   findById(id) {
-    const person = db.prepare(`
-      SELECT p.*, c.name AS club_name
-      FROM people p
-      LEFT JOIN clubs c ON c.id = p.club_id
-      WHERE p.id = ?
-    `).get(id);
+    const person = stmtFindById.get(id);
     if (!person) return null;
 
-    const fencer = db.prepare(
-      'SELECT id, weapons, handedness, fie_statut FROM fencers WHERE person_id = ?'
-    ).get(id);
+    const fencer = stmtFencerForPerson.get(id);
     if (fencer) fencer.weapons = parseWeapons(fencer.weapons);
 
-    const referee = db.prepare(
-      'SELECT id, level FROM referees WHERE person_id = ?'
-    ).get(id);
+    const referee = stmtRefereeForPerson.get(id);
 
     return { ...person, fencer: fencer || null, referee: referee || null };
   },
 
   create({ first_name, last_name, date_of_birth, gender, nationality, club_id }) {
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO people (first_name, last_name, date_of_birth, gender, nationality, club_id)
-      VALUES (@first_name, @last_name, @date_of_birth, @gender, @nationality, @club_id)
-    `).run({
+    const { lastInsertRowid } = stmtCreate.run({
       first_name,
       last_name,
       date_of_birth: date_of_birth || null,
@@ -83,16 +98,10 @@ const Person = {
 
   // Patch-style update: only supplied fields overwrite existing values.
   update(id, fields) {
-    const current = db.prepare('SELECT * FROM people WHERE id = ?').get(id);
+    const current = stmtRawById.get(id);
     if (!current) return null;
     const m = { ...current, ...fields };
-    db.prepare(`
-      UPDATE people
-      SET first_name = @first_name, last_name = @last_name,
-          date_of_birth = @date_of_birth, gender = @gender,
-          nationality = @nationality, club_id = @club_id
-      WHERE id = @id
-    `).run({
+    stmtUpdate.run({
       id: Number(id),
       first_name:    m.first_name,
       last_name:     m.last_name,
@@ -105,7 +114,7 @@ const Person = {
   },
 
   delete(id) {
-    return db.prepare('DELETE FROM people WHERE id = ?').run(id);
+    return stmtDelete.run(id);
   },
 };
 

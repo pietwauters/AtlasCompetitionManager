@@ -15,6 +15,7 @@ const stmtFindByIdFull  = db.prepare(`${BASE} WHERE b.id = ?`);
 const stmtFindByPool    = db.prepare(`${BASE} WHERE b.pool_id = ? ORDER BY b.bout_order`);
 const stmtFindByPhase   = db.prepare(`${BASE} WHERE b.phase_id = ? ORDER BY b.pool_id, b.bout_order`);
 const stmtGetRaw        = db.prepare('SELECT * FROM bouts WHERE id = ?');
+const stmtSetPhantomFinished = db.prepare("UPDATE bouts SET status='finished', winner_id=NULL WHERE id=?");
 const stmtInsertHistory = db.prepare(`
   INSERT INTO bout_history (bout_id, left_score, right_score, winner_id, status)
   VALUES (@bout_id, @left_score, @right_score, @winner_id, @status)
@@ -251,7 +252,7 @@ const Bout = {
         const pendingLeft  = stmtPendingCascade.get(nextId, 'left',  nextId, 'left').n;
         const pendingRight = stmtPendingCascade.get(nextId, 'right', nextId, 'right').n;
         if (pendingLeft > 0 || pendingRight > 0) continue; // still waiting on a real source
-        db.prepare("UPDATE bouts SET status='finished', winner_id=NULL WHERE id=?").run(nextId);
+        stmtSetPhantomFinished.run(nextId);
         cascaded.push(this.findById(nextId));
         const sub = this.routeBoutResult(nextId);
         cascaded.push(...sub.cascaded);

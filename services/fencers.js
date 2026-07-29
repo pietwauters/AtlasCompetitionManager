@@ -28,6 +28,26 @@ const BASE = `
   LEFT JOIN clubs c ON c.id = p.club_id
 `;
 
+const stmtFindById = db.prepare(`${BASE} WHERE f.id = ?`);
+const stmtFindByPersonId = db.prepare(`${BASE} WHERE f.person_id = ?`);
+const stmtFindByLicence = db.prepare(`
+  ${BASE}
+  JOIN licences l ON l.person_id = p.id
+  WHERE l.number = ?
+`);
+const stmtCreate = db.prepare(`
+  INSERT INTO fencers (person_id, weapons, handedness)
+  VALUES (@person_id, @weapons, @handedness)
+`);
+const stmtRawById = db.prepare('SELECT * FROM fencers WHERE id = ?');
+const stmtUpdate = db.prepare(`
+  UPDATE fencers
+  SET weapons = @weapons, handedness = @handedness
+  WHERE id = @id
+`);
+const stmtDelete = db.prepare('DELETE FROM fencers WHERE id = ?');
+const stmtDeleteByPersonId = db.prepare('DELETE FROM fencers WHERE person_id = ?');
+
 const Fencer = {
   // List fencers with optional search and club filter.
   findAll({ search, club_id } = {}) {
@@ -42,33 +62,27 @@ const Fencer = {
       params.push(Number(club_id));
     }
     const where = wheres.length ? 'WHERE ' + wheres.join(' AND ') : '';
+    // dynamic-sql-ok: WHERE clause built from optional filters, can't be a fixed statement
     return db.prepare(`${BASE} ${where} ORDER BY p.last_name, p.first_name`)
              .all(...params).map(hydrate);
   },
 
   findById(fencerId) {
-    return hydrate(db.prepare(`${BASE} WHERE f.id = ?`).get(fencerId));
+    return hydrate(stmtFindById.get(fencerId));
   },
 
   findByPersonId(personId) {
-    return hydrate(db.prepare(`${BASE} WHERE f.person_id = ?`).get(personId));
+    return hydrate(stmtFindByPersonId.get(personId));
   },
 
   // Match on any licence number across all issuers.
   findByLicence(number) {
-    return hydrate(db.prepare(`
-      ${BASE}
-      JOIN licences l ON l.person_id = p.id
-      WHERE l.number = ?
-    `).get(number));
+    return hydrate(stmtFindByLicence.get(number));
   },
 
   // Add a fencer profile to an existing person.
   create(personId, { weapons, handedness } = {}) {
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO fencers (person_id, weapons, handedness)
-      VALUES (@person_id, @weapons, @handedness)
-    `).run({
+    const { lastInsertRowid } = stmtCreate.run({
       person_id:  Number(personId),
       weapons:    serializeWeapons(weapons),
       handedness: handedness || null,
@@ -78,14 +92,10 @@ const Fencer = {
 
   // Patch-style update: only supplied fields overwrite existing values.
   update(fencerId, fields) {
-    const current = db.prepare('SELECT * FROM fencers WHERE id = ?').get(fencerId);
+    const current = stmtRawById.get(fencerId);
     if (!current) return null;
     const m = { ...current, ...fields };
-    db.prepare(`
-      UPDATE fencers
-      SET weapons = @weapons, handedness = @handedness
-      WHERE id = @id
-    `).run({
+    stmtUpdate.run({
       id:         Number(fencerId),
       weapons:    serializeWeapons(m.weapons),
       handedness: m.handedness || null,
@@ -94,11 +104,11 @@ const Fencer = {
   },
 
   delete(fencerId) {
-    return db.prepare('DELETE FROM fencers WHERE id = ?').run(fencerId);
+    return stmtDelete.run(fencerId);
   },
 
   deleteByPersonId(personId) {
-    return db.prepare('DELETE FROM fencers WHERE person_id = ?').run(personId);
+    return stmtDeleteByPersonId.run(personId);
   },
 };
 

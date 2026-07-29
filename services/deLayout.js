@@ -3,6 +3,8 @@ const db           = require('../db');
 const Bout         = require('./bouts');
 const { loadRule } = require('../lib/rules');
 
+const stmtPhaseById = db.prepare('SELECT * FROM phases WHERE id = ?');
+
 const A = 'A'.charCodeAt(0);
 const letter = n => String.fromCharCode(A + n);
 
@@ -161,7 +163,7 @@ const DeLayout = {
   },
 
   buildSections(phaseId) {
-    const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
+    const phase = stmtPhaseById.get(phaseId);
     if (!phase) return null;
 
     const rule  = loadRule(phase.rule_doc);

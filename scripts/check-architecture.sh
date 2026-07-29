@@ -48,14 +48,26 @@ done < <(find public -maxdepth 1 -name '*.html' 2>/dev/null)
 # 2. Prepared statements must be module-level constants (CLAUDE.md hard
 #    rule). Heuristic: a db.prepare( call on a line with zero leading
 #    whitespace is a module-level `const stmtX = db.prepare(...)`; any
-#    indented occurrence is inline inside a function/method.
+#    indented occurrence is inline inside a function/method — UNLESS the
+#    immediately preceding line carries a `// dynamic-sql-ok` marker, which
+#    is this project's documented escape hatch for genuinely dynamic SQL
+#    (e.g. a WHERE clause built from optional filters, CLAUDE.md's own
+#    stated exception to the module-level rule).
 # ─────────────────────────────────────────────────────────────────────────
 section "Prepared statements (services/*.js) — must be module-level"
 for f in services/*.js; do
   [ -f "$f" ] || continue
-  total=$(grep -o "db\.prepare(" "$f" | wc -l)
+  read -r total inline <<< "$(awk '
+    /db\.prepare\(/ {
+      total++
+      indented = ($0 ~ /^[ \t]/)
+      marked = (prev ~ /dynamic-sql-ok/)
+      if (indented && !marked) inline++
+    }
+    { prev = $0 }
+    END { print total+0, inline+0 }
+  ' "$f")"
   [ "$total" -eq 0 ] && continue
-  inline=$(grep -E "^[[:space:]]+.*db\.prepare\(" "$f" | grep -v "^[[:space:]]*//" | wc -l)
   modlevel=$((total - inline))
   if [ "$inline" -gt 0 ]; then
     echo "  FAIL: $f — $inline inline / $modlevel module-level db.prepare() calls"

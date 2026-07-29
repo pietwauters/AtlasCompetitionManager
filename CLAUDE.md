@@ -2197,18 +2197,55 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
     Smaller, still-open instance of the same client-recomputes-what-the-server-already-
     knows pattern: `opp2.html`'s `effectiveMinutes()` reimplements
     `services/boutDurationStandards.js`'s `getEffective()` instead of asking the server.
-  - **The project's own hard rule ("prepared statements must be module-level constants")
-    is barely enforced beyond a couple of files.** Measured (total `db.prepare()` calls /
-    module-level constants): `services/formats.js` 0/41, `services/phases.js` 0/58,
-    `services/teamMatches.js` 0/57, `services/teamPhases.js` 0/31, most small CRUD
-    services 0/N. `services/pipeline.js` is 16/89 — and the inline offenders that
-    actually matter for performance are on the live bout-navigation hot path
-    (`nextBout`/`prevBout`/`pendingBoutCount`, re-prepared on every OPP2 referee-tablet
-    NEXT/PREV/END transition), not just one-off admin actions. The three services built
-    2026-07-27/28 (`services/competitionReferees.js`, `services/tournamentReferees.js`,
-    mostly `services/poolRefereeAssignment.js` — one inline call at line ~118 slipped
-    through) do follow the rule, showing it's known and applied when someone's being
-    careful, just never retrofitted onto the older ~80% of the codebase.
+  - **Prepared-statement retrofit — DONE 2026-07-28/29.** Every remaining `services/`
+    file (25 in total: `ageCategories`, `boutDurationStandards`, `bouts`, `clubs`,
+    `competitions`, `competitors`, `deLayout`, `events`, `fencers`, `fieImport`,
+    `formats` (41→0), `nocs`, `people`, `personImport`, `poolRefereeAssignment`,
+    `pools`, `referees`, `results`, `strips`, `teamMatches` (57→0), `teamPhases`
+    (31→0), `teams`, `tournaments`, `users`, and `pipeline` (74→0, on top of the
+    15 already hoisted earlier) — now has **zero** inline `db.prepare()` calls,
+    confirmed by `scripts/check-architecture.sh`. Genuinely dynamic SQL (a `WHERE`
+    or `IN(...)` clause whose shape varies per call — variable filter count,
+    variable placeholder count, a direction-dependent `<`/`>` operator) is left
+    inline with a `// dynamic-sql-ok` comment directly above the `db.prepare()`
+    call, which the checker script recognizes as the documented CLAUDE.md
+    exception rather than flagging it. Where only 2 possible SQL-shape variants
+    exist (e.g. `results.js`'s `fetchPoolRows` eliminated-only vs all,
+    `pipeline.js`'s `reorder`'s up/down sibling lookup), both variants are
+    pre-declared as separate named module-level statements instead — avoiding
+    inline `prepare()` entirely since the shape is knowable ahead of time.
+    Identical SQL text used at multiple call sites within one file was
+    consolidated to a single shared statement object rather than re-declared
+    per call site (e.g. `pipeline.js`'s `"SELECT * FROM team_matches WHERE id =
+    ?"`-shaped queries, `teamMatches.js`'s repeated order/relay lookups).
+    **Two real, pre-existing bugs were found and fixed in the process, both the
+    same latent schema mismatch**: `teamMatches.js`'s `_fencerName` and
+    `pipeline.js`'s `_resolveRelayFencer` both joined through a `co.fencer_id`
+    column that `competitors` has never had — that table carries its own
+    `first_name`/`last_name`/`nationality` snapshot directly (the same pattern
+    established everywhere else, e.g. `services/competitors.js`'s `BASE` query).
+    Both queries were dead/broken code since the day they were written — inline
+    `db.prepare()` only fails at the moment it's actually *called*, so this went
+    unnoticed until hoisting forced the query to compile (and, for `pipeline.js`,
+    forced a live functional test that actually exercised the call path) at
+    require-time / test-time instead. `pipeline.js`'s version is the more
+    serious of the two: it sits on `nextBout`/`prevBout`'s team-relay path, meaning
+    any team match, the instant fencer orders were submitted for it, would have
+    crashed the OPP2 NEXT/PREV navigation for that piste the first time a real
+    relay's fencers needed resolving. Both fixed identically: query `competitors`
+    directly by id instead of joining through the nonexistent column. Verified
+    via a full throwaway-competition test exercising the exact previously-broken
+    call path (draw → submit orders → `Pipeline.nextBout` on a `team_match`
+    slot) and confirming real fencer names now resolve instead of crashing.
+    Also verified end-to-end for the ordinary pool/DE cases (`addSlot`,
+    `findByStrip`, `pendingBoutCount`, `nextBout`/`prevBout` forward and
+    backward, `competitorsForSlot`, `fencersForCompetition`, `updateSlot`,
+    `reorder`, `moveToStrip`, `batchReorder`, `deleteSlot`) against real
+    throwaway pool/DE/team-match phases, and the two live dev server processes
+    were confirmed untouched throughout (all test data created directly against
+    `data/atlas.db` and fully cleaned up after each check — see
+    `feedback_live_db_test_safety` for a lesson learned earlier the same session
+    about being crash-safe when doing this).
   - **God files, grown by accretion rather than extraction:**
     - `services/pipeline.js` (1150 lines) bundles slot CRUD, the live bout-cursor state
       machine, DE partition math, officiating roster, predicted-end-time math, relay

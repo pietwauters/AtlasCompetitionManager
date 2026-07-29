@@ -51,6 +51,7 @@ function shuffle(arr) {
   return a;
 }
 
+const stmtPhaseById = db.prepare('SELECT * FROM phases WHERE id = ?');
 const stmtCombinablePoolPhases = db.prepare(`
   SELECT ph.id AS phase_id, ph.phase_order, ph.status AS phase_status,
          c.id AS competition_id, c.name AS competition_name, c.weapon, c.gender,
@@ -115,7 +116,7 @@ const PoolRefereeAssignment = {
     if (!ids.length) return { assigned: [], unassigned: [], shortfalls: [] };
 
     const phases = ids.map(id => {
-      const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(id);
+      const phase = stmtPhaseById.get(id);
       if (!phase) throw Object.assign(new Error('Phase ' + id + ' not found'), { status: 404 });
       if (phase.type !== 'pool') throw Object.assign(new Error('Phase ' + id + ' is not a pool phase'), { status: 400 });
       return phase;

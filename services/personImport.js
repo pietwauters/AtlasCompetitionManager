@@ -26,6 +26,12 @@ const upsertLicence = db.prepare(`
   VALUES (?, 'national', 'national', ?)
   ON CONFLICT(person_id, issuer) DO UPDATE SET number = excluded.number
 `);
+const stmtFindByNameDob = db.prepare(`
+  SELECT id FROM people
+  WHERE first_name = ? COLLATE NOCASE
+    AND last_name  = ? COLLATE NOCASE
+    AND (date_of_birth = ? OR (date_of_birth IS NULL AND ? IS NULL))
+`);
 
 function importRow(row) {
   let club_id = null;
@@ -63,12 +69,7 @@ function importRow(row) {
   }
 
   // Match by name + date of birth
-  const byName = db.prepare(`
-    SELECT id FROM people
-    WHERE first_name = ? COLLATE NOCASE
-      AND last_name  = ? COLLATE NOCASE
-      AND (date_of_birth = ? OR (date_of_birth IS NULL AND ? IS NULL))
-  `).get(personData.first_name, personData.last_name, personData.date_of_birth, personData.date_of_birth);
+  const byName = stmtFindByNameDob.get(personData.first_name, personData.last_name, personData.date_of_birth, personData.date_of_birth);
 
   if (byName) {
     Person.update(byName.id, personData);

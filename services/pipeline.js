@@ -42,6 +42,296 @@ const stmtOfficialsForSlot = db.prepare(`
   WHERE so.slot_id = ?
 `);
 
+// ── Additional prepared statements — hoisted 2026-07-29 (architecture
+// review's prepared-statement retrofit; see feedback_prepare_hoisting).
+// Identical SQL text used at multiple call sites shares one statement
+// object rather than being re-declared per call site.
+const stmtFindByPool = db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?');
+const stmtFindByPhaseQuery = db.prepare(`
+  SELECT ps.*, st.name AS strip_name, st.strip_number
+  FROM pipeline_slots ps
+  JOIN strips st ON st.id = ps.strip_id
+  WHERE ps.phase_id = ? AND ps.type = 'de'
+  ORDER BY ps.tableau DESC
+`);
+const stmtFindByStripQuery = db.prepare(`
+  SELECT ps.*,
+    po.phase_id   AS pool_phase_id,
+    ph.competition_id,
+    ph.type       AS phase_type,
+    ph.phase_order,
+    co.name       AS competition_name,
+    co.weapon,
+    po.pool_number, po.strip_count, po.dynamic_reorder,
+    tm_slot.left_team_id, tm_left.name AS left_team_name,
+    tm_slot.right_team_id, tm_right.name AS right_team_name,
+    rp.first_name AS ref_first, rp.last_name AS ref_last,
+    so_ref2.referee_id AS referee2_id,         rp_ref2.first_name AS referee2_first,         rp_ref2.last_name AS referee2_last,
+    so_va.referee_id   AS video_assistant_id,  rp_va.first_name   AS video_assistant_first,  rp_va.last_name   AS video_assistant_last,
+    so_a1.referee_id   AS assessor1_id,        rp_a1.first_name   AS assessor1_first,        rp_a1.last_name   AS assessor1_last,
+    so_a2.referee_id   AS assessor2_id,        rp_a2.first_name   AS assessor2_first,        rp_a2.last_name   AS assessor2_last,
+    CASE WHEN ps.type = 'pool'
+      THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
+              AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
+      WHEN ps.type = 'team_match'
+      THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
+      ELSE NULL  -- computed in JS for DE slots (depends on partition)
+    END AS bout_count,
+    COALESCE(ps.minutes_per_bout,
+      (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
+                   THEN ds.observed_average
+                   ELSE ds.minutes_per_bout END
+       FROM bout_duration_standards ds
+       WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
+         AND ds.gender = co.gender
+         AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
+    ) AS effective_minutes_per_bout
+  FROM pipeline_slots ps
+  LEFT JOIN pools        po       ON po.id       = ps.pool_id
+  LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
+  LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
+  LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
+  LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
+  LEFT JOIN competitions co ON co.id  = ph.competition_id
+  LEFT JOIN referees     r  ON r.id   = ps.referee_id
+  LEFT JOIN people       rp ON rp.id  = r.person_id
+  LEFT JOIN pipeline_slot_officials so_ref2 ON so_ref2.slot_id = ps.id AND so_ref2.role = 'referee2'
+  LEFT JOIN referees     ref2 ON ref2.id = so_ref2.referee_id
+  LEFT JOIN people       rp_ref2 ON rp_ref2.id = ref2.person_id
+  LEFT JOIN pipeline_slot_officials so_va ON so_va.slot_id = ps.id AND so_va.role = 'video_assistant'
+  LEFT JOIN referees     refva ON refva.id = so_va.referee_id
+  LEFT JOIN people       rp_va ON rp_va.id = refva.person_id
+  LEFT JOIN pipeline_slot_officials so_a1 ON so_a1.slot_id = ps.id AND so_a1.role = 'assessor1'
+  LEFT JOIN referees     refa1 ON refa1.id = so_a1.referee_id
+  LEFT JOIN people       rp_a1 ON rp_a1.id = refa1.person_id
+  LEFT JOIN pipeline_slot_officials so_a2 ON so_a2.slot_id = ps.id AND so_a2.role = 'assessor2'
+  LEFT JOIN referees     refa2 ON refa2.id = so_a2.referee_id
+  LEFT JOIN people       rp_a2 ON rp_a2.id = refa2.person_id
+  WHERE ps.strip_id = ?
+  ORDER BY ps.slot_order
+`);
+const stmtFindAllForRefereeQuery = db.prepare(`
+  SELECT ps.*, st.name AS strip_name, st.strip_number,
+    po.pool_number,
+    ph.type AS phase_type, ph.phase_order,
+    co.name AS competition_name, co.weapon,
+    tm_slot.left_team_id, tm_left.name AS left_team_name,
+    tm_slot.right_team_id, tm_right.name AS right_team_name,
+    GROUP_CONCAT(so.role) AS other_roles,
+    CASE WHEN ps.type = 'pool'
+      THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
+              AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
+      WHEN ps.type = 'team_match'
+      THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
+      ELSE NULL
+    END AS bout_count,
+    COALESCE(ps.minutes_per_bout,
+      (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
+                   THEN ds.observed_average
+                   ELSE ds.minutes_per_bout END
+       FROM bout_duration_standards ds
+       WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
+         AND ds.gender = co.gender
+         AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
+    ) AS effective_minutes_per_bout
+  FROM pipeline_slots ps
+  JOIN strips          st       ON st.id       = ps.strip_id
+  LEFT JOIN pools      po       ON po.id       = ps.pool_id
+  LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
+  LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
+  LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
+  LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
+  LEFT JOIN competitions co ON co.id  = ph.competition_id
+  LEFT JOIN pipeline_slot_officials so ON so.slot_id = ps.id AND so.referee_id = @refId
+  WHERE ps.referee_id = @refId OR so.referee_id IS NOT NULL
+  GROUP BY ps.id
+  ORDER BY ps.strip_id, ps.slot_order
+`);
+const stmtFindAllStripsQuery = db.prepare(`
+  SELECT s.*, COUNT(ps.id) AS slot_count
+  FROM strips s
+  LEFT JOIN pipeline_slots ps ON ps.strip_id = s.id
+  GROUP BY s.id
+  ORDER BY s.strip_number
+`);
+const stmtExistingDeSlot = db.prepare(`
+  SELECT * FROM pipeline_slots
+  WHERE phase_id = ? AND type = 'de'
+    AND COALESCE(bracket, 'main') = ?
+    AND COALESCE(tableau, 0) = ?
+    AND COALESCE(partition, 'full') = ?
+    AND COALESCE(de_round, -1) = COALESCE(?, -1)
+`);
+const stmtDeletePipelineSlot = db.prepare('DELETE FROM pipeline_slots WHERE id = ?');
+const stmtExistingSlotForPoolOnStrip = db.prepare(
+  'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
+);
+const stmtSetSlotPending = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
+const stmtSetStripAssigned = db.prepare("UPDATE strips SET status='assigned' WHERE id=?");
+const stmtOtherSlotsForPool = db.prepare(
+  'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id != ?'
+);
+const stmtCountSlotsWithPoolOnStrip = db.prepare(
+  'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
+);
+const stmtExistingSlotForTeamMatchOnStrip = db.prepare(
+  'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id = ?'
+);
+const stmtOtherSlotsForTeamMatch = db.prepare(
+  'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id != ?'
+);
+const stmtCountSlotsWithTeamMatchOnStrip = db.prepare(
+  'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND team_match_id IS NOT NULL'
+);
+const stmtMaxSlotOrderForStrip = db.prepare(
+  'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
+);
+const stmtInsertPipelineSlot = db.prepare(`
+  INSERT INTO pipeline_slots
+    (strip_id, slot_order, type, pool_id, phase_id, team_match_id,
+     bracket, tableau, partition, de_round,
+     scheduled_start, minutes_per_bout, referee_id)
+  VALUES
+    (@strip_id, @slot_order, @type, @pool_id, @phase_id, @team_match_id,
+     @bracket, @tableau, @partition, @de_round,
+     @scheduled_start, @minutes_per_bout, @referee_id)
+`);
+const stmtSetPoolStripId = db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?');
+const stmtUpdateSlotFields = db.prepare(`
+  UPDATE pipeline_slots
+  SET scheduled_start         = @scheduled_start,
+      minutes_per_bout        = @minutes_per_bout,
+      referee_id              = @referee_id,
+      status                  = @status,
+      conflict_referee_id     = @conflict_referee_id,
+      conflict_original_start = @conflict_original_start,
+      conflict_paired_slot_id = @conflict_paired_slot_id
+  WHERE id = @id
+`);
+const stmtPoolStripIdLookup = db.prepare('SELECT strip_id FROM pools WHERE id = ?');
+const stmtSetPoolRefereeId = db.prepare('UPDATE pools SET referee_id = ? WHERE id = ?');
+const stmtSiblingUp = db.prepare(`
+  SELECT * FROM pipeline_slots
+  WHERE strip_id = ? AND slot_order < ?
+  ORDER BY slot_order DESC
+  LIMIT 1
+`);
+const stmtSiblingDown = db.prepare(`
+  SELECT * FROM pipeline_slots
+  WHERE strip_id = ? AND slot_order > ?
+  ORDER BY slot_order ASC
+  LIMIT 1
+`);
+const stmtSetSlotOrderNeg1 = db.prepare('UPDATE pipeline_slots SET slot_order = -1 WHERE id = ?');
+const stmtSetSlotOrder = db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?');
+const stmtClearPoolStripId = db.prepare('UPDATE pools SET strip_id = NULL WHERE id = ?');
+const stmtMaxDoneSlotOrder = db.prepare(
+  "SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ? AND status = 'done'"
+);
+const stmtBatchReorderUpdate = db.prepare(
+  'UPDATE pipeline_slots SET slot_order = ? WHERE id = ? AND strip_id = ?'
+);
+const stmtMoveSlotToStrip = db.prepare(
+  'UPDATE pipeline_slots SET strip_id = ?, slot_order = ? WHERE id = ?'
+);
+const stmtPoolStripCount = db.prepare('SELECT strip_count FROM pools WHERE id = ?');
+const stmtRelayNext = db.prepare(`
+  SELECT id, relay_number, target, status, left_touches, right_touches,
+         left_position, right_position
+  FROM relays
+  WHERE team_match_id = ?
+    AND status != 'finished'
+    AND (? IS NULL OR relay_number > (SELECT relay_number FROM relays WHERE id = ?))
+  ORDER BY relay_number LIMIT 1
+`);
+const stmtRelayNextFallback = db.prepare(`
+  SELECT id, relay_number, target, status, left_touches, right_touches,
+         left_position, right_position
+  FROM relays
+  WHERE team_match_id = ? AND status != 'finished' AND id != ?
+  ORDER BY relay_number LIMIT 1
+`);
+const stmtRelayPrev = db.prepare(`
+  SELECT id, relay_number, target, status, left_touches, right_touches,
+         left_position, right_position
+  FROM relays
+  WHERE team_match_id = ?
+    AND relay_number < (SELECT relay_number FROM relays WHERE id = ?)
+  ORDER BY relay_number DESC LIMIT 1
+`);
+const stmtResolveRelayFencerOrder = db.prepare(`
+  SELECT COALESCE(sub.substitute_competitor_id, ord.competitor_id) AS competitor_id
+  FROM team_match_orders ord
+  LEFT JOIN team_match_substitutions sub
+    ON sub.team_match_id = ord.team_match_id
+    AND sub.team_id = ord.team_id
+    AND sub.position_replaced = ord.position
+    AND sub.effective_from_relay <= ?
+  WHERE ord.team_match_id = ? AND ord.position = ?
+`);
+// Fixed 2026-07-29 (found while hoisting): this previously joined through a
+// `co.fencer_id` column that competitors has never had — competitors carries
+// its own first_name/last_name/nationality snapshot directly (see
+// services/competitors.js's BASE query), the same schema mismatch found and
+// fixed the same day in services/teamMatches.js's _fencerName. Latent since
+// this was written: any team match with orders submitted would crash the
+// instant nextBout/prevBout tried to resolve a relay fencer for real.
+const stmtResolveRelayFencerDetails = db.prepare(`
+  SELECT id AS competitor_id, first_name, last_name, nationality
+  FROM competitors
+  WHERE id = ?
+`);
+const stmtRelayMatchInfo = db.prepare(`
+  SELECT tm.id, tm.left_team_id, tm.right_team_id, tm.phase_id,
+         tl.name AS left_team_name, tr.name AS right_team_name,
+         ph.phase_order,
+         co.name AS competition_name, co.weapon
+  FROM team_matches tm
+  LEFT JOIN teams tl ON tl.id = tm.left_team_id
+  LEFT JOIN teams tr ON tr.id = tm.right_team_id
+  JOIN phases ph       ON ph.id = tm.phase_id
+  JOIN competitions co ON co.id = ph.competition_id
+  WHERE tm.id = ?
+`);
+const stmtPhaseRuleDocForRelay = db.prepare('SELECT rule_doc FROM phases WHERE id = ?');
+const stmtRelayCumulative = db.prepare(`
+  SELECT COALESCE(SUM(left_touches),  0) AS cum_left,
+         COALESCE(SUM(right_touches), 0) AS cum_right
+  FROM relays
+  WHERE team_match_id = ? AND relay_number < ? AND status = 'finished'
+`);
+const stmtRelayTotalCount = db.prepare(
+  'SELECT COUNT(*) AS n FROM relays WHERE team_match_id = ?'
+);
+const stmtPoolCompetitorsForSlot = db.prepare(`
+  SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+         cl.name AS club_name
+  FROM pool_competitors pc
+  JOIN competitors c  ON c.id  = pc.competitor_id
+  LEFT JOIN people p2 ON p2.id = c.person_id
+  LEFT JOIN clubs  cl ON cl.id = p2.club_id
+  WHERE pc.pool_id = ?
+  ORDER BY c.initial_seed ASC, c.last_name
+`);
+const stmtTeamMembersForSide = db.prepare(`
+  SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+         cl.name AS club_name, ? AS team_side
+  FROM team_members tmm
+  JOIN competitors c  ON c.id  = tmm.competitor_id
+  LEFT JOIN people p2 ON p2.id = c.person_id
+  LEFT JOIN clubs  cl ON cl.id = p2.club_id
+  WHERE tmm.team_id = ?
+`);
+const stmtCompetitionRoster = db.prepare(`
+  SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
+         cl.name AS club_name
+  FROM competitors c
+  LEFT JOIN people p2 ON p2.id = c.person_id
+  LEFT JOIN clubs  cl ON cl.id = p2.club_id
+  WHERE c.competition_id = ?
+  ORDER BY c.initial_seed ASC, c.last_name, c.first_name
+`);
+
 // Bouts in a DE round ordered by tableau position.
 // round_index is 1-based within the round, matching partition ranges.
 // bracket is bound as the first parameter of the outer query (see call sites).
@@ -54,14 +344,88 @@ const DE_BOUT_ORDER = `
   WHERE b.de_round IS NOT NULL AND b.bracket = ?
 `;
 
+// DE_BOUT_ORDER is a fixed module-level string, so every query embedding it
+// via template literal below is still 100% static SQL text — the `${...}`
+// is a compile-time JS concatenation, not a per-call variable clause.
+const stmtDePendingCount = db.prepare(`
+  WITH ordered AS (${DE_BOUT_ORDER})
+  SELECT COUNT(*) AS n FROM bouts b
+  JOIN ordered o ON o.id = b.id
+  WHERE b.phase_id=? AND b.de_round=?
+    AND o.round_index BETWEEN ? AND ?
+    AND b.status != 'finished'
+    AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+`);
+const stmtDeNext = db.prepare(`
+  WITH ordered AS (${DE_BOUT_ORDER})
+  SELECT b.*, b.id AS bout_id, o.round_index,
+    lc.first_name AS left_first,  lc.last_name  AS left_last,
+    lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+    rc.first_name AS right_first, rc.last_name  AS right_last,
+    rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+    ph.phase_order,
+    co.name AS competition_name, co.weapon
+  FROM bouts b
+  JOIN ordered o ON o.id = b.id
+  JOIN phases     ph  ON ph.id  = b.phase_id
+  JOIN competitions co ON co.id = ph.competition_id
+  LEFT JOIN competitors lc  ON lc.id  = b.left_id
+  LEFT JOIN people      lpl ON lpl.id = lc.person_id
+  LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
+  LEFT JOIN competitors rc  ON rc.id  = b.right_id
+  LEFT JOIN people      rpl ON rpl.id = rc.person_id
+  LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
+  WHERE b.phase_id = ? AND b.de_round = ?
+    AND o.round_index BETWEEN ? AND ?
+    AND b.status != 'finished'
+    AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+    AND (? IS NULL OR o.round_index > (
+          SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?
+        ))
+  ORDER BY o.round_index
+  LIMIT 1
+`);
+const stmtDePrev = db.prepare(`
+  WITH ordered AS (${DE_BOUT_ORDER})
+  SELECT b.*, b.id AS bout_id, o.round_index,
+    lc.first_name AS left_first,  lc.last_name  AS left_last,
+    lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
+    rc.first_name AS right_first, rc.last_name  AS right_last,
+    rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
+    ph.phase_order, co.name AS competition_name, co.weapon
+  FROM bouts b
+  JOIN ordered o ON o.id = b.id
+  JOIN phases ph ON ph.id = b.phase_id
+  JOIN competitions co ON co.id = ph.competition_id
+  LEFT JOIN competitors lc  ON lc.id  = b.left_id
+  LEFT JOIN people      lpl ON lpl.id = lc.person_id
+  LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
+  LEFT JOIN competitors rc  ON rc.id  = b.right_id
+  LEFT JOIN people      rpl ON rpl.id = rc.person_id
+  LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
+  WHERE b.phase_id = ? AND b.de_round = ?
+    AND o.round_index BETWEEN ? AND ?
+    AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+    AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)
+  ORDER BY o.round_index DESC
+  LIMIT 1
+`);
+const stmtDeBoutRowsForSlot = db.prepare(`
+  WITH ordered AS (${DE_BOUT_ORDER})
+  SELECT b.left_id, b.right_id FROM bouts b
+  JOIN ordered o ON o.id = b.id
+  WHERE b.phase_id = ? AND b.de_round = ? AND o.round_index BETWEEN ? AND ?
+`);
+
 // Convert a slot's tableau size to the de_round integer stored on bouts.
 // de_round 1 = first (largest) round; each subsequent round halves the field.
 // Derived from the bout count in round 1: initial_tableau = count_in_round_1 × 2.
+const stmtRound1CountForTableau = db.prepare(`
+  SELECT COUNT(*) AS cnt FROM bouts WHERE phase_id = ? AND de_round = 1
+`);
 function tableauToDeRound(phaseId, tableau) {
   if (!phaseId || !tableau) return null;
-  const r = db.prepare(`
-    SELECT COUNT(*) AS cnt FROM bouts WHERE phase_id = ? AND de_round = 1
-  `).get(phaseId);
+  const r = stmtRound1CountForTableau.get(phaseId);
   if (!r || !r.cnt) return null;
   const initialTableau = r.cnt * 2;
   const round = Math.round(Math.log2(initialTableau / tableau)) + 1;
@@ -194,119 +558,22 @@ const Pipeline = {
   },
 
   findByPool(poolId) {
-    return db.prepare('SELECT * FROM pipeline_slots WHERE pool_id = ?').get(poolId) || null;
+    return stmtFindByPool.get(poolId) || null;
   },
 
   // All DE pipeline slots for a phase, with strip names. Used by de.html.
   findByPhase(phaseId) {
-    return db.prepare(`
-      SELECT ps.*, st.name AS strip_name, st.strip_number
-      FROM pipeline_slots ps
-      JOIN strips st ON st.id = ps.strip_id
-      WHERE ps.phase_id = ? AND ps.type = 'de'
-      ORDER BY ps.tableau DESC
-    `).all(phaseId);
+    return stmtFindByPhaseQuery.all(phaseId);
   },
 
   findByStrip(stripId) {
-    const slots = db.prepare(`
-      SELECT ps.*,
-        po.phase_id   AS pool_phase_id,
-        ph.competition_id,
-        ph.type       AS phase_type,
-        ph.phase_order,
-        co.name       AS competition_name,
-        co.weapon,
-        po.pool_number, po.strip_count, po.dynamic_reorder,
-        tm_slot.left_team_id, tm_left.name AS left_team_name,
-        tm_slot.right_team_id, tm_right.name AS right_team_name,
-        rp.first_name AS ref_first, rp.last_name AS ref_last,
-        so_ref2.referee_id AS referee2_id,         rp_ref2.first_name AS referee2_first,         rp_ref2.last_name AS referee2_last,
-        so_va.referee_id   AS video_assistant_id,  rp_va.first_name   AS video_assistant_first,  rp_va.last_name   AS video_assistant_last,
-        so_a1.referee_id   AS assessor1_id,        rp_a1.first_name   AS assessor1_first,        rp_a1.last_name   AS assessor1_last,
-        so_a2.referee_id   AS assessor2_id,        rp_a2.first_name   AS assessor2_first,        rp_a2.last_name   AS assessor2_last,
-        CASE WHEN ps.type = 'pool'
-          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
-                  AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
-          WHEN ps.type = 'team_match'
-          THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
-          ELSE NULL  -- computed in JS for DE slots (depends on partition)
-        END AS bout_count,
-        COALESCE(ps.minutes_per_bout,
-          (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
-                       THEN ds.observed_average
-                       ELSE ds.minutes_per_bout END
-           FROM bout_duration_standards ds
-           WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
-             AND ds.gender = co.gender
-             AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
-        ) AS effective_minutes_per_bout
-      FROM pipeline_slots ps
-      LEFT JOIN pools        po       ON po.id       = ps.pool_id
-      LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
-      LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
-      LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
-      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
-      LEFT JOIN competitions co ON co.id  = ph.competition_id
-      LEFT JOIN referees     r  ON r.id   = ps.referee_id
-      LEFT JOIN people       rp ON rp.id  = r.person_id
-      LEFT JOIN pipeline_slot_officials so_ref2 ON so_ref2.slot_id = ps.id AND so_ref2.role = 'referee2'
-      LEFT JOIN referees     ref2 ON ref2.id = so_ref2.referee_id
-      LEFT JOIN people       rp_ref2 ON rp_ref2.id = ref2.person_id
-      LEFT JOIN pipeline_slot_officials so_va ON so_va.slot_id = ps.id AND so_va.role = 'video_assistant'
-      LEFT JOIN referees     refva ON refva.id = so_va.referee_id
-      LEFT JOIN people       rp_va ON rp_va.id = refva.person_id
-      LEFT JOIN pipeline_slot_officials so_a1 ON so_a1.slot_id = ps.id AND so_a1.role = 'assessor1'
-      LEFT JOIN referees     refa1 ON refa1.id = so_a1.referee_id
-      LEFT JOIN people       rp_a1 ON rp_a1.id = refa1.person_id
-      LEFT JOIN pipeline_slot_officials so_a2 ON so_a2.slot_id = ps.id AND so_a2.role = 'assessor2'
-      LEFT JOIN referees     refa2 ON refa2.id = so_a2.referee_id
-      LEFT JOIN people       rp_a2 ON rp_a2.id = refa2.person_id
-      WHERE ps.strip_id = ?
-      ORDER BY ps.slot_order
-    `).all(stripId);
+    const slots = stmtFindByStripQuery.all(stripId);
 
     return slots.map(s => this._attachOfficials(this._withPredictedEnd(this._fillDeBoutCount(s))));
   },
 
   findAllForReferee(refereeId) {
-    const slots = db.prepare(`
-      SELECT ps.*, st.name AS strip_name, st.strip_number,
-        po.pool_number,
-        ph.type AS phase_type, ph.phase_order,
-        co.name AS competition_name, co.weapon,
-        tm_slot.left_team_id, tm_left.name AS left_team_name,
-        tm_slot.right_team_id, tm_right.name AS right_team_name,
-        GROUP_CONCAT(so.role) AS other_roles,
-        CASE WHEN ps.type = 'pool'
-          THEN (SELECT COUNT(*) FROM bouts b WHERE b.pool_id = ps.pool_id
-                  AND (po.strip_count <= 1 OR b.strip_id = ps.strip_id))
-          WHEN ps.type = 'team_match'
-          THEN (SELECT COUNT(*) FROM relays r WHERE r.team_match_id = ps.team_match_id)
-          ELSE NULL
-        END AS bout_count,
-        COALESCE(ps.minutes_per_bout,
-          (SELECT CASE WHEN ds.sample_count >= 4 AND ds.observed_average IS NOT NULL
-                       THEN ds.observed_average
-                       ELSE ds.minutes_per_bout END
-           FROM bout_duration_standards ds
-           WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
-             AND ds.gender = co.gender
-             AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
-        ) AS effective_minutes_per_bout
-      FROM pipeline_slots ps
-      JOIN strips          st       ON st.id       = ps.strip_id
-      LEFT JOIN pools      po       ON po.id       = ps.pool_id
-      LEFT JOIN team_matches tm_slot  ON tm_slot.id  = ps.team_match_id
-      LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
-      LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
-      LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
-      LEFT JOIN competitions co ON co.id  = ph.competition_id
-      LEFT JOIN pipeline_slot_officials so ON so.slot_id = ps.id AND so.referee_id = @refId
-      WHERE ps.referee_id = @refId OR so.referee_id IS NOT NULL
-      GROUP BY ps.id
-      ORDER BY ps.strip_id, ps.slot_order
-    `).all({ refId: Number(refereeId) });
+    const slots = stmtFindAllForRefereeQuery.all({ refId: Number(refereeId) });
 
     return slots.map(s => {
       const roles = [];
@@ -318,13 +585,7 @@ const Pipeline = {
 
   // All strips with their pipelines, used by the admin page.
   findAllStrips() {
-    const strips = db.prepare(`
-      SELECT s.*, COUNT(ps.id) AS slot_count
-      FROM strips s
-      LEFT JOIN pipeline_slots ps ON ps.strip_id = s.id
-      GROUP BY s.id
-      ORDER BY s.strip_number
-    `).all();
+    const strips = stmtFindAllStripsQuery.all();
 
     return strips.map(s => ({
       ...s,
@@ -358,42 +619,29 @@ const Pipeline = {
       // main-bracket round and first Finals round share the same bracket ('main')
       // and tableau by construction, and would otherwise look like the same round.
       if (data.type === 'de' && data.phase_id && data.tableau) {
-        const existing = db.prepare(`
-          SELECT * FROM pipeline_slots
-          WHERE phase_id = ? AND type = 'de'
-            AND COALESCE(bracket, 'main') = ?
-            AND COALESCE(tableau, 0) = ?
-            AND COALESCE(partition, 'full') = ?
-            AND COALESCE(de_round, -1) = COALESCE(?, -1)
-        `).get(data.phase_id, data.bracket ?? 'main', data.tableau, data.partition ?? 'full', data.de_round ?? null);
+        const existing = stmtExistingDeSlot.get(data.phase_id, data.bracket ?? 'main', data.tableau, data.partition ?? 'full', data.de_round ?? null);
         if (existing) {
           if (existing.strip_id === Number(stripId)) return this.findById(existing.id);
-          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(existing.id);
+          stmtDeletePipelineSlot.run(existing.id);
         }
       }
 
       // A pool may live in multiple pipeline slots (one per strip for multi-strip).
       // data.secondary = true: adding an extra strip — don't remove existing slots.
       if (data.pool_id) {
-        const existingOnThisStrip = db.prepare(
-          'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id = ?'
-        ).get(data.pool_id, Number(stripId));
+        const existingOnThisStrip = stmtExistingSlotForPoolOnStrip.get(data.pool_id, Number(stripId));
         if (existingOnThisStrip) {
-          db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existingOnThisStrip.id);
-          db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+          stmtSetSlotPending.run(existingOnThisStrip.id);
+          stmtSetStripAssigned.run(Number(stripId));
           return this.findById(existingOnThisStrip.id);
         }
         if (!data.secondary) {
           // Single-strip assignment: remove any existing slots for this pool on other strips.
-          const others = db.prepare(
-            'SELECT * FROM pipeline_slots WHERE pool_id = ? AND strip_id != ?'
-          ).all(data.pool_id, Number(stripId));
+          const others = stmtOtherSlotsForPool.all(data.pool_id, Number(stripId));
           for (const s of others) {
-            db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(s.id);
-            const rem = db.prepare(
-              'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
-            ).get(s.strip_id).n;
-            if (rem === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(s.strip_id);
+            stmtDeletePipelineSlot.run(s.id);
+            const rem = stmtCountSlotsWithPoolOnStrip.get(s.strip_id).n;
+            if (rem === 0) stmtSetStripIdle.run(s.strip_id);
           }
         }
       }
@@ -404,40 +652,23 @@ const Pipeline = {
       // one strip at once. Reassigning it must remove the old slot, or both
       // strips would offer the same next relay simultaneously.
       if (data.team_match_id) {
-        const existingOnThisStrip = db.prepare(
-          'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id = ?'
-        ).get(data.team_match_id, Number(stripId));
+        const existingOnThisStrip = stmtExistingSlotForTeamMatchOnStrip.get(data.team_match_id, Number(stripId));
         if (existingOnThisStrip) {
-          db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?").run(existingOnThisStrip.id);
-          db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+          stmtSetSlotPending.run(existingOnThisStrip.id);
+          stmtSetStripAssigned.run(Number(stripId));
           return this.findById(existingOnThisStrip.id);
         }
-        const others = db.prepare(
-          'SELECT * FROM pipeline_slots WHERE team_match_id = ? AND strip_id != ?'
-        ).all(data.team_match_id, Number(stripId));
+        const others = stmtOtherSlotsForTeamMatch.all(data.team_match_id, Number(stripId));
         for (const s of others) {
-          db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(s.id);
-          const rem = db.prepare(
-            'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND team_match_id IS NOT NULL'
-          ).get(s.strip_id).n;
-          if (rem === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(s.strip_id);
+          stmtDeletePipelineSlot.run(s.id);
+          const rem = stmtCountSlotsWithTeamMatchOnStrip.get(s.strip_id).n;
+          if (rem === 0) stmtSetStripIdle.run(s.strip_id);
         }
       }
 
-      const maxOrder = db.prepare(
-        'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
-      ).get(stripId).m;
+      const maxOrder = stmtMaxSlotOrderForStrip.get(stripId).m;
 
-      const { lastInsertRowid } = db.prepare(`
-        INSERT INTO pipeline_slots
-          (strip_id, slot_order, type, pool_id, phase_id, team_match_id,
-           bracket, tableau, partition, de_round,
-           scheduled_start, minutes_per_bout, referee_id)
-        VALUES
-          (@strip_id, @slot_order, @type, @pool_id, @phase_id, @team_match_id,
-           @bracket, @tableau, @partition, @de_round,
-           @scheduled_start, @minutes_per_bout, @referee_id)
-      `).run({
+      const { lastInsertRowid } = stmtInsertPipelineSlot.run({
         strip_id:         Number(stripId),
         slot_order:       maxOrder + 1,
         type:             data.type,
@@ -457,9 +688,9 @@ const Pipeline = {
         // Secondary slots (extra strips for a distributed pool) must not
         // overwrite pools.strip_id — that stays the primary/home strip.
         if (!data.secondary) {
-          db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(Number(stripId), data.pool_id);
+          stmtSetPoolStripId.run(Number(stripId), data.pool_id);
         }
-        db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(Number(stripId));
+        stmtSetStripAssigned.run(Number(stripId));
       }
 
       return this.findById(lastInsertRowid);
@@ -515,17 +746,7 @@ const Pipeline = {
     };
 
     db.transaction(() => {
-      db.prepare(`
-        UPDATE pipeline_slots
-        SET scheduled_start         = @scheduled_start,
-            minutes_per_bout        = @minutes_per_bout,
-            referee_id              = @referee_id,
-            status                  = @status,
-            conflict_referee_id     = @conflict_referee_id,
-            conflict_original_start = @conflict_original_start,
-            conflict_paired_slot_id = @conflict_paired_slot_id
-        WHERE id = @id
-      `).run({
+      stmtUpdateSlotFields.run({
         id: Number(id),
         scheduled_start:         m.scheduled_start         ?? null,
         minutes_per_bout:        m.minutes_per_bout        ?? null,
@@ -547,10 +768,9 @@ const Pipeline = {
       // reflecting the primary strip); a distributed pool's secondary-strip
       // slots keep their own referee independently.
       if ('referee_id' in data && current.type === 'pool' && current.pool_id) {
-        const pool = db.prepare('SELECT strip_id FROM pools WHERE id = ?').get(current.pool_id);
+        const pool = stmtPoolStripIdLookup.get(current.pool_id);
         if (pool && pool.strip_id === current.strip_id) {
-          db.prepare('UPDATE pools SET referee_id = ? WHERE id = ?')
-            .run(m.referee_id ?? null, current.pool_id);
+          stmtSetPoolRefereeId.run(m.referee_id ?? null, current.pool_id);
         }
       }
     })();
@@ -561,18 +781,13 @@ const Pipeline = {
   reorder(id, direction) {
     const slot = this.findById(id);
     if (!slot) return false;
-    const sibling = db.prepare(`
-      SELECT * FROM pipeline_slots
-      WHERE strip_id = ? AND slot_order ${direction === 'up' ? '<' : '>'} ?
-      ORDER BY slot_order ${direction === 'up' ? 'DESC' : 'ASC'}
-      LIMIT 1
-    `).get(slot.strip_id, slot.slot_order);
+    const sibling = (direction === 'up' ? stmtSiblingUp : stmtSiblingDown).get(slot.strip_id, slot.slot_order);
     if (!sibling) return false;
 
     db.transaction(() => {
-      db.prepare('UPDATE pipeline_slots SET slot_order = -1 WHERE id = ?').run(slot.id);
-      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?').run(slot.slot_order, sibling.id);
-      db.prepare('UPDATE pipeline_slots SET slot_order = ? WHERE id = ?').run(sibling.slot_order, slot.id);
+      stmtSetSlotOrderNeg1.run(slot.id);
+      stmtSetSlotOrder.run(slot.slot_order, sibling.id);
+      stmtSetSlotOrder.run(sibling.slot_order, slot.id);
     })();
     return true;
   },
@@ -581,13 +796,11 @@ const Pipeline = {
     return db.transaction(() => {
       const slot = this.findById(id);
       if (!slot) return false;
-      const changed = db.prepare('DELETE FROM pipeline_slots WHERE id = ?').run(id).changes > 0;
+      const changed = stmtDeletePipelineSlot.run(id).changes > 0;
       if (changed && slot.pool_id) {
-        db.prepare('UPDATE pools SET strip_id = NULL WHERE id = ?').run(slot.pool_id);
-        const remaining = db.prepare(
-          'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
-        ).get(slot.strip_id).n;
-        if (remaining === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
+        stmtClearPoolStripId.run(slot.pool_id);
+        const remaining = stmtCountSlotsWithPoolOnStrip.get(slot.strip_id).n;
+        if (remaining === 0) stmtSetStripIdle.run(slot.strip_id);
       }
       return changed;
     })();
@@ -595,14 +808,10 @@ const Pipeline = {
 
   batchReorder(stripId, pendingOrderedIds) {
     db.transaction(() => {
-      const maxDone = db.prepare(
-        "SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ? AND status = 'done'"
-      ).get(Number(stripId)).m;
+      const maxDone = stmtMaxDoneSlotOrder.get(Number(stripId)).m;
       const base = maxDone + 1;
       pendingOrderedIds.forEach((id, i) => {
-        db.prepare(
-          'UPDATE pipeline_slots SET slot_order = ? WHERE id = ? AND strip_id = ?'
-        ).run(base + i, id, Number(stripId));
+        stmtBatchReorderUpdate.run(base + i, id, Number(stripId));
       });
     })();
   },
@@ -614,21 +823,15 @@ const Pipeline = {
       const newId = Number(newStripId);
       if (slot.strip_id === newId) return slot;
 
-      const maxOrder = db.prepare(
-        'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
-      ).get(newId).m;
+      const maxOrder = stmtMaxSlotOrderForStrip.get(newId).m;
 
-      db.prepare(
-        'UPDATE pipeline_slots SET strip_id = ?, slot_order = ? WHERE id = ?'
-      ).run(newId, maxOrder + 1, slotId);
+      stmtMoveSlotToStrip.run(newId, maxOrder + 1, slotId);
 
       if (slot.pool_id) {
-        db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?').run(newId, slot.pool_id);
-        const remaining = db.prepare(
-          'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND pool_id IS NOT NULL'
-        ).get(slot.strip_id).n;
-        if (remaining === 0) db.prepare("UPDATE strips SET status='idle' WHERE id=?").run(slot.strip_id);
-        db.prepare("UPDATE strips SET status='assigned' WHERE id=?").run(newId);
+        stmtSetPoolStripId.run(newId, slot.pool_id);
+        const remaining = stmtCountSlotsWithPoolOnStrip.get(slot.strip_id).n;
+        if (remaining === 0) stmtSetStripIdle.run(slot.strip_id);
+        stmtSetStripAssigned.run(newId);
       }
 
       return this.findById(slotId);
@@ -676,6 +879,7 @@ const Pipeline = {
     if (slot.bracket === 'placement') {
       const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
       if (!ids.length) return 0;
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
       return db.prepare(`
         SELECT COUNT(*) AS n FROM bouts
         WHERE id IN (${ids.map(() => '?').join(',')})
@@ -684,37 +888,15 @@ const Pipeline = {
     }
     const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return 0;
-    return db.prepare(`
-      WITH ordered AS (${DE_BOUT_ORDER})
-      SELECT COUNT(*) AS n FROM bouts b
-      JOIN ordered o ON o.id = b.id
-      WHERE b.phase_id=? AND b.de_round=?
-        AND o.round_index BETWEEN ? AND ?
-        AND b.status != 'finished'
-        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
-    `).get(bracket, slot.phase_id, deRound, lo, hi).n;
+    return stmtDePendingCount.get(bracket, slot.phase_id, deRound, lo, hi).n;
   },
 
   nextBout(slot, afterBoutId = null) {
     if (slot.type === 'team_match') {
-      const relay = db.prepare(`
-        SELECT id, relay_number, target, status, left_touches, right_touches,
-               left_position, right_position
-        FROM relays
-        WHERE team_match_id = ?
-          AND status != 'finished'
-          AND (? IS NULL OR relay_number > (SELECT relay_number FROM relays WHERE id = ?))
-        ORDER BY relay_number LIMIT 1
-      `).get(slot.team_match_id, afterBoutId, afterBoutId);
+      const relay = stmtRelayNext.get(slot.team_match_id, afterBoutId, afterBoutId);
 
       const effective = relay || (afterBoutId
-        ? db.prepare(`
-            SELECT id, relay_number, target, status, left_touches, right_touches,
-                   left_position, right_position
-            FROM relays
-            WHERE team_match_id = ? AND status != 'finished' AND id != ?
-            ORDER BY relay_number LIMIT 1
-          `).get(slot.team_match_id, afterBoutId)
+        ? stmtRelayNextFallback.get(slot.team_match_id, afterBoutId)
         : null);
 
       return effective ? this._buildRelayBout(slot.team_match_id, effective) : null;
@@ -748,11 +930,12 @@ const Pipeline = {
 
       // For multi-strip pools, filter by strip_id so each strip sees only its bouts.
       // strip_count > 1 means the pool was distributed; bouts.strip_id is set per bout.
-      const pool = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+      const pool = stmtPoolStripCount.get(slot.pool_id);
       const stripFilter = (pool && pool.strip_count > 1)
         ? `AND b.strip_id = ${Number(slot.strip_id)}`
         : '';
 
+      // dynamic-sql-ok: stripFilter clause is conditionally present (multi-strip pools only)
       const forward = db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
           ${stripFilter}
@@ -763,6 +946,7 @@ const Pipeline = {
       if (forward) return forward;
 
       if (!afterBoutId) return null;
+      // dynamic-sql-ok: stripFilter clause is conditionally present (multi-strip pools only)
       return db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ? ${stripFilter} AND b.status != 'finished' AND b.id != ?
         ORDER BY b.bout_order LIMIT 1
@@ -791,6 +975,7 @@ const Pipeline = {
         LEFT JOIN people      rpl ON rpl.id = rc.person_id
         LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
       `;
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
       const forward = db.prepare(`${PLACEMENT_JOIN}
         WHERE b.id IN (${idList})
           AND b.status != 'finished'
@@ -798,6 +983,7 @@ const Pipeline = {
           AND (? IS NULL OR b.bout_order > (SELECT bout_order FROM bouts WHERE id = ?))
         ORDER BY b.bout_order LIMIT 1
       `).get(...ids, afterBoutId, afterBoutId);
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
       const bout = forward || (afterBoutId ? db.prepare(`${PLACEMENT_JOIN}
         WHERE b.id IN (${idList}) AND b.status != 'finished'
           AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL AND b.id != ?
@@ -809,42 +995,14 @@ const Pipeline = {
     const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return null;
 
-    const bout = db.prepare(`
-      WITH ordered AS (${DE_BOUT_ORDER})
-      SELECT b.*, b.id AS bout_id, o.round_index,
-        lc.first_name AS left_first,  lc.last_name  AS left_last,
-        lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-        rc.first_name AS right_first, rc.last_name  AS right_last,
-        rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-        ph.phase_order,
-        co.name AS competition_name, co.weapon
-      FROM bouts b
-      JOIN ordered o ON o.id = b.id
-      JOIN phases     ph  ON ph.id  = b.phase_id
-      JOIN competitions co ON co.id = ph.competition_id
-      LEFT JOIN competitors lc  ON lc.id  = b.left_id
-      LEFT JOIN people      lpl ON lpl.id = lc.person_id
-      LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
-      LEFT JOIN competitors rc  ON rc.id  = b.right_id
-      LEFT JOIN people      rpl ON rpl.id = rc.person_id
-      LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
-      WHERE b.phase_id = ? AND b.de_round = ?
-        AND o.round_index BETWEEN ? AND ?
-        AND b.status != 'finished'
-        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
-        AND (? IS NULL OR o.round_index > (
-              SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?
-            ))
-      ORDER BY o.round_index
-      LIMIT 1
-    `).get(bracket, slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
+    const bout = stmtDeNext.get(bracket, slot.phase_id, deRound, lo, hi, afterBoutId, afterBoutId);
     return this._attachReferee(bout, slot);
   },
 
   // Return the next `limit` pending bouts for a pool slot (for dynamic reorder lookahead).
   nextBoutsAhead(slot, afterBoutId, limit = 4) {
     if (slot.type !== 'pool') return [];
-    const pool = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+    const pool = stmtPoolStripCount.get(slot.pool_id);
     const stripFilter = (pool && pool.strip_count > 1)
       ? `AND b.strip_id = ${Number(slot.strip_id)}`
       : '';
@@ -852,6 +1010,7 @@ const Pipeline = {
       SELECT b.id, b.bout_order, b.left_id, b.right_id, b.pool_id, b.strip_id
       FROM bouts b
     `;
+    // dynamic-sql-ok: stripFilter clause is conditionally present (multi-strip pools only)
     return db.prepare(`${POOL_JOIN}
       WHERE b.pool_id = ?
         ${stripFilter}
@@ -865,14 +1024,7 @@ const Pipeline = {
     if (!beforeBoutId) return null;
 
     if (slot.type === 'team_match') {
-      const relay = db.prepare(`
-        SELECT id, relay_number, target, status, left_touches, right_touches,
-               left_position, right_position
-        FROM relays
-        WHERE team_match_id = ?
-          AND relay_number < (SELECT relay_number FROM relays WHERE id = ?)
-        ORDER BY relay_number DESC LIMIT 1
-      `).get(slot.team_match_id, beforeBoutId);
+      const relay = stmtRelayPrev.get(slot.team_match_id, beforeBoutId);
       return relay ? this._buildRelayBout(slot.team_match_id, relay) : null;
     }
 
@@ -901,10 +1053,11 @@ const Pipeline = {
         LEFT JOIN people      ref_p ON ref_p.id = ref.person_id
       `;
 
-      const pool2 = db.prepare('SELECT strip_count FROM pools WHERE id = ?').get(slot.pool_id);
+      const pool2 = stmtPoolStripCount.get(slot.pool_id);
       const stripFilter2 = (pool2 && pool2.strip_count > 1)
         ? `AND b.strip_id = ${Number(slot.strip_id)}`
         : '';
+      // dynamic-sql-ok: stripFilter clause is conditionally present (multi-strip pools only)
       return db.prepare(`${POOL_JOIN}
         WHERE b.pool_id = ?
           ${stripFilter2}
@@ -917,6 +1070,7 @@ const Pipeline = {
       const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
       if (!ids.length) return null;
       const idList = ids.map(() => '?').join(',');
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
       const bout = db.prepare(`
         SELECT b.*, b.id AS bout_id,
           lc.first_name AS left_first,  lc.last_name  AS left_last,
@@ -944,31 +1098,7 @@ const Pipeline = {
     const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
     if (!deRound) return null;
 
-    const bout = db.prepare(`
-      WITH ordered AS (${DE_BOUT_ORDER})
-      SELECT b.*, b.id AS bout_id, o.round_index,
-        lc.first_name AS left_first,  lc.last_name  AS left_last,
-        lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
-        rc.first_name AS right_first, rc.last_name  AS right_last,
-        rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-        ph.phase_order, co.name AS competition_name, co.weapon
-      FROM bouts b
-      JOIN ordered o ON o.id = b.id
-      JOIN phases ph ON ph.id = b.phase_id
-      JOIN competitions co ON co.id = ph.competition_id
-      LEFT JOIN competitors lc  ON lc.id  = b.left_id
-      LEFT JOIN people      lpl ON lpl.id = lc.person_id
-      LEFT JOIN clubs       lcl ON lcl.id = lpl.club_id
-      LEFT JOIN competitors rc  ON rc.id  = b.right_id
-      LEFT JOIN people      rpl ON rpl.id = rc.person_id
-      LEFT JOIN clubs       rcl ON rcl.id = rpl.club_id
-      WHERE b.phase_id = ? AND b.de_round = ?
-        AND o.round_index BETWEEN ? AND ?
-        AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
-        AND o.round_index < (SELECT o2.round_index FROM ordered o2 WHERE o2.id = ?)
-      ORDER BY o.round_index DESC
-      LIMIT 1
-    `).get(bracket, slot.phase_id, deRound, lo, hi, beforeBoutId);
+    const bout = stmtDePrev.get(bracket, slot.phase_id, deRound, lo, hi, beforeBoutId);
     return this._attachReferee(bout, slot);
   },
 
@@ -1038,40 +1168,14 @@ const Pipeline = {
   // Resolve which competitor fences at a given position for a given relay.
   _resolveRelayFencer(matchId, position, relayNumber) {
     if (!position) return null;
-    const row = db.prepare(`
-      SELECT COALESCE(sub.substitute_competitor_id, ord.competitor_id) AS competitor_id
-      FROM team_match_orders ord
-      LEFT JOIN team_match_substitutions sub
-        ON sub.team_match_id = ord.team_match_id
-        AND sub.team_id = ord.team_id
-        AND sub.position_replaced = ord.position
-        AND sub.effective_from_relay <= ?
-      WHERE ord.team_match_id = ? AND ord.position = ?
-    `).get(relayNumber, matchId, position);
+    const row = stmtResolveRelayFencerOrder.get(relayNumber, matchId, position);
     if (!row?.competitor_id) return null;
-    return db.prepare(`
-      SELECT c.id AS competitor_id, p.first_name, p.last_name, p.nationality
-      FROM competitors c
-      JOIN fencers f ON f.id = c.fencer_id
-      JOIN people p  ON p.id = f.person_id
-      WHERE c.id = ?
-    `).get(row.competitor_id);
+    return stmtResolveRelayFencerDetails.get(row.competitor_id);
   },
 
   // Build the full relay bout object returned by nextBout / prevBout for team_match slots.
   _buildRelayBout(matchId, relay) {
-    const match = db.prepare(`
-      SELECT tm.id, tm.left_team_id, tm.right_team_id, tm.phase_id,
-             tl.name AS left_team_name, tr.name AS right_team_name,
-             ph.phase_order,
-             co.name AS competition_name, co.weapon
-      FROM team_matches tm
-      LEFT JOIN teams tl ON tl.id = tm.left_team_id
-      LEFT JOIN teams tr ON tr.id = tm.right_team_id
-      JOIN phases ph       ON ph.id = tm.phase_id
-      JOIN competitions co ON co.id = ph.competition_id
-      WHERE tm.id = ?
-    `).get(matchId);
+    const match = stmtRelayMatchInfo.get(matchId);
     if (!match) return null;
 
     // left_position/right_position may be null for relays created before migration 017.
@@ -1079,7 +1183,7 @@ const Pipeline = {
     let leftPos  = relay.left_position;
     let rightPos = relay.right_position;
     if (leftPos == null || rightPos == null) {
-      const phaseRow = db.prepare('SELECT rule_doc FROM phases WHERE id = ?').get(match.phase_id);
+      const phaseRow = stmtPhaseRuleDocForRelay.get(match.phase_id);
       const rule     = require('../lib/rules').loadRule(phaseRow.rule_doc);
       const def      = rule.relays?.[relay.relay_number - 1];
       if (def) { leftPos = def.left; rightPos = def.right; }
@@ -1088,16 +1192,9 @@ const Pipeline = {
     const leftFencer  = this._resolveRelayFencer(matchId, leftPos,  relay.relay_number);
     const rightFencer = this._resolveRelayFencer(matchId, rightPos, relay.relay_number);
 
-    const cumul = db.prepare(`
-      SELECT COALESCE(SUM(left_touches),  0) AS cum_left,
-             COALESCE(SUM(right_touches), 0) AS cum_right
-      FROM relays
-      WHERE team_match_id = ? AND relay_number < ? AND status = 'finished'
-    `).get(matchId, relay.relay_number);
+    const cumul = stmtRelayCumulative.get(matchId, relay.relay_number);
 
-    const relayTotal = db.prepare(
-      'SELECT COUNT(*) AS n FROM relays WHERE team_match_id = ?'
-    ).get(matchId).n;
+    const relayTotal = stmtRelayTotalCount.get(matchId).n;
 
     return {
       id:              relay.id,
@@ -1139,28 +1236,11 @@ const Pipeline = {
   // since their opposing left_id/right_id is still null).
   competitorsForSlot(slot) {
     if (slot.type === 'pool') {
-      return db.prepare(`
-        SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
-               cl.name AS club_name
-        FROM pool_competitors pc
-        JOIN competitors c  ON c.id  = pc.competitor_id
-        LEFT JOIN people p2 ON p2.id = c.person_id
-        LEFT JOIN clubs  cl ON cl.id = p2.club_id
-        WHERE pc.pool_id = ?
-        ORDER BY c.initial_seed ASC, c.last_name
-      `).all(slot.pool_id);
+      return stmtPoolCompetitorsForSlot.all(slot.pool_id);
     }
 
     if (slot.type === 'team_match') {
-      const teamMembers = (teamId, side) => teamId ? db.prepare(`
-        SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
-               cl.name AS club_name, ? AS team_side
-        FROM team_members tmm
-        JOIN competitors c  ON c.id  = tmm.competitor_id
-        LEFT JOIN people p2 ON p2.id = c.person_id
-        LEFT JOIN clubs  cl ON cl.id = p2.club_id
-        WHERE tmm.team_id = ?
-      `).all(side, teamId) : [];
+      const teamMembers = (teamId, side) => teamId ? stmtTeamMembersForSide.all(side, teamId) : [];
       return [...teamMembers(slot.left_team_id, 'left'), ...teamMembers(slot.right_team_id, 'right')];
     }
 
@@ -1169,22 +1249,19 @@ const Pipeline = {
     if (slot.bracket === 'placement') {
       const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
       if (!ids.length) return [];
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
       boutRows = db.prepare(
         `SELECT left_id, right_id FROM bouts WHERE id IN (${ids.map(() => '?').join(',')})`
       ).all(...ids);
     } else {
       const { deRound, lo, hi, bracket } = this._deSlotParams(slot);
       if (!deRound) return [];
-      boutRows = db.prepare(`
-        WITH ordered AS (${DE_BOUT_ORDER})
-        SELECT b.left_id, b.right_id FROM bouts b
-        JOIN ordered o ON o.id = b.id
-        WHERE b.phase_id = ? AND b.de_round = ? AND o.round_index BETWEEN ? AND ?
-      `).all(bracket, slot.phase_id, deRound, lo, hi);
+      boutRows = stmtDeBoutRowsForSlot.all(bracket, slot.phase_id, deRound, lo, hi);
     }
 
     const ids = [...new Set(boutRows.flatMap(b => [b.left_id, b.right_id]).filter(Boolean))];
     if (!ids.length) return [];
+    // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
     return db.prepare(`
       SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
              cl.name AS club_name
@@ -1202,15 +1279,7 @@ const Pipeline = {
   // both exist), the active one wins, else the one starting soonest.
   fencersForCompetition(compId) {
     compId = Number(compId);
-    const roster = db.prepare(`
-      SELECT c.id AS competitor_id, c.first_name, c.last_name, c.nationality,
-             cl.name AS club_name
-      FROM competitors c
-      LEFT JOIN people p2 ON p2.id = c.person_id
-      LEFT JOIN clubs  cl ON cl.id = p2.club_id
-      WHERE c.competition_id = ?
-      ORDER BY c.initial_seed ASC, c.last_name, c.first_name
-    `).all(compId);
+    const roster = stmtCompetitionRoster.all(compId);
 
     const candidatesByCompetitor = new Map();
     for (const strip of this.findAllStrips()) {

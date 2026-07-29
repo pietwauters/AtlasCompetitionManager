@@ -1,18 +1,21 @@
 'use strict';
 const db = require('../db');
 
+const stmtRecord = db.prepare(`
+  INSERT INTO events
+    (competition_id, phase_id, bout_id, event_type, actor, actor_id,
+     side, correlation_id, payload)
+  VALUES
+    (@competition_id, @phase_id, @bout_id, @event_type, @actor, @actor_id,
+     @side, @correlation_id, @payload)
+`);
+const stmtFindByBout = db.prepare('SELECT * FROM events WHERE bout_id = ? ORDER BY recorded_at');
+
 const Event = {
   record({ competition_id, phase_id = null, bout_id = null,
            event_type, actor, actor_id = null, side = null,
            correlation_id = null, payload = null }) {
-    const { lastInsertRowid } = db.prepare(`
-      INSERT INTO events
-        (competition_id, phase_id, bout_id, event_type, actor, actor_id,
-         side, correlation_id, payload)
-      VALUES
-        (@competition_id, @phase_id, @bout_id, @event_type, @actor, @actor_id,
-         @side, @correlation_id, @payload)
-    `).run({
+    const { lastInsertRowid } = stmtRecord.run({
       competition_id: competition_id || null,
       phase_id:       phase_id       || null,
       bout_id:        bout_id        || null,
@@ -27,9 +30,7 @@ const Event = {
   },
 
   findByBout(boutId) {
-    return db.prepare(
-      'SELECT * FROM events WHERE bout_id = ? ORDER BY recorded_at'
-    ).all(boutId);
+    return stmtFindByBout.all(boutId);
   },
 
   // Optional filters: { event_type, phase_id, bout_id }
@@ -53,6 +54,7 @@ const Event = {
     if (phase_id) { conditions.push('phase_id = @phase_id'); params.phase_id = phase_id; }
     if (bout_id)  { conditions.push('bout_id  = @bout_id');  params.bout_id  = bout_id;  }
 
+    // dynamic-sql-ok: WHERE clause built from optional filters, can't be a fixed statement
     return db.prepare(
       `SELECT * FROM events WHERE ${conditions.join(' AND ')} ORDER BY recorded_at DESC`
     ).all(params);

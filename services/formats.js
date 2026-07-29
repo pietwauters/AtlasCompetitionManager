@@ -13,6 +13,158 @@ let   catalogCache   = null;
 let   formatListCache = null;
 
 // ---------------------------------------------------------------------------
+// Prepared statements — module-level per CLAUDE.md (better-sqlite3 doesn't
+// cache prepare() calls; see feedback_prepare_hoisting).
+// ---------------------------------------------------------------------------
+
+const stmtActiveRemainderFromPool = db.prepare(`
+  SELECT r.competitor_id
+  FROM   rankings r
+  JOIN   competitors c ON c.id = r.competitor_id
+  WHERE  r.phase_id = ? AND c.format_cohort IS NULL AND c.status = 'active'
+  ORDER  BY r.position ASC
+`);
+const stmtActiveRemainderFallback = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
+  ORDER BY initial_seed ASC
+`);
+const stmtLastFinishedPool = db.prepare(`
+  SELECT id FROM phases
+  WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
+  ORDER BY phase_order DESC LIMIT 1
+`);
+const stmtRankRangeLastPoolOpen = db.prepare(`
+  SELECT r.competitor_id FROM rankings r
+  JOIN   competitors c ON c.id = r.competitor_id
+  WHERE  r.phase_id = ? AND c.status = 'active' AND r.position >= ?
+  ORDER  BY r.position ASC
+`);
+const stmtRankRangeLastPoolClosed = db.prepare(`
+  SELECT r.competitor_id FROM rankings r
+  JOIN   competitors c ON c.id = r.competitor_id
+  WHERE  r.phase_id = ? AND c.status = 'active' AND r.position BETWEEN ? AND ?
+  ORDER  BY r.position ASC
+`);
+const stmtRankRangeSeedOpen = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed >= ?
+  ORDER BY initial_seed ASC
+`);
+const stmtRankRangeSeedClosed = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed BETWEEN ? AND ?
+  ORDER BY initial_seed ASC
+`);
+const stmtInitialSourceCompetitors = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
+  ORDER BY initial_seed ASC
+`);
+const stmtAllPresentCompetitors = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1
+  ORDER BY initial_seed ASC
+`);
+const stmtCohortInitialExempt = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND format_cohort = 'initial_exempt'
+  ORDER BY initial_seed ASC
+`);
+const stmtCohortFromPoolRankings = db.prepare(`
+  SELECT r.competitor_id
+  FROM   rankings r
+  JOIN   competitors c ON c.id = r.competitor_id
+  WHERE  r.phase_id = ? AND c.format_cohort = ?
+  ORDER  BY r.position ASC
+`);
+const stmtCohortBySeedFallback = db.prepare(`
+  SELECT id AS competitor_id FROM competitors
+  WHERE competition_id = ? AND format_cohort = ?
+  ORDER BY initial_seed ASC
+`);
+const stmtCountCohort = db.prepare(
+  "SELECT COUNT(*) AS cnt FROM competitors WHERE competition_id = ? AND format_cohort = ?"
+);
+const stmtTopNForExemption = db.prepare(`
+  SELECT id FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
+  ORDER BY initial_seed ASC
+  LIMIT ?
+`);
+const stmtSetFormatCohort = db.prepare("UPDATE competitors SET format_cohort = ? WHERE id = ?");
+const stmtPhaseByStage = db.prepare(
+  'SELECT * FROM phases WHERE competition_id = ? AND format_stage = ?'
+);
+const stmtLastPoolSeedingFallback = stmtAllPresentCompetitors;
+const stmtLastPoolActiveRankings = db.prepare(`
+  SELECT r.competitor_id
+  FROM   rankings r
+  JOIN   competitors c ON c.id = r.competitor_id
+  WHERE  r.phase_id = ? AND c.status = 'active'
+  ORDER  BY r.position ASC
+`);
+const stmtFinishedPoolPhases = db.prepare(`
+  SELECT id FROM phases
+  WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
+  ORDER BY phase_order
+`);
+const stmtActiveCompetitorsWithSeed = db.prepare(`
+  SELECT id AS competitor_id, initial_seed FROM competitors
+  WHERE competition_id = ? AND status = 'active' AND checked_in = 1
+`);
+const stmtSetActiveStatus = db.prepare("UPDATE competitors SET status = 'active' WHERE id = ?");
+const stmtCompetitionFormatParams = db.prepare('SELECT format_params FROM competitions WHERE id = ?');
+const stmtPhaseById = db.prepare('SELECT * FROM phases WHERE id = ?');
+const stmtRound1MainCount = db.prepare(
+  "SELECT COUNT(*) AS n FROM bouts WHERE phase_id = ? AND de_round = 1 AND bracket = 'main'"
+);
+const stmtPendingUpToRound = db.prepare(`
+  SELECT COUNT(*) AS n FROM bouts
+  WHERE phase_id = ? AND de_round <= ? AND bracket = 'main' AND status != 'finished'
+    AND left_id IS NOT NULL AND right_id IS NOT NULL
+`);
+const stmtRound1Participants = db.prepare(`
+  SELECT DISTINCT comp_id FROM (
+    SELECT left_id  AS comp_id FROM bouts WHERE phase_id = ? AND de_round = 1 AND left_id  IS NOT NULL
+    UNION
+    SELECT right_id AS comp_id FROM bouts WHERE phase_id = ? AND de_round = 1 AND right_id IS NOT NULL
+  )
+`);
+const stmtLosersUpToRound = db.prepare(`
+  SELECT DISTINCT CASE WHEN winner_id = left_id THEN right_id ELSE left_id END AS comp_id
+  FROM bouts
+  WHERE phase_id = ? AND de_round <= ? AND status = 'finished' AND winner_id IS NOT NULL
+    AND left_id IS NOT NULL AND right_id IS NOT NULL
+`);
+const stmtEliminateCompetitor = db.prepare(`
+  UPDATE competitors SET status = 'eliminated', eliminated_after = ?
+  WHERE id = ? AND status = 'active'
+`);
+const stmtFinishPhase = db.prepare("UPDATE phases SET status = 'finished' WHERE id = ?");
+const stmtCountActivePresent = db.prepare(
+  "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active' AND checked_in = 1"
+);
+const stmtPhasesForPlan = db.prepare(
+  'SELECT id, format_stage, type, status FROM phases WHERE competition_id = ? ORDER BY phase_order'
+);
+const stmtCountActiveOrEliminated = db.prepare(
+  "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status IN ('active','eliminated')"
+);
+const stmtCountByCohort = db.prepare(
+  "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND format_cohort = ?"
+);
+const stmtCountActiveNoCohort = db.prepare(
+  "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active' AND format_cohort IS NULL"
+);
+const stmtCountActive = db.prepare(
+  "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active'"
+);
+const stmtPhasesForAssertNext = db.prepare(
+  'SELECT format_stage, status FROM phases WHERE competition_id = ? ORDER BY phase_order'
+);
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -318,20 +470,10 @@ function resolveParticipants(compId, format, stage) {
   if (p.source === 'active_remainder') {
     const poolStagePhase = _findPhaseByStage(compId, _findPrevPoolStageId(format, stage));
     if (poolStagePhase) {
-      return db.prepare(`
-        SELECT r.competitor_id
-        FROM   rankings r
-        JOIN   competitors c ON c.id = r.competitor_id
-        WHERE  r.phase_id = ? AND c.format_cohort IS NULL AND c.status = 'active'
-        ORDER  BY r.position ASC
-      `).all(poolStagePhase.id);
+      return stmtActiveRemainderFromPool.all(poolStagePhase.id);
     }
     // Fallback: no pool stage yet — return all present with no cohort
-    return db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
-      ORDER BY initial_seed ASC
-    `).all(compId);
+    return stmtActiveRemainderFallback.all(compId);
   }
 
   // ── Rank range (independent parallel tracks, e.g. Division 1 / Division 2) ──
@@ -348,11 +490,7 @@ function resolveParticipants(compId, format, stage) {
     // (an "Elite Division" / "Division 1" split by pool performance, not by
     // initial seed).
     if (p.basedOn === 'last_pool') {
-      const lastPool = db.prepare(`
-        SELECT id FROM phases
-        WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
-        ORDER BY phase_order DESC LIMIT 1
-      `).get(compId);
+      const lastPool = stmtLastFinishedPool.get(compId);
       if (!lastPool) {
         throw Object.assign(
           new Error('This stage needs a finished pool phase before it can split by pool result.'),
@@ -360,33 +498,15 @@ function resolveParticipants(compId, format, stage) {
         );
       }
       if (p.to == null) {
-        return db.prepare(`
-          SELECT r.competitor_id FROM rankings r
-          JOIN   competitors c ON c.id = r.competitor_id
-          WHERE  r.phase_id = ? AND c.status = 'active' AND r.position >= ?
-          ORDER  BY r.position ASC
-        `).all(lastPool.id, from);
+        return stmtRankRangeLastPoolOpen.all(lastPool.id, from);
       }
-      return db.prepare(`
-        SELECT r.competitor_id FROM rankings r
-        JOIN   competitors c ON c.id = r.competitor_id
-        WHERE  r.phase_id = ? AND c.status = 'active' AND r.position BETWEEN ? AND ?
-        ORDER  BY r.position ASC
-      `).all(lastPool.id, from, p.to);
+      return stmtRankRangeLastPoolClosed.all(lastPool.id, from, p.to);
     }
 
     if (p.to == null) {
-      return db.prepare(`
-        SELECT id AS competitor_id FROM competitors
-        WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed >= ?
-        ORDER BY initial_seed ASC
-      `).all(compId, from);
+      return stmtRankRangeSeedOpen.all(compId, from);
     }
-    return db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND initial_seed BETWEEN ? AND ?
-      ORDER BY initial_seed ASC
-    `).all(compId, from, p.to);
+    return stmtRankRangeSeedClosed.all(compId, from, p.to);
   }
 
   // ── Initial (all, or with top-N exclusion) ───────────────────────────────
@@ -394,19 +514,11 @@ function resolveParticipants(compId, format, stage) {
     if (p.excludeTopByInitialSeed) {
       _ensureInitialExemptions(compId, p.excludeTopByInitialSeed, p.initialExemptCohort || 'initial_exempt');
     }
-    return db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
-      ORDER BY initial_seed ASC
-    `).all(compId);
+    return stmtInitialSourceCompetitors.all(compId);
   }
 
   // ── Fallback: all present competitors ───────────────────────────────────
-  return db.prepare(`
-    SELECT id AS competitor_id FROM competitors
-    WHERE competition_id = ? AND status = 'active' AND checked_in = 1
-    ORDER BY initial_seed ASC
-  `).all(compId);
+  return stmtAllPresentCompetitors.all(compId);
 }
 
 // FIE o.87.2 / o.102.1 "drawing lots in pairs": within a ranked cohort, adjacent rank
@@ -428,29 +540,15 @@ function _resolveCohort(compId, spec) {
   let rows;
 
   if (spec.cohort === 'initial_exempt') {
-    rows = db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND format_cohort = 'initial_exempt'
-      ORDER BY initial_seed ASC
-    `).all(compId);
+    rows = stmtCohortInitialExempt.all(compId);
   } else {
     // pool_exempt and de_survivors: sort by their position in the pool stage rankings
     const poolPhase = spec.poolStage ? _findPhaseByStage(compId, spec.poolStage) : null;
     if (poolPhase) {
-      rows = db.prepare(`
-        SELECT r.competitor_id
-        FROM   rankings r
-        JOIN   competitors c ON c.id = r.competitor_id
-        WHERE  r.phase_id = ? AND c.format_cohort = ?
-        ORDER  BY r.position ASC
-      `).all(poolPhase.id, spec.cohort);
+      rows = stmtCohortFromPoolRankings.all(poolPhase.id, spec.cohort);
     } else {
       // Fallback: sort by initial_seed
-      rows = db.prepare(`
-        SELECT id AS competitor_id FROM competitors
-        WHERE competition_id = ? AND format_cohort = ?
-        ORDER BY initial_seed ASC
-      `).all(compId, spec.cohort);
+      rows = stmtCohortBySeedFallback.all(compId, spec.cohort);
     }
   }
 
@@ -460,28 +558,18 @@ function _resolveCohort(compId, spec) {
 // Assign initial_exempt cohort to the top N present competitors by initial_seed.
 // Idempotent: skips if already assigned.
 function _ensureInitialExemptions(compId, n, cohort) {
-  const already = db.prepare(
-    "SELECT COUNT(*) AS cnt FROM competitors WHERE competition_id = ? AND format_cohort = ?"
-  ).get(compId, cohort).cnt;
+  const already = stmtCountCohort.get(compId, cohort).cnt;
   if (already > 0) return;
 
-  const top = db.prepare(`
-    SELECT id FROM competitors
-    WHERE competition_id = ? AND status = 'active' AND checked_in = 1 AND format_cohort IS NULL
-    ORDER BY initial_seed ASC
-    LIMIT ?
-  `).all(compId, n);
+  const top = stmtTopNForExemption.all(compId, n);
 
-  const stmt = db.prepare("UPDATE competitors SET format_cohort = ? WHERE id = ?");
-  for (const c of top) stmt.run(cohort, c.id);
+  for (const c of top) stmtSetFormatCohort.run(cohort, c.id);
 }
 
 // Find the phase DB row for a given format_stage id, or null
 function _findPhaseByStage(compId, stageId) {
   if (!stageId) return null;
-  return db.prepare(
-    'SELECT * FROM phases WHERE competition_id = ? AND format_stage = ?'
-  ).get(compId, stageId) || null;
+  return stmtPhaseByStage.get(compId, stageId) || null;
 }
 
 // Find the id of the most recent pool stage before the given stage in the format
@@ -495,27 +583,13 @@ function _findPrevPoolStageId(format, stage) {
 
 // Seeding by the most recently finished pool phase; only active competitors included.
 function _lastPoolSeeding(compId) {
-  const last = db.prepare(`
-    SELECT id FROM phases
-    WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
-    ORDER BY phase_order DESC LIMIT 1
-  `).get(compId);
+  const last = stmtLastFinishedPool.get(compId);
 
   if (!last) {
-    return db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND checked_in = 1
-      ORDER BY initial_seed ASC
-    `).all(compId);
+    return stmtLastPoolSeedingFallback.all(compId);
   }
 
-  return db.prepare(`
-    SELECT r.competitor_id
-    FROM   rankings r
-    JOIN   competitors c ON c.id = r.competitor_id
-    WHERE  r.phase_id = ? AND c.status = 'active'
-    ORDER  BY r.position ASC
-  `).all(last.id);
+  return stmtLastPoolActiveRankings.all(last.id);
 }
 
 // Combined seeding across all finished pool phases: aggregate bout stats,
@@ -527,27 +601,16 @@ function _lastPoolSeeding(compId) {
 // than keeping its own copy — see the 2026-07-28 architecture review, which
 // found the two copies had drifted: only this one filtered by checked_in).
 function combinedSeeding(compId) {
-  const finishedPhases = db.prepare(`
-    SELECT id FROM phases
-    WHERE competition_id = ? AND type = 'pool' AND status = 'finished'
-    ORDER BY phase_order
-  `).all(compId);
+  const finishedPhases = stmtFinishedPoolPhases.all(compId);
 
   if (!finishedPhases.length) {
-    return db.prepare(`
-      SELECT id AS competitor_id FROM competitors
-      WHERE competition_id = ? AND status = 'active' AND checked_in = 1
-      ORDER BY initial_seed ASC
-    `).all(compId);
+    return stmtAllPresentCompetitors.all(compId);
   }
 
   // Present competitors only — a never-checked-in fencer (so never entered
   // into any pool) would otherwise still show up with a padded
   // 0-victories/0-matches stat line and occupy a DE bracket slot.
-  const active = db.prepare(`
-    SELECT id AS competitor_id, initial_seed FROM competitors
-    WHERE competition_id = ? AND status = 'active' AND checked_in = 1
-  `).all(compId);
+  const active = stmtActiveCompetitorsWithSeed.all(compId);
 
   const stats = {};
   for (const c of active) {
@@ -560,6 +623,7 @@ function combinedSeeding(compId) {
 
   const phaseIds    = finishedPhases.map(p => p.id);
   const placeholders = phaseIds.map(() => '?').join(',');
+  // dynamic-sql-ok: IN(...) placeholder count varies with phaseIds.length
   const bouts = db.prepare(`
     SELECT left_id, right_id, left_score, right_score, winner_id
     FROM bouts
@@ -612,15 +676,14 @@ function applyPoolClose(compId, phaseId, rankings, format, stage) {
       const cohort = adv.exemptCohort || 'pool_exempt';
       for (let i = 0; i < rankings.length; i++) {
         if (i < n) {
-          db.prepare("UPDATE competitors SET format_cohort = ? WHERE id = ?")
-            .run(cohort, rankings[i].competitor_id);
+          stmtSetFormatCohort.run(cohort, rankings[i].competitor_id);
         }
       }
     }
 
     if (adv.noElimination) {
       for (const r of rankings) {
-        db.prepare("UPDATE competitors SET status = 'active' WHERE id = ?").run(r.competitor_id);
+        stmtSetActiveStatus.run(r.competitor_id);
       }
     }
   })();
@@ -633,7 +696,7 @@ function applyPoolClose(compId, phaseId, rankings, format, stage) {
 
   // useParam: read advancement % from the competition's stored format_params.
   if (adv.useParam) {
-    const comp    = db.prepare('SELECT format_params FROM competitions WHERE id = ?').get(compId);
+    const comp    = stmtCompetitionFormatParams.get(compId);
     const stored  = comp?.format_params ? JSON.parse(comp.format_params) : {};
     const paramDef = (format.params || []).find(p => p.id === adv.useParam);
     const pct     = Number(stored[adv.useParam] ?? paramDef?.default ?? 70) / 100;
@@ -650,23 +713,17 @@ function applyPoolClose(compId, phaseId, rankings, format, stage) {
 // survivorCohort, eliminates the rest, and marks the phase finished.
 // ---------------------------------------------------------------------------
 function closeFormatDE(phaseId, survivorTarget, survivorCohort) {
-  const phase = db.prepare('SELECT * FROM phases WHERE id = ?').get(phaseId);
+  const phase = stmtPhaseById.get(phaseId);
   if (!phase) throw Object.assign(new Error('Phase not found.'), { status: 404 });
   if (phase.status === 'finished') throw Object.assign(new Error('Phase already finished.'), { status: 400 });
 
   // Determine the stopping round from tableau size and survivor target
-  const tHalf = db.prepare(
-    "SELECT COUNT(*) AS n FROM bouts WHERE phase_id = ? AND de_round = 1 AND bracket = 'main'"
-  ).get(phaseId).n;
+  const tHalf = stmtRound1MainCount.get(phaseId).n;
   const tableauSize   = tHalf * 2;
   const stoppingRound = Math.round(Math.log2(tableauSize / survivorTarget));
 
   // Verify stopping round is complete
-  const pending = db.prepare(`
-    SELECT COUNT(*) AS n FROM bouts
-    WHERE phase_id = ? AND de_round <= ? AND bracket = 'main' AND status != 'finished'
-      AND left_id IS NOT NULL AND right_id IS NOT NULL
-  `).get(phaseId, stoppingRound).n;
+  const pending = stmtPendingUpToRound.get(phaseId, stoppingRound).n;
 
   if (pending > 0) {
     throw Object.assign(
@@ -677,21 +734,10 @@ function closeFormatDE(phaseId, survivorTarget, survivorCohort) {
 
   // All competitors who appear in round-1 bouts (the entry round) of this phase.
   // We use round 1 specifically so byes in round 1 count as participants.
-  const all = db.prepare(`
-    SELECT DISTINCT comp_id FROM (
-      SELECT left_id  AS comp_id FROM bouts WHERE phase_id = ? AND de_round = 1 AND left_id  IS NOT NULL
-      UNION
-      SELECT right_id AS comp_id FROM bouts WHERE phase_id = ? AND de_round = 1 AND right_id IS NOT NULL
-    )
-  `).all(phaseId, phaseId).map(r => r.comp_id);
+  const all = stmtRound1Participants.all(phaseId, phaseId).map(r => r.comp_id);
 
   // Those who lost a real bout in rounds 1..stoppingRound (not a bye — bye bouts have right_id NULL)
-  const losers = db.prepare(`
-    SELECT DISTINCT CASE WHEN winner_id = left_id THEN right_id ELSE left_id END AS comp_id
-    FROM bouts
-    WHERE phase_id = ? AND de_round <= ? AND status = 'finished' AND winner_id IS NOT NULL
-      AND left_id IS NOT NULL AND right_id IS NOT NULL
-  `).all(phaseId, stoppingRound).map(r => r.comp_id);
+  const losers = stmtLosersUpToRound.all(phaseId, stoppingRound).map(r => r.comp_id);
 
   const loserSet = new Set(losers);
   const survivors = all.filter(id => !loserSet.has(id));
@@ -707,15 +753,12 @@ function closeFormatDE(phaseId, survivorTarget, survivorCohort) {
 
   db.transaction(() => {
     for (const id of survivors) {
-      db.prepare("UPDATE competitors SET format_cohort = ? WHERE id = ?").run(cohort, id);
+      stmtSetFormatCohort.run(cohort, id);
     }
     for (const id of losers) {
-      db.prepare(`
-        UPDATE competitors SET status = 'eliminated', eliminated_after = ?
-        WHERE id = ? AND status = 'active'
-      `).run(phaseId, id);
+      stmtEliminateCompetitor.run(phaseId, id);
     }
-    db.prepare("UPDATE phases SET status = 'finished' WHERE id = ?").run(phaseId);
+    stmtFinishPhase.run(phaseId);
   })();
 
   return { survivors: survivors.length, eliminated: losers.length };
@@ -726,9 +769,7 @@ function closeFormatDE(phaseId, survivorTarget, survivorCohort) {
 // Throws with a human-readable message if the format cannot run.
 // ---------------------------------------------------------------------------
 function validateCounts(compId, format) {
-  const N = db.prepare(
-    "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active' AND checked_in = 1"
-  ).get(compId).n;
+  const N = stmtCountActivePresent.get(compId).n;
 
   for (const stage of format.stages) {
     const p   = stage.participants;
@@ -787,18 +828,14 @@ function validateCounts(compId, format) {
 // Format plan — returns stage statuses + projected participant counts
 // ---------------------------------------------------------------------------
 function getFormatPlan(compId, format) {
-  const phases = db.prepare(
-    'SELECT id, format_stage, type, status FROM phases WHERE competition_id = ? ORDER BY phase_order'
-  ).all(compId);
+  const phases = stmtPhasesForPlan.all(compId);
 
   const phaseByStage = {};
   for (const ph of phases) {
     if (ph.format_stage) phaseByStage[ph.format_stage] = ph;
   }
 
-  const N = db.prepare(
-    "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status IN ('active','eliminated')"
-  ).get(compId).n;
+  const N = stmtCountActiveOrEliminated.get(compId).n;
 
   const stages = format.stages.map(stage => {
     const ph = phaseByStage[stage.id] || null;
@@ -845,9 +882,7 @@ function _estimateCount(compId, format, stage, totalN) {
   if (p.cohorts) {
     let total = 0;
     for (const c of p.cohorts) {
-      const cnt = db.prepare(
-        "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND format_cohort = ?"
-      ).get(compId, c.cohort).n;
+      const cnt = stmtCountByCohort.get(compId, c.cohort).n;
       total += cnt;
     }
     if (total > 0) return total;
@@ -860,9 +895,7 @@ function _estimateCount(compId, format, stage, totalN) {
 
   if (p.source === 'active_remainder') {
     // Count from DB if cohorts are assigned, else estimate
-    const actual = db.prepare(
-      "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active' AND format_cohort IS NULL"
-    ).get(compId).n;
+    const actual = stmtCountActiveNoCohort.get(compId).n;
     if (actual > 0) return actual;
     const prevPool = format.stages.find(s => s.phaseType === 'pool');
     const ex = (prevPool?.participants?.excludeTopByInitialSeed || 0) + (prevPool?.advancement?.exemptTop || 0);
@@ -875,9 +908,7 @@ function _estimateCount(compId, format, stage, totalN) {
   }
 
   if (p.seedingMethod === 'combined' || p.seedingMethod === 'last_pool') {
-    return db.prepare(
-      "SELECT COUNT(*) AS n FROM competitors WHERE competition_id = ? AND status = 'active'"
-    ).get(compId).n;
+    return stmtCountActive.get(compId).n;
   }
 
   return totalN;
@@ -888,9 +919,7 @@ function _estimateCount(compId, format, stage, totalN) {
 // Throws if not.
 // ---------------------------------------------------------------------------
 function assertNextStage(compId, format, stageId) {
-  const phases = db.prepare(
-    'SELECT format_stage, status FROM phases WHERE competition_id = ? ORDER BY phase_order'
-  ).all(compId);
+  const phases = stmtPhasesForAssertNext.all(compId);
 
   const stageIndex = getStageIndex(format, stageId);
   if (stageIndex < 0) {
