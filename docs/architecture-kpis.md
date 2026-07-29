@@ -18,12 +18,15 @@ these checks directly — several are here specifically because they're what tha
 
 ## Mechanical (scripted)
 
-1. **File size** — thresholds: `services/`, `routes/`, `lib/` JS files warn at 500
-   lines, flag as a god-file candidate at 800; `public/*.html` warn at 1000, flag at
-   1500 (HTML files run larger due to bundled markup/CSS/JS, hence the higher bar).
-   Rationale: `pipeline.js`/`formats.js`/`phases.js`/`opp2.html` all crossed well past
-   these thresholds before anyone noticed — the point is to catch it while it's still
-   cheap to split, not after.
+1. **File size** — thresholds: `services/`, `routes/`, `lib/`, and `public/js/` JS
+   files warn at 500 lines, flag as a god-file candidate at 800; `public/*.html` warn
+   at 1000, flag at 1500 (HTML files run larger due to bundled markup/CSS/JS, hence
+   the higher bar). Rationale: `pipeline.js`/`formats.js`/`phases.js`/`opp2.html` all
+   crossed well past these thresholds before anyone noticed — the point is to catch it
+   while it's still cheap to split, not after. `public/js/` was added to this check
+   2026-07-29, the same day `opp2.html`'s split produced six new files there — the
+   original check only scanned `services/routes/lib` for JS, so those new files would
+   otherwise have been invisible to the very tool built to catch this class of drift.
 2. **Prepared statements must be module-level** (CLAUDE.md hard rule) — any
    `db.prepare()` call indented (i.e. inside a function/method body) instead of a
    top-level `const stmtX = db.prepare(...)` is a violation. ~16x slower under load,
@@ -41,7 +44,9 @@ these checks directly — several are here specifically because they're what tha
 6. **Duplicate function/method names within one file** — a cheap proxy for "this file
    has grown large enough that nobody notices things get redefined." Caught a real,
    verbatim duplicate (`opp2.html`'s `pendingSlotCount`, defined at both line ~1173 and
-   ~1997) on the script's first run.
+   ~1997) on the script's first run — since fixed by the 2026-07-29 `opp2.html` split
+   (the duplicate simply doesn't exist anymore; `public/js/*.js` is now scanned here
+   too, alongside `public/*.html`).
 7. **Circular requires / layering** (`scripts/check-circular-requires.js`) — no cycle
    anywhere in the `services/routes/lib` require graph, and `services/`/`lib/` must
    never require anything under `routes/`. A file requiring itself (a lazy

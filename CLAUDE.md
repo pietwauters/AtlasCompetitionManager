@@ -2289,7 +2289,7 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
       defined twice, verbatim (lines ~1173 and ~1991). Modal state mostly converged on
       one `{open, ...}` shape, except `bulkModal`, whose Cancel button sets `open=false`
       directly inline in the template rather than through a dedicated reset function like
-      the other three modals have.
+      the other three modals have. **Split 2026-07-29** — see its own entry below.
   - **What's actually fine, confirmed rather than assumed:** no circular requires
     anywhere (services↔services, services↔routes, lib↔services all checked); layering
     direction is correct throughout (services never require routes or the opp2 lib;
@@ -2418,6 +2418,82 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
       appears in `check-architecture.sh`'s god-file list at all (39 lines); the three
       new services files are "large" (500-620 lines) but under the 800-line god-file
       threshold.
+  - **`public/opp2.html` split — DONE 2026-07-29.** The very last open item from the
+    architecture review. A frontend split is structurally different from the two
+    CommonJS splits above — no bundler, no `require()`, one Alpine `x-data="app()"`
+    needs to stay one reactive component — so the shape is Alpine *mixins* (plain
+    functions each returning a chunk of state/methods), composed back into one object,
+    rather than files exporting a service object. Split by feature, matching the
+    review's own "5+ distinct features" finding:
+    - `public/js/opp2-core.js` — strip-list state/lifecycle loads, `ganttData`, misc
+      formatting helpers, the DE partition-math trio (mirrors `lib/deSlotMath.js`
+      server-side — an intentional, already-documented client/server duplication, not
+      something to fix here), and the two cross-cutting low-level helpers
+      (`_computeSlotEnd`/`_patchSlot`) both conflict-resolution and drag/reorder need.
+    - `public/js/opp2-add-slot.js` — the single-slot "add to pipeline" form (pool/DE/
+      team_match), including multi-strip distribution.
+    - `public/js/opp2-conflict.js` — `assignOfficial`/officiating-conflict detection,
+      the conflict-resolution modal, and the conflict-push undo/restore flow.
+    - `public/js/opp2-schedule-ops.js` — move/drag/reorder/delete + the
+      schedule-recascade logic all four trigger.
+    - `public/js/opp2-bulk-assign.js` — the bulk-assign modal + undo. **This is where
+      the confirmed duplicate `pendingSlotCount` used to live** — dropped here since
+      `opp2-core.js` already defines it and every mixin shares one merged `this`.
+    - `public/js/opp2-referee-schedule.js` — the by-referee Gantt view.
+    - `opp2.html` itself now just has six `<script src="/js/opp2-*.js">` tags plus a
+      ~15-line inline script defining `mergeMixins()` and `app()`.
+    - **A trap specific to this kind of split, verified empirically before relying on
+      it rather than assumed:** several of the original properties are `get xxx() {
+      ... }` computed getters (`sortedStrips`, `ganttData`, `bulkPreview`, etc.). A
+      naive `{...opp2Core(), ...opp2AddSlot(), ...}` spread merge would silently
+      **evaluate every getter once at spread-time and bake in that one frozen value**
+      as a plain data property — object spread copies current *values*, not accessor
+      descriptors. The failure mode is silent: no error, just permanently-stale
+      computed properties from the moment the page loads. Fixed by merging via
+      `Object.defineProperties(result, Object.getOwnPropertyDescriptors(m))` for each
+      mixin instead of spread — this copies the actual property descriptor (including
+      `get`/`set`), preserving live reactivity. Confirmed the distinction with a
+      standalone Node repro before writing any of the real mixin files (naive spread:
+      mutating the source object left the copy's getter frozen at its old value;
+      descriptor-copy: the getter stayed live and reflected the mutation).
+    - **The `this`-binding hazard the `services/phases.js` split had to design around
+      does *not* apply here, and needed no special handling** — confirmed, not just
+      assumed. Alpine calls `app()` exactly once and wraps the single returned
+      (merged) object in one reactive Proxy; every method's `this`, regardless of
+      which mixin file originally defined it, is always bound to that same one
+      object. So `opp2-conflict.js`'s `applyRestore()` calling `this._recascadeStrip()`
+      (which lives in `opp2-schedule-ops.js`) just works, with zero cross-file
+      requires needed between the six mixin files — unlike the CommonJS splits, where
+      three genuinely separate module objects existed and cross-references had to be
+      resolved explicitly.
+    - **Verified**: every one of the original ~113 top-level properties (state,
+      getters, methods) was accounted for exactly once across the six files (the
+      duplicate `pendingSlotCount` deliberately excluded, not accidentally dropped) by
+      building a Node `vm`-based test harness that loads all six files' real source
+      into one shared context (exactly mirroring how six `<script src>` tags execute
+      in one browser `window`), performs the real `mergeMixins` merge, and confirms:
+      all six mixins' state is present on the merged object; a getter (`sortedStrips`)
+      stays live after mutating its underlying `strips` array post-merge (the exact
+      hazard above); a getter in one file (`areStripsAdjacent`, `opp2-core.js`) reading
+      state owned by a different file (`multiStrips`, `opp2-add-slot.js`) resolves
+      correctly; a method in one file (`resetAddForm`, `opp2-add-slot.js`) calling a
+      helper owned by another (`round5`, `opp2-core.js`) works with no wiring; and
+      `assignOfficial` (`opp2-conflict.js`) correctly reads/writes `noStartTimeModal`
+      (`opp2-core.js`). Also verified over real HTTP against the live dev server (no
+      restart needed — static files reload per-request): `opp2.html` correctly
+      references all six new `<script>` tags, and all six files serve `200 OK` with
+      the expected byte sizes. **Not verified**: real-browser Alpine reactivity
+      end-to-end (no Chrome extension available in this environment this session) —
+      the `vm` harness is a faithful but not identical substitute; worth a real
+      browser click-through next time one's available. `scripts/check-architecture.sh`
+      extended the same day to also scan `public/js/*.js` for file-size and duplicate-
+      function-name violations (previously only `services/routes/lib` and
+      `public/*.html` were scanned — the six new files themselves would have been
+      invisible to the very checker built to catch this class of drift). `opp2.html`
+      no longer appears in the god-file list at all (2111 → 961 lines, now mostly
+      template markup); none of the six new JS files are individually over the
+      500-line "large" threshold. `pendingSlotCount` no longer appears in the
+      duplicate-function-name report.
 - `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
   simulated competition run over live MQTT to confirm the observed-average path behaves
   (see OPP2 section above)
@@ -2470,12 +2546,19 @@ partition on, unlike pool bouts). Fixed by mirroring the pool dedup guard.
 | `services/pipelineNav.js` | Live OPP2 hot path: activeSlot/markActive/markDone, pendingBoutCount, nextBout/prevBout, relay resolution |
 | `services/pipelineRosters.js` | competitorsForSlot/fencersForCompetition (kiosk waiting-room displays) |
 | `lib/deSlotMath.js` | Pure DE tableau/partition/de_round math shared by the three pipeline files above |
+| `public/opp2.html` | Pipeline builder page shell — six `<script src>` mixins below + `mergeMixins()`/`app()` |
+| `public/js/opp2-core.js` | opp2.html Alpine mixin: strip-list state/lifecycle, DE partition math, shared low-level helpers |
+| `public/js/opp2-add-slot.js` | opp2.html Alpine mixin: single-slot add form (pool/DE/team_match), multi-strip distribution |
+| `public/js/opp2-conflict.js` | opp2.html Alpine mixin: referee assignment, double-booking conflict detection/resolution |
+| `public/js/opp2-schedule-ops.js` | opp2.html Alpine mixin: move/drag/reorder/delete slots + schedule recascade |
+| `public/js/opp2-bulk-assign.js` | opp2.html Alpine mixin: bulk-assign modal + undo |
+| `public/js/opp2-referee-schedule.js` | opp2.html Alpine mixin: by-referee Gantt view |
 | `services/settings.js` | Key/value settings (broker URL, enabled flag) |
 | `services/cardReasons.js` | Card reason persistence, incl. official attribution |
 | `public/opp2.html` | Pipeline builder, live piste status, piste + referee Gantt charts |
 | `public/referee-schedule.html` | By-piste / by-referee schedule views |
 | `scripts/sync-spec.sh` | Diff/update `docs/level2.md` against the canonical upstream spec |
-| `scripts/check-architecture.sh` | Mechanical architecture/code-quality checks — run before committing any change under `services/`, `routes/`, `lib/`, or `public/*.html`. See `docs/architecture-kpis.md` |
+| `scripts/check-architecture.sh` | Mechanical architecture/code-quality checks — run before committing any change under `services/`, `routes/`, `lib/`, `public/*.html`, or `public/js/*.js`. See `docs/architecture-kpis.md` |
 | `docs/architecture-kpis.md` | Full architecture/code-quality KPI reference — mechanical (scripted) + judgment-based (periodic review) |
 
 ---

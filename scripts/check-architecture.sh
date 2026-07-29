@@ -42,6 +42,18 @@ while IFS= read -r f; do
   elif [ "$lines" -ge "$HTML_WARN" ]; then echo "  large:    $f ($lines lines, >= $HTML_WARN)"; WARN=$((WARN+1))
   fi
 done < <(find public -maxdepth 1 -name '*.html' 2>/dev/null)
+
+# public/js/*.js — same JS thresholds as services/routes/lib. Added
+# 2026-07-29 alongside the opp2.html split (the six opp2-*.js mixin files it
+# produced): the pre-existing loop above only ever scanned services/routes/
+# lib, so these — and any other public/js/ file — would have drifted
+# unnoticed the same way opp2.html itself did before this review existed.
+while IFS= read -r f; do
+  lines=$(wc -l < "$f")
+  if   [ "$lines" -ge "$JS_FLAG" ]; then echo "  GOD-FILE: $f ($lines lines, >= $JS_FLAG)"; WARN=$((WARN+1))
+  elif [ "$lines" -ge "$JS_WARN" ]; then echo "  large:    $f ($lines lines, >= $JS_WARN)"; WARN=$((WARN+1))
+  fi
+done < <(find public/js -maxdepth 1 -name '*.js' 2>/dev/null)
 [ "$WARN" -eq 0 ] && echo "  (none over threshold)"
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -120,7 +132,7 @@ done
 #    opp2.html pendingSlotCount duplicate is exactly what this catches.
 # ─────────────────────────────────────────────────────────────────────────
 section "Duplicate function/method names within one file"
-for f in services/*.js routes/*.js lib/*.js public/*.html; do
+for f in services/*.js routes/*.js lib/*.js public/*.html public/js/*.js; do
   [ -f "$f" ] || continue
   # Matches both `function name(` and Alpine/object method-shorthand
   # `  name(args) {` (needs a lookahead for `(`, hence -P not -E).
