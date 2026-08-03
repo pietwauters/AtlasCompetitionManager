@@ -77,6 +77,7 @@ app.use('/api/nocs',         writeOnly('assistant'), require('./routes/nocs'));
 app.use('/api/age-categories', writeOnly('director'), require('./routes/ageCategories'));
 app.use('/api/tournaments',  writeOnly('director'),  require('./routes/tournaments'));
 app.use('/api/tournaments/:tid/referees',        writeOnly('director'), require('./routes/tournamentReferees'));
+app.use('/api/schedule-plans', writeOnly('director'), require('./routes/schedulePlans'));
 app.use('/api/competitions', writeOnly('director'),  require('./routes/competitions'));
 app.use('/api/competitions/:compId/competitors', writeOnly('director'), require('./routes/competitors'));
 app.use('/api/competitions/:compId/referees',    writeOnly('director'), require('./routes/competitionReferees'));

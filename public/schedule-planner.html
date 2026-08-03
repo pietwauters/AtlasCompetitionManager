@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas — Schedule Planner</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/theme-init.js"></script>
+<style>
+  .sp-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .6rem; font-size: .78rem; }
+  .sp-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: .3rem; }
+  .sp-stage-row { display: grid; grid-template-columns: 1fr 6rem 6rem 8rem auto; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid var(--clr-border); }
+  .sp-stage-row input[type=number], .sp-stage-row input[type=text] { width: 100%; padding: .25rem .4rem; border: 1px solid var(--clr-btn-border); border-radius: 4px; background: var(--clr-surface); color: var(--clr-text); }
+  .sp-comp-block { margin-bottom: 1.25rem; }
+  .sp-comp-title { font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+  .sp-shortfall { font-size: .85rem; padding: .5rem .6rem; background: #fde8e8; border: 1px solid #f1a9a9; border-radius: 5px; margin-bottom: .5rem; color: #922b21; }
+  .sp-shortfall.ok { background: #d4edda; border-color: #b7dfc2; color: #155724; }
+  .sp-insufficient { font-size: .85rem; padding: .5rem .6rem; background: var(--clr-th-bg); border: 1px solid var(--clr-border); border-radius: 5px; margin-bottom: .5rem; color: var(--clr-text-muted); }
+</style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <div class="nav-right">
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/referee-schedule.html">Referees</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main class="layout-app">
+
+  <div class="notice-bar notice-error" x-show="error" x-text="error" @click="error=''" style="cursor:pointer"></div>
+  <div class="notice-bar notice-ok" x-show="notice" x-text="notice" @click="notice=''" style="cursor:pointer"></div>
+
+  <h1 x-text="tournament ? ('Schedule planner — ' + tournament.name) : 'Schedule planner'"></h1>
+  <p style="color:var(--clr-text-muted);max-width:60rem">
+    Estimate piste/time and referee needs for this tournament before real entrants are known.
+    Add a stage per competition round (or sync them from an assigned format), give each an
+    estimated participant count, then re-solve to get a starting layout.
+  </p>
+
+  <template x-if="loading">
+    <p>Loading…</p>
+  </template>
+
+  <template x-if="!loading && plan">
+    <div>
+
+      <!-- ── Plan settings ─────────────────────────────────────────────── -->
+      <div class="card">
+        <h2 style="margin-top:0">Plan settings</h2>
+        <div class="form-grid">
+          <label>Day start
+            <input type="time" x-model="plan.day_start" @change="updatePlanSettings()">
+          </label>
+          <label>Assumed extra (abstract) pistes
+            <input type="number" min="0" x-model="plan.abstract_piste_count" @change="updatePlanSettings()">
+          </label>
+          <label>Assumed extra (abstract) referees
+            <input type="number" min="0" x-model="plan.abstract_referee_count" @change="updatePlanSettings()">
+          </label>
+        </div>
+        <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:0">
+          <span x-text="strips.length"></span> real piste(s) currently configured. Abstract pistes/referees
+          let you plan ahead of having them actually registered — the analysis sharpens automatically as
+          real strips/referees/competitors are added.
+        </p>
+      </div>
+
+      <!-- ── Stages per competition ───────────────────────────────────── -->
+      <div class="card">
+        <h2 style="margin-top:0">Stages</h2>
+        <template x-for="comp in competitions" :key="comp.id">
+          <div class="sp-comp-block">
+            <div class="sp-comp-title">
+              <span class="sp-swatch" :style="{background: competitionColor(comp.id)}"></span>
+              <span x-text="comp.name"></span>
+              <span class="badge" x-text="comp.weapon + '/' + comp.gender"></span>
+              <button class="secondary" x-show="comp.format_id" @click="syncFormat(comp.id)" style="margin-left:auto;font-size:.78rem;padding:.25rem .6rem">
+                Sync stages from format
+              </button>
+            </div>
+
+            <template x-for="stage in stagesForCompetition(comp.id)" :key="stage.id">
+              <div class="sp-stage-row">
+                <span x-text="stage.label + (stage.format_stage_id ? '' : ' (manual)')"></span>
+                <input type="number" min="0" x-model="stage.estimated_n" title="Estimated participants"
+                       @change="updateStage(stage, {estimated_n: Number(stage.estimated_n)})">
+                <input type="number" min="1" x-model="stage.pistes_assigned" title="Pistes assigned"
+                       @change="updateStage(stage, {pistes_assigned: Number(stage.pistes_assigned)})">
+                <span style="font-size:.78rem;color:var(--clr-text-muted)"
+                      x-text="stage.computed ? (stage.computed.totalBoutMinutes + ' bout-min') : ''"></span>
+                <span style="display:flex;gap:.3rem">
+                  <button class="secondary" @click="refreshEstimate(stage)" title="Reset estimated N to current registered count" style="font-size:.75rem;padding:.2rem .5rem">↻</button>
+                  <button class="danger" @click="removeStage(stage)" style="font-size:.75rem;padding:.2rem .5rem">✕</button>
+                </span>
+              </div>
+            </template>
+
+            <div class="sp-stage-row" style="border-bottom:none" x-show="newStage.competition_id == comp.id">
+              <input type="text" placeholder="Label" x-model="newStage.label">
+              <input type="number" min="0" placeholder="Est. N" x-model="newStage.estimated_n">
+              <input type="number" min="1" placeholder="Pistes" x-model="newStage.pistes_assigned">
+              <select x-model="newStage.phase_type" style="width:100%">
+                <option value="pool">Pool</option>
+                <option value="de">DE</option>
+              </select>
+              <button class="primary" @click="addStage()" style="font-size:.78rem;padding:.25rem .6rem">Add</button>
+            </div>
+            <button class="secondary" x-show="newStage.competition_id != comp.id"
+                    @click="newStage.competition_id = comp.id"
+                    style="font-size:.78rem;padding:.25rem .6rem;margin-top:.4rem">+ Add manual stage</button>
+          </div>
+        </template>
+        <p x-show="!competitions.length" style="color:var(--clr-text-muted)">No competitions in this tournament yet.</p>
+      </div>
+
+      <!-- ── Solve ─────────────────────────────────────────────────────── -->
+      <div class="card">
+        <h2 style="margin-top:0">Solve</h2>
+        <button class="primary" @click="resolvePlan()" :disabled="solveBusy">
+          <span x-text="solveBusy ? 'Solving…' : '⚡ Re-solve schedule'"></span>
+        </button>
+        <p style="font-size:.82rem;color:var(--clr-text-muted)">
+          Uses <span x-text="strips.length + (Number(plan.abstract_piste_count)||0)"></span> total pistes
+          (real + assumed). Writes the layout shown in the Gantt below — a starting point you can then
+          hand-adjust by editing pistes-assigned per stage and re-solving.
+        </p>
+
+        <div class="form-grid" style="margin-top:1rem">
+          <div>
+            <label>What if I had this many pistes?
+              <span style="display:flex;gap:.4rem">
+                <input type="number" min="1" x-model="previewPistesInput" style="width:5rem">
+                <button class="secondary" @click="runPreviewPistes()">Preview</button>
+              </span>
+            </label>
+            <p x-show="previewPistesResult" style="font-size:.85rem;margin-top:.3rem">
+              Finishes at <strong x-text="previewPistesResult?.finishTime"></strong>
+            </p>
+          </div>
+          <div>
+            <label>How many pistes to finish by?
+              <span style="display:flex;gap:.4rem">
+                <input type="time" x-model="previewDeadlineInput" style="width:8rem">
+                <button class="secondary" @click="runPreviewDeadline()">Preview</button>
+              </span>
+            </label>
+            <p x-show="previewDeadlineResult" style="font-size:.85rem;margin-top:.3rem">
+              <template x-if="previewDeadlineResult?.pistesNeeded">
+                <span>Needs <strong x-text="previewDeadlineResult.pistesNeeded"></strong> piste(s)</span>
+              </template>
+              <template x-if="previewDeadlineResult && !previewDeadlineResult.pistesNeeded">
+                <span>Not achievable within the search range — finishes at <strong x-text="previewDeadlineResult.result.finishTime"></strong> even at the largest piste count tried.</span>
+              </template>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Gantt ─────────────────────────────────────────────────────── -->
+      <div class="card" x-show="ganttData.hasData">
+        <h2 style="margin-top:0">Estimated piste schedule</h2>
+        <div style="overflow-x:auto">
+          <div style="min-width:500px;display:flex">
+            <div style="width:130px;flex-shrink:0">
+              <div style="height:26px"></div>
+              <template x-for="row in ganttData.rows" :key="row.key+'_l'">
+                <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid var(--clr-border);font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                     x-text="row.name"></div>
+              </template>
+            </div>
+            <div style="flex:1;position:relative;min-width:0">
+              <div style="height:26px;position:relative;border-bottom:2px solid var(--clr-border)">
+                <template x-for="tick in ganttData.ticks" :key="'lbl'+tick.left">
+                  <div x-show="tick.isHour"
+                       style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:var(--clr-text-muted);white-space:nowrap;pointer-events:none"
+                       :style="{ left: tick.left+'%' }" x-text="tick.label"></div>
+                </template>
+              </div>
+              <template x-for="tick in ganttData.ticks" :key="'grid'+tick.left">
+                <div style="position:absolute;top:26px;bottom:0;pointer-events:none"
+                     :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? 'var(--clr-border)' : 'var(--clr-th-bg)' }"></div>
+              </template>
+              <template x-for="row in ganttData.rows" :key="row.key">
+                <div style="height:34px;position:relative;border-bottom:1px solid var(--clr-border)">
+                  <template x-for="bar in row.bars" :key="bar.id">
+                    <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
+                         :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
+                         :title="bar.label + ' (' + bar.start + ' → ' + bar.end + ')'">
+                      <span x-text="bar.label"></span>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="sp-legend">
+            <template x-for="l in ganttData.legend" :key="l.competition_id">
+              <span><span class="sp-swatch" :style="{background: l.color}"></span><span x-text="l.name"></span></span>
+            </template>
+          </div>
+        </div>
+      </div>
+      <p x-show="!ganttData.hasData" style="color:var(--clr-text-muted)">No solved schedule yet — add stages and re-solve.</p>
+
+      <!-- ── Referee sufficiency ──────────────────────────────────────── -->
+      <div class="card" x-show="refereeSummaryStages.length">
+        <h2 style="margin-top:0">Referee sufficiency</h2>
+        <template x-for="stage in refereeSummaryStages" :key="stage.id">
+          <div>
+            <template x-if="stage.computed.referees.status === 'insufficient_data'">
+              <div class="sp-insufficient">
+                <strong x-text="competitionName(stage.competition_id) + ' — ' + stage.label"></strong>:
+                no competitors registered yet — referee analysis will sharpen once some are.
+              </div>
+            </template>
+            <template x-if="stage.computed.referees.status === 'ok' && stage.computed.referees.shortfall === 0">
+              <div class="sp-shortfall ok">
+                <strong x-text="competitionName(stage.competition_id) + ' — ' + stage.label"></strong>:
+                a fully neutral assignment looks achievable
+                (<span x-text="stage.computed.referees.registered_referees"></span> registered
+                + <span x-text="stage.computed.referees.abstract_referees_assumed"></span> assumed).
+              </div>
+            </template>
+            <template x-if="stage.computed.referees.status === 'ok' && stage.computed.referees.shortfall > 0">
+              <div class="sp-shortfall">
+                <strong x-text="competitionName(stage.competition_id) + ' — ' + stage.label"></strong>:
+                short by <strong x-text="stage.computed.referees.shortfall"></strong> referee(s) beyond the
+                <span x-text="stage.computed.referees.registered_referees + stage.computed.referees.abstract_referees_assumed"></span>
+                currently registered/assumed.
+                <template x-for="(s, i) in stage.computed.referees.shortfalls" :key="i">
+                  <div style="font-size:.8rem;margin-top:.3rem">
+                    Add <span x-text="s.shortfall"></span> more avoiding
+                    <span x-text="blockingSummary(s)"></span>.
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+    </div>
+  </template>
+
+</main>
+
+<script src="/js/schedule-planner-core.js"></script>
+<script src="/js/schedule-planner-gantt.js"></script>
+<script src="/js/schedule-planner-solve.js"></script>
+<script src="/js/schedule-planner-referees.js"></script>
+<script>
+'use strict';
+function mergeMixins(...mixins) {
+  const result = {};
+  for (const m of mixins) Object.defineProperties(result, Object.getOwnPropertyDescriptors(m));
+  return result;
+}
+function app() {
+  return mergeMixins(
+    schedulePlannerCore(),
+    schedulePlannerGantt(),
+    schedulePlannerSolve(),
+    schedulePlannerReferees(),
+  );
+}
+</script>
+<script src="/js/nav.js"></script>
+<script src="/js/alpinejs.min.js"></script>
+</body>
+</html>

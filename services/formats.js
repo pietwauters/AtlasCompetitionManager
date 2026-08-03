@@ -960,4 +960,5 @@ module.exports = {
   assertNextStage,
   combinedSeeding,
   getTerminalStages,
+  stageDependencies: _stageDependencies,
 };

@@ -29,17 +29,97 @@ function conflictCount(referee, fencers, criteria) {
 // for this pool — the actual, concrete answer to "what referee do I need to
 // go find," not just an abstract conflict count.
 function poolAttributes(pool) {
-  const nationalities = [...new Set(pool.competitors.map(f => f.nationality).filter(Boolean))];
+  const nationalities = [...new Set(pool.fencers.map(f => f.nationality).filter(Boolean))];
   const clubMap = new Map();
-  for (const f of pool.competitors) {
+  for (const f of pool.fencers) {
     if (f.club_id) clubMap.set(f.club_id, f.club_name);
   }
   return {
-    pool_id: pool.id,
-    criteria: pool.__criteria,
+    pool_id: pool.pool_id,
+    criteria: pool.criteria,
     nationalities,
     clubs: [...clubMap.entries()].map(([club_id, club_name]) => ({ club_id, club_name })),
   };
+}
+
+// The pure matching/shortfall core, with no DB access — reusable against
+// simulated pools/referees (see services/schedulePlanReferees.js), not just
+// real ones. Callers own drawing/shuffling the referee list beforehand (the
+// "drawing lots" semantics of t.50.1 only matter for a real assignment, not
+// a what-if analysis) and applying the `assigned` results back to storage.
+//
+// pools:    [{ pool_id, criteria: ['nationality'|'club', ...], fencers: [{nationality, club_id, club_name}] }]
+// referees: [{ referee_id, nationality, club_id }]
+//
+// Returns the same shape autoAssign has always returned — see its own doc
+// comment below for the full field-by-field explanation.
+function solveAssignment(pools, referees) {
+  if (!pools.length) return { assigned: [], unassigned: [], shortfalls: [] };
+
+  let remainingPools    = pools.map((_, i) => i);
+  let remainingReferees = referees.map((_, i) => i);
+  const assignedRefIdx   = new Array(pools.length).fill(-1);
+  const assignedConflict = new Array(pools.length).fill(null);
+  const shortfalls = [];
+
+  const maxThreshold = pools.reduce((m, p) => Math.max(m, p.criteria.length), 0);
+  for (let threshold = 0; threshold <= maxThreshold && remainingPools.length; threshold++) {
+    const leftIds  = remainingPools;
+    const rightIds = remainingReferees;
+    const adjacency = leftIds.map(poolIdx => {
+      const pool = pools[poolIdx];
+      const out = [];
+      rightIds.forEach((refIdx, localRightIdx) => {
+        if (conflictCount(referees[refIdx], pool.fencers, pool.criteria) <= threshold) out.push(localRightIdx);
+      });
+      return out;
+    });
+
+    const matchLeft = maxBipartiteMatching(leftIds.length, rightIds.length, adjacency);
+
+    const stillUnmatchedLocal = [];
+    matchLeft.forEach((localRightIdx, localLeftIdx) => {
+      if (localRightIdx === -1) stillUnmatchedLocal.push(localLeftIdx);
+    });
+
+    if (stillUnmatchedLocal.length) {
+      const { S, T } = findDeficientSet(leftIds.length, rightIds.length, adjacency, matchLeft);
+      shortfalls.push({
+        threshold,
+        pools: S.map(i => poolAttributes(pools[leftIds[i]])),
+        compatible_referee_ids: T.map(i => referees[rightIds[i]].referee_id),
+        shortfall: S.length - T.length,
+      });
+    }
+
+    const usedRightLocalIdx = new Set();
+    matchLeft.forEach((localRightIdx, localLeftIdx) => {
+      if (localRightIdx === -1) return;
+      const poolIdx = leftIds[localLeftIdx];
+      const refIdx  = rightIds[localRightIdx];
+      assignedRefIdx[poolIdx]   = refIdx;
+      assignedConflict[poolIdx] = conflictCount(referees[refIdx], pools[poolIdx].fencers, pools[poolIdx].criteria);
+      usedRightLocalIdx.add(localRightIdx);
+    });
+
+    remainingPools    = stillUnmatchedLocal.map(li => leftIds[li]);
+    remainingReferees = rightIds.filter((_, i) => !usedRightLocalIdx.has(i));
+
+    // No referees left at all — relaxing the conflict tolerance further can
+    // never help, so stop instead of re-reporting the identical shortfall at
+    // every remaining threshold level.
+    if (!remainingReferees.length) break;
+  }
+
+  const assigned = [];
+  const unassigned = [];
+  pools.forEach((pool, poolIdx) => {
+    if (assignedRefIdx[poolIdx] === -1) { unassigned.push(pool.pool_id); return; }
+    const referee = referees[assignedRefIdx[poolIdx]];
+    assigned.push({ pool_id: pool.pool_id, referee_id: referee.referee_id, conflicts: assignedConflict[poolIdx] });
+  });
+
+  return { assigned, unassigned, shortfalls };
 }
 
 function shuffle(arr) {
@@ -148,83 +228,25 @@ const PoolRefereeAssignment = {
       }
     }
 
-    const pools = [];
+    const dbPools = [];
     for (const phase of phases) {
       for (const p of Pool.findByPhase(phase.id)) {
-        const full = Pool.findById(p.id);
-        pools.push({ ...full, __criteria: criteriaByCompId.get(phase.competition_id) });
+        dbPools.push({ full: Pool.findById(p.id), criteria: criteriaByCompId.get(phase.competition_id) });
       }
     }
-    if (!pools.length) return { assigned: [], unassigned: [], shortfalls: [] };
+    if (!dbPools.length) return { assigned: [], unassigned: [], shortfalls: [] };
 
-    const roster = shuffle([...refereeById.values()]);
+    const pools = dbPools.map(({ full, criteria }) => ({ pool_id: full.id, criteria, fencers: full.competitors }));
+    const referees = shuffle([...refereeById.values()]);
 
-    let remainingPools    = pools.map((_, i) => i);
-    let remainingReferees = roster.map((_, i) => i);
-    const assignedRefIdx   = new Array(pools.length).fill(-1);
-    const assignedConflict = new Array(pools.length).fill(null);
-    const shortfalls = [];
-
-    const maxThreshold = pools.reduce((m, p) => Math.max(m, p.__criteria.length), 0);
-    for (let threshold = 0; threshold <= maxThreshold && remainingPools.length; threshold++) {
-      const leftIds  = remainingPools;
-      const rightIds = remainingReferees;
-      const adjacency = leftIds.map(poolIdx => {
-        const pool = pools[poolIdx];
-        const out = [];
-        rightIds.forEach((refIdx, localRightIdx) => {
-          if (conflictCount(roster[refIdx], pool.competitors, pool.__criteria) <= threshold) out.push(localRightIdx);
-        });
-        return out;
-      });
-
-      const matchLeft = maxBipartiteMatching(leftIds.length, rightIds.length, adjacency);
-
-      const stillUnmatchedLocal = [];
-      matchLeft.forEach((localRightIdx, localLeftIdx) => {
-        if (localRightIdx === -1) stillUnmatchedLocal.push(localLeftIdx);
-      });
-
-      if (stillUnmatchedLocal.length) {
-        const { S, T } = findDeficientSet(leftIds.length, rightIds.length, adjacency, matchLeft);
-        shortfalls.push({
-          threshold,
-          pools: S.map(i => poolAttributes(pools[leftIds[i]])),
-          compatible_referee_ids: T.map(i => roster[rightIds[i]].referee_id),
-          shortfall: S.length - T.length,
-        });
-      }
-
-      const usedRightLocalIdx = new Set();
-      matchLeft.forEach((localRightIdx, localLeftIdx) => {
-        if (localRightIdx === -1) return;
-        const poolIdx = leftIds[localLeftIdx];
-        const refIdx  = rightIds[localRightIdx];
-        assignedRefIdx[poolIdx]   = refIdx;
-        assignedConflict[poolIdx] = conflictCount(roster[refIdx], pools[poolIdx].competitors, pools[poolIdx].__criteria);
-        usedRightLocalIdx.add(localRightIdx);
-      });
-
-      remainingPools    = stillUnmatchedLocal.map(li => leftIds[li]);
-      remainingReferees = rightIds.filter((_, i) => !usedRightLocalIdx.has(i));
-
-      // No referees left at all — relaxing the conflict tolerance further
-      // can never help, so stop instead of re-reporting the identical
-      // shortfall at every remaining threshold level.
-      if (!remainingReferees.length) break;
+    const result = solveAssignment(pools, referees);
+    for (const a of result.assigned) {
+      Pool.update(a.pool_id, { referee_id: a.referee_id });
     }
-
-    const assigned = [];
-    const unassigned = [];
-    pools.forEach((pool, poolIdx) => {
-      if (assignedRefIdx[poolIdx] === -1) { unassigned.push(pool.id); return; }
-      const referee = roster[assignedRefIdx[poolIdx]];
-      Pool.update(pool.id, { referee_id: referee.referee_id });
-      assigned.push({ pool_id: pool.id, referee_id: referee.referee_id, conflicts: assignedConflict[poolIdx] });
-    });
-
-    return { assigned, unassigned, shortfalls };
+    return result;
   },
 };
 
 module.exports = PoolRefereeAssignment;
+module.exports.solveAssignment = solveAssignment;
+module.exports.parseSeparation = parseSeparation;

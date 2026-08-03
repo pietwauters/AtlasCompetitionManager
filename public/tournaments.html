@@ -153,6 +153,7 @@
             <span style="font-size:.82rem;color:#555" x-show="t.date_start" x-text="formatDates(t)"></span>
             <span style="font-size:.82rem;color:#555" x-show="t.level" x-text="t.level"></span>
             <span class="badge" :class="'badge-'+t.status" x-text="t.status"></span>
+            <a :href="'/schedule-planner.html?tournament_id='+t.id" style="font-size:.82rem">📅 Schedule planner</a>
             <button @click="editTourn(t)" style="font-size:.82rem">Edit</button>
             <button class="danger" @click="deleteTourn(t)" style="font-size:.82rem">Delete</button>
           </div>

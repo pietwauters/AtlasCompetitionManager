@@ -316,7 +316,10 @@
             const r = await fetch(`/api/tournaments/${id}`);
             if (!r.ok) { document.getElementById('tournament-detail').innerHTML = '<p class="empty">Tournament not found.</p>'; return; }
             const t = await r.json();
-            let html = `<h2>${esc(t.name)}</h2>`;
+            let html = `<h2 style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+                <span>${esc(t.name)}</span>
+                <a href="/schedule-planner.html?tournament_id=${id}" style="font-size:.78rem;font-weight:400">📅 Schedule planner</a>
+            </h2>`;
             html += `<div style='margin-bottom:1rem;color:#555;'>${esc(t.city)}, ${esc(t.country)} | ${t.date_start || ''}${t.date_end ? ' – ' + t.date_end : ''} | Level: ${esc(t.level || '')}</div>`;
             if (!t.competitions || !t.competitions.length) {
                 html += `<p class='empty'>No competitions linked to this tournament.</p>`;
