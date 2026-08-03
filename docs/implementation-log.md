@@ -1,0 +1,2210 @@
+# Atlas Competition Manager — Implementation Log
+
+This is the detailed, dated build history moved out of the root `CLAUDE.md` on
+2026-08-03 to keep that file from loading its entire multi-month development log
+into every session's context. Nothing here is normative guidance — it's the
+bug-forensics, verification notes, and design rationale behind already-completed
+features. `CLAUDE.md` keeps a one-line current-status summary for each item below
+and points here for the full story.
+
+---
+
+## What is built (as of 2026-06-01)
+
+### Infrastructure
+- `db/index.js`, `db/migrator.js`, migrations 001–004
+- `server.js` — Express, mounts all routes, runs migrations on start
+- `install.sh`, `StartAtBoot.sh`, `DontStartAtBoot.sh`
+
+### People
+- People, Fencers, Referees, Clubs, NOCs
+- CSV import/export (RFC-4180, match by licence or name+DOB)
+- UI: `public/people.html`
+
+### Competitions
+- Tournaments, Competitions, Age Categories, Competitors
+- Eligibility filter (gender + weapon + age)
+- Auto-seed from national ranking
+- UI: `public/tournaments.html`, `public/competition-detail.html`
+- **Presence gate on first-round creation (added 2026-07-28):** every competitor's
+  presence is already tracked by two existing, pre-built fields — `checked_in`
+  (0/1, migration `009_checkin.sql`) and `status` (`'active'`/`'withdrawn'`/…) —
+  giving three explicit states `checkin.html` already surfaces: present
+  (`checked_in=1`), withdrawn (`status='withdrawn'`), and unknown/"not yet"
+  (`checked_in=0 && status='active'`, the default before anyone touches check-in).
+  What was missing: phase creation never looked at `checked_in` at all — it drew
+  from every `status='active'` competitor regardless of presence. Fixed in
+  `services/phases.js`:
+  - `Phase.calcOptions`'s and `Phase.create`'s no-format-stage fallback, and
+    `Phase._getDeSeeding`'s no-finished-pool-phase fallback, all now filter to
+    `status='active' && checked_in=1` — present only. Applies to *every*
+    manually-created round, not just the first, but is a no-op for phase 2+ in
+    practice: a survivor of an earlier round is already `checked_in=1` from
+    having been included then, so this can never re-exclude someone legitimately
+    still in the competition.
+  - **Format-stage-driven participant resolution — initially left out, then
+    fixed the same day after real use caught it.** The first pass deliberately
+    skipped `Format.resolveParticipants` (used once a competition has a format
+    assigned), reasoning it had too many branches to touch safely in one pass.
+    The user then hit exactly this gap for real (`club-level-pools` →
+    `pool-level-pools.json`'s `pools_1` stage, `participants.source: "initial"`)
+    — pools got created with unknown-presence fencers included, no warning,
+    because format-driven creation never goes through `Phase.create`'s fixed
+    fallback at all. Every raw-roster query in `services/formats.js` now also
+    requires `checked_in = 1`: `resolveParticipants`'s `active_remainder`
+    fallback, both `rank_range` branches (not the `basedOn: 'last_pool'`
+    variant — that reads a finished phase's `rankings`, survivors already
+    checked in), `source: 'initial'`, and the final fallback;
+    `_ensureInitialExemptions` (the GP-format "top 16 preliminary-exempt seeds"
+    selection); `_lastPoolSeeding`'s and `_combinedSeeding`'s
+    no-finished-pool-phase fallbacks; and `validateCounts`'s total-N check (so
+    the format-compatibility validation before applying a format matches what
+    will actually be entered). `services/phases.js`'s own `_combinedSeeding`
+    (DE `seedingMethod: 'combined'`) got the same fix — it was padding the
+    combined-seeding stat table with 0-victory entries for competitors who'd
+    never even been checked in, and thus never entered any pool bout.
+    Deliberately **not** touched: anything reading from `rankings` (a finished
+    phase's actual results — survivors, presence already established by
+    definition) and `getFormatPlan`'s stage-participant-count *display*
+    estimates (`_estimateCount`, and its `N` denominator at line ~790) — those
+    intentionally represent the format's total original field size across its
+    whole lifecycle, a different semantic from "who enters the very next
+    phase," and touching them risked subtly wrong cosmetic counts elsewhere in
+    the stage-plan UI for no behavioral benefit.
+  - Verified against the actual format that failed (`club-level-pools`, mixed
+    10 competitors/6 present) and a realistic GP-format scenario (20
+    competitors, exclude-top-16 exemption, 15 present) — both now correctly
+    resolve only present fencers into the stage.
+  - Error messages updated to say "present" rather than "active" for the
+    no-format branch specifically (`calcOptions`'s), pointing the operator at
+    `checkin.html` rather than leaving a bare count-too-low error.
+  - `competition-detail.html`: before submitting the competition's *first*
+    round (pool or DE — gated on `phases.length === 0`; later rounds don't
+    warn, since the server-side filter is already a no-op for them), a modal
+    warns if any active competitor has no explicit presence status, naming the
+    count and linking to `checkin.html`. Cancel aborts; "Continue with present
+    fencers only" proceeds knowing unresolved fencers will be silently
+    excluded — mirrors the `{open, onContinue}` gate-modal pattern already
+    established for `opp2.html`'s no-start-time warning.
+  - `checkin.html` gained a persistent banner (shown only while `unknownCount >
+    0`) explaining the same thing proactively: mark absentees **Withdrawn**
+    rather than leaving them unresolved, since unresolved fencers are silently
+    dropped, not merely deferred.
+- **`referee_separation` flag (added 2026-07-27, storage/UI only):** a `competitions`
+  column (migration `032_competition_referee_separation.sql`) recording which fencer
+  attribute(s) — `nationality`, `club`, both (`nationality,club`), or none (`''`/`null`)
+  — a referee/official assignment should avoid matching, per FIE Technical Rules t.50.2/
+  t.50.3 (pool/DE referees should be a different nationality from the pool/quarter's
+  fencers "if possible"). Same comma-separated value vocabulary and option labels as the
+  existing per-phase `poolSeparation` picker in `competition-detail.html`, but this is a
+  **separate, competition-level** setting — `poolFormation.separation` (rule-file/
+  per-phase, governs fencer-vs-fencer pool separation) is untouched and unrelated. Editable
+  via a "Referee neutrality" `<select>` on the competition header
+  (`competition-detail.html`), persisted through the normal `PATCH /api/competitions/:id`.
+  **Not yet consumed anywhere** — `assignOfficial`/`officialOptionsFor` in `opp2.html`
+  still only check time-overlap availability (see "Referee/official double-booking
+  detection" below); wiring this flag into an actual nationality/club-neutrality warning
+  on that screen is deliberately deferred to a later pass. **Design note for that future
+  pass (2026-07-27):** a referee with no club (`club_id`/`club_name` null — an
+  unaffiliated or independent referee) should count as neutral for the `club` criterion
+  for local/domestic competitions — never flagged as sharing a club with any fencer,
+  regardless of the fencers' own clubs. No `nationality` equivalent was specified —
+  don't assume the same "null = neutral" treatment applies there without asking.
+
+### Referee rosters — tournament + competition (added 2026-07-27)
+Referees previously had no per-event registration at all — `opp2.html`'s officiating
+dropdowns list literally every referee in the DB (`GET /api/people?role=referee`), with
+no notion of "which referees are actually working this event." Added the same
+add-from-the-database roster mechanism fencers already have (`competitors`/eligible-list/
+bulk-add), at two levels:
+- **`tournament_referees` / `competition_referees`** (migration
+  `033_referee_rosters.sql`) — plain many-to-many join tables (`(tournament_id,
+  referee_id)` / `(competition_id, referee_id)`), no snapshot fields (unlike
+  `competitors`, which freezes a fencer's identity at registration time — a referee's
+  identity doesn't need freezing the same way, so this is a live join to `referees`/
+  `people`/`clubs`).
+- **A competition's *effective* roster is the union** of its own
+  `competition_referees` rows and its parent tournament's `tournament_referees` rows
+  (`services/competitionReferees.js`'s `findAll`/`findEligible`, `LEFT JOIN ... ON
+  tr.tournament_id = @tournament_id` — degrades correctly to "no match" for a
+  tournament-less competition since SQL `x = NULL` is never true, no sentinel value
+  needed). Each row is tagged `via: 'competition' | 'tournament' | 'both'` — only
+  `'competition'`/`'both'` rows can be removed from the competition's own roster page;
+  a `'tournament'`-only row must be removed from the tournament roster instead (adding
+  it there again at the competition level, making it `'both'`, is what makes it
+  independently removable per-competition without affecting the tournament roster).
+- `services/tournamentReferees.js` mirrors the same shape one level up (no union to
+  compute — a tournament roster is just its own table).
+- Routes: `GET/POST .../referees`, `GET .../referees/eligible`, `POST
+  .../referees/bulk` (body `{referee_ids: [...]}`), `DELETE .../referees/:refereeId` —
+  both mounted the same way as the existing `:compId/competitors` pattern:
+  `/api/tournaments/:tid/referees` (`routes/tournamentReferees.js`) and
+  `/api/competitions/:compId/referees` (`routes/competitionReferees.js`), both gated
+  `writeOnly('director')` in `server.js`.
+- UI: `competition-detail.html` gained a "Referees"/"Add referees" two-card panel
+  (identical interaction pattern to the existing "Competitors"/"Add fencers" panel —
+  club-filterable eligible list, bulk-select, bulk-add) plus a `via`-tagged badge and a
+  remove button hidden for tournament-only rows. `tournaments-detail.html` — a
+  vanilla-JS/innerHTML page (no Alpine `x-data`, unlike every other detail page; not
+  refactored to Alpine here since that's a pre-existing inconsistency out of this
+  task's scope) — gained an equivalent card using the same manual
+  fetch-then-`innerHTML` idiom already used for its competitions list, with cached
+  last-fetched roster/eligible arrays so a checkbox toggle or club-filter change
+  re-renders from the cache instead of re-fetching.
+- **Deliberately not done, per explicit scoping decision:** `opp2.html`'s officiating
+  assignment screen still pulls from every referee in the DB — it does not yet filter
+  to a competition's roster. That's a separate follow-up, same deferred-wiring pattern
+  as the `referee_separation` flag above.
+- **Collapsible grouping (added 2026-07-27):** the existing "Competitors"/"Add fencers"
+  pair and the new "Referees"/"Add referees" pair are each wrapped in a
+  `<details class="card" open>`/`<summary>` (native, no JS) instead of always-visible
+  bare `.layout-detail` grids — shared styling in `style.css`'s "Collapsible section"
+  block (`details.card > summary`, custom ▸/▾ marker replacing the browser default).
+  Reuses the same pattern `people.html`'s CSV-import section already established
+  (`<details>`/`<summary>` inside a card), generalized into a shared, reusable class
+  rather than that page's one-off local CSS.
+
+### Referee roster ranking (added 2026-07-27)
+FIE Technical Rules t.50.3: for the DE table, Refereeing Delegates "establish, among
+the referees present, a list of the best referees at each weapon (according to the
+grades obtained during the season)" — draws are then made from within that ranked
+list. `tournament_referees`/`competition_referees` both gained a `rank_order` column
+(migration `034_referee_roster_ranking.sql`, nullable — unranked rows sort last,
+alphabetically, until ranked) to model exactly this list, ahead of actually building
+the lot-draw mechanism itself (not started — this is the data model + manual/auto
+ranking UI only).
+- **`lib/refereeLevel.js`'s `compareByLevel`** — best-effort ordering for the free-text
+  `referees.level` field: letter grades (`A`/`B`/`C`) rank above any numeric grade
+  (matching the real FIE Engarde export convention found in `docs/GP/*.xml` — see
+  below), numeric grades ascending (`1` best, matching this app's own seed data
+  convention, e.g. `"1.0"`.."4.0"`), anything else/blank last. Shared by both
+  `autoRankByLevel` methods so the two rosters can't drift on convention.
+- **`autoRankByLevel(id)`** (both services) — full re-rank: sorts the whole roster by
+  `compareByLevel`, ties broken alphabetically, writes sequential `rank_order` 1..N.
+  Always a full reset, not a "nudge" — re-running it after manual reordering discards
+  the manual order, which is the intended, obvious behavior of an "auto-rank" button.
+- **`moveRank(id, refereeId, direction)`** (both services) — swaps a referee with its
+  neighbor in the *current displayed order*. Always normalizes every row in the roster
+  to sequential `rank_order` first (current order — ranked if set, else the
+  alphabetical fallback `findAll` already applies), so up/down works correctly even
+  before anything has ever been ranked — no need to force "auto-rank first."
+- **Competition-level ranking on a tournament-only referee promotes them to
+  `via: 'both'`** — `CompetitionReferee.autoRankByLevel`/`moveRank` `INSERT OR IGNORE`
+  a `competition_referees` row for every referee touched before writing `rank_order`
+  (a tournament-only referee has no competition-level row to rank otherwise). Considered
+  correct, not a bug: giving a referee a competition-specific rank is itself a
+  competition-specific fact worth recording, same reasoning as the existing `via`
+  design from the roster feature above.
+- UI: a "Rank" column (number + ▲/▼ buttons, disabled at the ends of the list) and an
+  "⚡ Auto-rank by level" button on the roster card header, on both
+  `competition-detail.html` (Alpine) and `tournaments-detail.html` (vanilla JS/innerHTML,
+  matching that page's existing idiom).
+- **What real FIE XML data confirms (`docs/GP/*.xml` — see also "FIE Organisation
+  Rules"/Technical Rules reference in memory):** referees carry a letter grade **per
+  weapon** (`CategorieFleuret="B"` in the sample Grand Prix files, alongside a base
+  `Categorie="B"`) — confirms t.50.3's "grades... at each weapon" is a real, already-
+  modeled Engarde concept, not just spec text; this app's own single `referees.level`
+  field is a simplification (not changed here — out of scope for this pass, flagged for
+  later if per-weapon grading is ever wanted). **The referee list order in these XML
+  files is alphabetical by surname, not a performance ranking** — so there's no ranking
+  signal to import from real competition exports; the actual t.50.3 "list of best
+  referees" is decided live by the Refereeing Delegates and never appears in the
+  results/roster export. No per-bout/per-pool referee assignment is recorded in these
+  files either (no `IdArbitre`-type linkage) — consistent with Atlas tracking that
+  itself (`pipeline_slot_officials`) rather than expecting to import it.
+- **Not yet built:** the actual t.50.3 lot-draw mechanism (drawing referees for a
+  specific pool/DE-quarter/final from within the top of this ranked list, with the
+  nationality-neutrality check from `referee_separation` above) — this pass only adds
+  the ranked-list data model and UI, not the draw itself.
+
+### Pool referee auto-assignment (added 2026-07-27)
+FIE Technical Rules t.50.1-2, for pools specifically (simpler than the DE-table
+mechanism above, which needs the ranked list): *"the Refereeing Delegates select the
+referees by drawing lots... the referee must be of a different nationality from any of
+the fencers in the pool if possible."* No algorithm is specified beyond that — unlike
+pool *formation* (exact serpentine + swap rules, byte-verified bout-order tables), FIE
+leaves the actual "if possible" conflict-resolution procedure entirely up to the
+organizers. `services/poolRefereeAssignment.js`'s `autoAssign(phaseId)` is Atlas's own
+choice of procedure, not a spec-mandated one:
+- Draws only from the competition's registered referee roster
+  (`services/competitionReferees.js` — "the referees present", t.50.1), not the global
+  referee list. Shuffles that roster before matching each time (drawing-lots spirit —
+  which referee lands where, among equally-valid options, isn't deterministic).
+- Every pool in a phase runs at the same time, so no two pools may share a referee —
+  this is a genuine bipartite matching problem (pools ↔ compatible referees), not
+  something brute force could ever handle at scale (40 pools is 40! permutations).
+  `lib/bipartiteMatching.js`'s `maxBipartiteMatching` is a plain textbook Kuhn's
+  augmenting-path algorithm — small, generic, reusable, O(pools × edges), instant at
+  this app's scale (dozens of pools).
+- Conflict count per (pool, referee) pair = how many of the competition's
+  `referee_separation` criteria (nationality/club) that referee violates against *any*
+  fencer in the pool — 0, 1, or 2. A referee with no club never counts as a club
+  conflict (`club` design note under the `referee_separation` flag above). Assignment
+  proceeds in threshold stages: first find the maximum possible set of *fully clean*
+  (threshold-0) assignments via bipartite matching, then — only for pools still
+  unmatched, only using referees not already used — retry allowing threshold-1
+  (one criterion violated), then threshold-2, etc. This finds the true maximum
+  clean-assignment count first (not a greedy first-fit that could leave an avoidable
+  conflict), and only ever accepts a conflict where no clean option exists at all.
+- Pools left unmatched even after exhausting every referee in the roster mean there
+  are genuinely fewer registered referees than pools running simultaneously — reported
+  back as `unassigned`, not silently double-booked or dropped; the director adds more
+  referees to the roster or assigns those by hand.
+- Writes through `Pool.update(poolId, {referee_id})`, which — moved into
+  `services/pools.js` itself in this same pass (previously this mirroring only lived
+  inside `routes/pools.js`'s PATCH handler, so any other caller bypassing that specific
+  route, like this new bulk-assignment service, would have silently left
+  `pipeline_slots.referee_id` stale) — mirrors onto every pipeline slot for that pool.
+  This is a genuine latent-bug fix, not just a refactor: the invariant belongs at the
+  data layer, not one particular HTTP entry point.
+- **Deliberately out of scope:** cross-phase/cross-competition scheduling conflicts
+  (a referee already busy on a different phase's overlapping pipeline slot) — that's
+  `opp2.html`'s separate time-window double-booking check (see "Referee/official
+  double-booking detection" above), which only applies once slots are actually
+  scheduled onto strips/times; this feature only guarantees distinctness *within* one
+  phase's own simultaneous pools.
+- UI: "⚡ Auto-assign referees" button on `phase.html`'s phase-header actions row
+  (`POST /api/phases/:id/auto-assign-referees`), reports how many were assigned, how
+  many had an unavoidable conflict, and how many pools were left unassigned.
+
+**Shortfall diagnostics (added 2026-07-28) — "how to solve the unmatchable pools":**
+when pools can't all get a clean referee, `autoAssign` doesn't just report a flat
+unassigned count — it reports *why*, using the same Hall's-theorem deficiency
+certificate discussed with the user while designing this feature. At every threshold
+stage where some pools remain unmatched, `lib/bipartiteMatching.js`'s new
+`findDeficientSet(numLeft, numRight, adjacency, matchLeft)` does a BFS over alternating
+paths from the unmatched pools (the standard Kőnig's-theorem construction) to find:
+`S` — every pool caught in that same irreducible cluster (not just the literally-
+unmatched ones: a pool that *did* get a referee can still be part of the cluster, if a
+different rearrangement could have shifted the shortfall onto it instead) — and `T` —
+the referees compatible with that whole cluster. `|S| − |T|` is provably the exact
+shortfall (a short standard proof: every referee in `T` is necessarily matched, each to
+a distinct pool already counted in `S`, so `S` = unmatched pools + one pool per referee
+in `T`). This is genuinely free — no separate search, just extra bookkeeping on the
+same BFS already needed to know the matching is stuck. Verified against a hand-built
+3-pools/2-referees case matching the theorem by hand, and against a real combined-phase
+scarcity scenario (below) spanning two competitions' pools in one cluster. Surfaced in
+`phase.html` as a result modal (not just the notice bar, given how much there can be to
+say) and, in the combined view, on `tournaments-detail.html`.
+
+**Extended same day: naming *what kind* of referee is missing, not just how many.**
+Knowing a cluster is short by N referees doesn't tell a director who to go recruit —
+so each shortfall's `pools` array carries `{pool_id, criteria, nationalities, clubs}`
+per pool: the actual distinct nationalities and clubs (`club_id`+`club_name`) present
+among that pool's fencers (`poolAttributes()` helper). The UI derives a plain-language
+summary from this (`blockingSummary`/`poolBlockingDetail` in both `phase.html` and
+`tournaments-detail.html`) — e.g. *"add 1 more referee(s) avoiding nationality BEL and
+club Club Gent, Club Bruxelles, ... to resolve this."* Also fixed while building this:
+the threshold loop now `break`s as soon as `remainingReferees` is fully exhausted —
+relaxing the conflict tolerance further can never help once there are literally zero
+referees left, so without this the identical shortfall was being reported once per
+remaining threshold level (up to 3× duplicated in the nationality+club case), found by
+the test scenario itself before it reached the UI. Result shape:
+`shortfalls: [{threshold, pools: [{pool_id, criteria, nationalities, clubs}, ...],
+compatible_referee_ids, shortfall}]`.
+
+**Combined multi-competition pool referee auto-assignment (added 2026-07-28):**
+`autoAssign` now takes a phase id *or an array of phase ids* — solving several
+competitions' pool rounds as a single, larger bipartite-matching problem when they run
+at the same time (e.g. a foil and an épée competition in the same tournament, both
+fencing their pool round simultaneously on different strips). Genuinely useful, not
+just bigger: solved separately, one competition can "hog" a referee that was its only
+clean option for one pool while it had other clean options available elsewhere,
+starving the other competition of that referee for a pool that had no alternative;
+solved jointly, the matching optimizes globally and avoids that. Each pool keeps its
+*own* competition's `referee_separation` criteria (competitions in the same tournament
+aren't required to agree on nationality vs club), and the referee pool is the union of
+every involved competition's effective roster (`services/competitionReferees.js`),
+deduplicated by `referee_id` (the same physical referee registered to two competitions
+in the tournament counts once, not twice). **Still scoped to "these pools run at the
+same time," asserted by whoever selects the phases — not verified against real
+schedule data**, same limitation as the single-phase version; combining phases that
+don't actually overlap in time would be safe here (nothing double-books) but wastes the
+opportunity the joint solve is for.
+- `PoolRefereeAssignment.listCombinablePoolPhases(tournamentId)` — every pool phase
+  belonging to a competition in the tournament, with pool count and how many already
+  have a referee, for the picker UI.
+- Routes: `GET /api/tournaments/:id/pool-phases`, `POST
+  /api/tournaments/:id/auto-assign-referees` (body `{phase_ids: [...]}`) — the latter
+  verifies every phase actually belongs to a competition in that tournament before
+  running (`routes/tournaments.js`), rejecting cross-tournament phase ids.
+- UI: new "Combine pool rounds — auto-assign referees" card on `tournaments-detail.html`
+  — checkboxes over every pool phase in the tournament, run the combined solve, and the
+  same shortfall/conflict/unassigned diagnostics as `phase.html`, with pool labels
+  resolved to "`<competition name>` Pool `<number>`" by fetching each selected phase's
+  own pool list after the solve (this page has no other source of pool numbers, since
+  the phase-list endpoint only returns per-phase aggregates).
+
+### Pool phase (complete)
+- FIE serpentine seeding + separation (nationality for FIE formats; club also supported for
+  non-FIE rule files — see "Pool formation" above)
+- FIE official bout order (pools of 4–12) — **verified against real FIE GP XML, and
+  cross-checked 2026-07-04/05 against 3 independent vendors' real competition data
+  (Fencing Time, Engarde, Ophardt) — see `docs/format-system-comparison.md` §7**
+- Live rankings (V/M, indicator, touches scored/received)
+- Simulate function for random result entry (testing)
+- Phase close: saves rankings, applies advancement, marks eliminated
+- Phase chaining: previous pool rankings seed the next phase
+- Combined seeding: aggregate stats across multiple pool phases
+- UI: `public/phase.html`, `public/pool.html`
+- **Advancement dead-doc/dead-code cleanup — FIXED 2026-07-08** (doc §8 item 1).
+  `minimumVictories` and `top_per_pool` were documented in the (now-removed) `rules/RULES.md` and (the
+  former) cargo-culted as `null` into all 4 shipped rule files, but never read by
+  `services/phases.js`'s `close()` — struck from the docs and rule files rather than
+  implemented, since nothing needs them. `rules/pool-advancement-choices.json` (an
+  unwired stub meant to let a rule file offer a director a curated menu of advancement
+  methods at close time) deleted rather than wired up: `phase.html` already has a
+  generic, always-available "Advance:" override at close time for any pool phase
+  (documented in the domain model above as "the competition manager can always manually
+  override the proposed advancement list"), and it already covered 3 of the stub's 4
+  methods (count/percentage/multiple). The one real gap — `percentage` + "rounded up to
+  a multiple of N" — was a genuine miss: `services/phases.js` already read `adv.roundTo`
+  (line ~425) but no UI ever sent it. Fixed by adding a `roundTo` input next to that
+  override, shown only when `percentage` is selected.
+- **`minForCut` guard added 2026-07-08** (doc §8 item 2). New optional
+  `advancement.minForCut` field in pool rule files: if the active fencer count in a
+  phase is below it, `services/phases.js`'s `close()` advances everyone instead of
+  applying `method`/`value` — matches FencingTime's own guard. Only applies to the
+  rule's own automatic cut; a director's explicit close-time override always still
+  applies regardless of field size. Not set on any shipped rule file — opt-in, not a new
+  default (FencingTime itself leaves it disabled on all but one of its 35 templates).
+- **Combined authoring guide added 2026-07-08.** `rules/RULES.md` and `rules/RULES-DE.md`
+  (pool/DE rule-file field references) removed and folded, verbatim content plus a new
+  end-to-end worked example and the format-shape/catalog schema (previously undocumented
+  anywhere — see "Competition formats" below), into a single
+  `docs/format-authoring-guide.md` — one place to read to build a whole dedicated
+  competition format (rule file → format shape → catalog entry), not three.
+
+### DE phase (complete)
+- FIE serpentine tableau seeding
+- All rounds pre-built on phase creation; byes auto-finished and wired
+- Score entry, undo, winner auto-advancement
+- Simulate function
+- `allPlacesFenced` (unique rank down to last place): fully implemented and **verified
+  end-to-end** — `de-all-places-t16.json` runs through `Phase.simulate()` to completion
+  with zero stuck bouts, including multi-level placement groups (5th-8th, 9th-16th etc.)
+- Repechage (Tables D/E/F/G with FIE injection seeding): bracket-building is correct, and
+  a real completion bug found 2026-07-02 is now **fixed and verified**. Root cause: Table
+  D pairs *consecutive R1 losers* — when two R1 byes land adjacent in the seeding (high
+  bye-count draws, e.g. N=20 in a T32), neither bye has a real loser to route, so that
+  Table D slot got permanently stuck with zero entrants, stalling everything downstream
+  (confirmed on both `de-repechage-t32-t8.json` and `de-repechage-t64-t4.json`; light-bye
+  draws like N=30 in a T32 were unaffected, which is what hid this for so long — no
+  repechage phase had ever actually been run with a heavy enough bye count to hit it).
+  Fix: `services/bouts.js`'s `routeBoutResult` cascade now detects when *both* sides of a
+  repechage/placement bout are permanently starved (not just "one side, other side is a
+  dead bye" as before) and resolves it as a no-result phantom bout (`winner_id = NULL`,
+  `status = 'finished'`) so the emptiness propagates transparently to whatever it would
+  have fed. `services/phases.js`'s `createDE` now runs every bye through
+  `routeBoutResult` at creation time (Pass 4) instead of only hand-forwarding its winner,
+  since that's what makes the cascade check fire at all. Verified against N=20/T32
+  (heavy bye), N=30/T32 (light bye), and N=34/T64→T4 (very heavy bye, 14 phantom bouts) —
+  all complete with zero stuck bouts and `services/results.js` produces unique ranks with
+  no crash even with phantom bouts present.
+- Final results table: unique rank per place when `allPlacesFenced`/repechage rules are
+  used; otherwise 1st/2nd unique, 3rd shared if no bronze bout, others by seed
+- UI: `public/de.html` — generic `sections`/`displayHint` renderer handles main,
+  placement, and repechage brackets side by side. Below 700px width, `displayHint:
+  'bracket'` sections (main/Finals) become a per-round collapsible accordion instead of
+  horizontal scroll (`isNarrow`/`matchMedia`, same pattern as `opp2.html`'s master-detail
+  drill-down); one round auto-expands on load (first with an unfinished real bout, else
+  the last round). `displayHint: 'list'` sections (repechage/placement) already reflowed
+  fine via CSS grid and needed no JS change. Also fixed while building this: the piste
+  label/strip-filter functions (`roundPisteLabel`, `roundVisible`, `boutVisible`) matched
+  slots by `(bracket, tableau)` only — the same ambiguity fixed server-side in
+  `services/pipeline.js` above — now match on `de_round` when available.
+- Bout order within each round: sequential by bracket position (top to bottom) — **verified against real FIE GP XML**
+
+### Handedness-aware strip-side placement (added 2026-07-08)
+`bouts.left_id`/`right_id` isn't just a scoresheet column label — it's the physical
+strip side, and it's genuinely load-bearing: FIE pool bout-order tables
+(`lib/boutOrder.js`) assign it by pool-slot position, DE's advancement cascade
+(`services/bouts.js`) assigns it by bracket structure (`tableau_position % 2`,
+precomputed `winner_next_side`/`loser_next_side`), and OPP2's `software/fencers`/score
+messages are wired to real apparatus lamps/connectors (`docs/level2.md`: "Red light:
+left fencer scored"). None of that ever considered fencer handedness — which it must:
+**FIE Technical Rules t.22** ("Coming on guard and placing of the fencers") specifies
+that the fencer called first stands on the referee's right, *except* in a right-vs-left
+bout, where the left-hander is placed on the referee's left regardless of call order
+(t.22.2 covers the team version — greater right-hander count takes the referee's right,
+tied broken by call order — not yet implemented; team relays go through a completely
+separate code path, `services/teamMatches.js`/`teamPhases.js`, with no cohort/rule
+resolution at all).
+
+Two parts, both individual bouts only (pool + DE; team relays untouched):
+
+1. **Automatic default — always on, not a rule-file setting.** `Bout.normalizeHandedness(boutId)`
+   (`services/bouts.js`) swaps `left_id`/`right_id` so a left-handed fencer occupies
+   `left_id` (mapped to the referee's left) whenever paired against a known
+   right-hander, for every pool and DE bout unconditionally; no swap when both share a
+   hand or either's handedness is unknown — the table/bracket-driven default is left
+   untouched in both cases. (An earlier version of this gated the behavior behind an
+   opt-in `bout.handednessAware` rule field — removed 2026-07-08 per direction that this
+   must always apply whenever handedness is known, not be something a rule file can
+   silently leave off.) Wired at every point a bout's two sides become concretely known:
+   pool bout creation (`services/phases.js`'s `create()`, immediately after each bout
+   insert); DE bracket creation for real (non-bye) round-1 pairs (`createDE()`, right
+   after Pass 1's insert loop); and every dynamic routing write inside
+   `services/bouts.js`'s `routeBoutResult` cascade (winner-forward, loser-forward, and
+   the bronze-bout write) — called defensively after each write since the helper itself
+   no-ops unless both sides are filled and the bout hasn't been scored yet, so a bracket
+   where a bout's second side isn't known until several rounds later still gets
+   normalized the moment it is. Reads handedness fresh from `competitors.handedness` by
+   id — no need to thread it through `lib/poolFormation.js`/`lib/deFormation.js`'s
+   existing (unmodified) pairing/seeding logic at all.
+2. **Manual referee override — not optional, per t.22's "if it is not forced upfront by
+   the CMS, the referee needs the possibility to swap the fencers."** `Bout.swapSides(boutId)`
+   (`services/bouts.js`) is available regardless of how the current sides were assigned —
+   a general safety valve, not tied to the automatic feature above. Swaps
+   `left_id`/`right_id`, `left_score`/`right_score` (so each fencer's own score stays
+   attached to them, not to whichever column they used to occupy), every `bout_history`
+   snapshot's scores (so a later `undo()` doesn't misattribute a pre-swap snapshot), and
+   every `card_reasons.side` for that bout (cards are keyed by side —
+   `card_reasons.side TEXT CHECK(side IN ('left','right'))` — not by `competitor_id`, so
+   they'd otherwise silently reattach to the wrong fencer after a swap). Refused once the
+   bout is `finished` — `undo()` first, same as any other post-result correction. Exposed
+   as `POST /api/bouts/:id/swap-sides` (`routes/bouts.js`, gated by the existing
+   `writeOnly('director')` mount on `/api/bouts`) and a "⇄" button in both score-entry
+   UIs: `public/pool.html`'s scoresheet grid (per bout row, hidden once finished) and
+   `public/de.html`'s score modal ("⇄ Swap sides", shown instead of "↩ Undo" while a bout
+   is still open).
+
+**OPP2 integration — FIXED 2026-07-08.** The gap above (manual override was
+Atlas-web-UI-only, no apparatus integration) is closed. Design settled on **not** a new
+`control` command — that would have required apparatus state-machine changes (waiting
+for corrected match data, re-pressing BEGIN) the user explicitly rejected as needless
+complexity, and doesn't match how Cyrano actually does this. Instead, `fencers`
+(`docs/level2.md` §15) is now bidirectional, mirroring the existing `score` precedent
+(`apparatus/score` vs `software/score`): the apparatus can publish `apparatus/fencers`
+with the `left`/`right` fencer objects exchanged, verbatim, whenever the referee
+corrects the assignment locally (button or remote — the trigger itself stays entirely
+outside OPP2, per the user's steer: "no-one will see a button, or an IR remote control,
+only commands exchanged via MQTT are seen"). No new control command, no apparatus
+state-machine change. Spec change is upstream at
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) (**merged
+2026-07-08**) — also documents `apparatus/fencers` as retained (matching `apparatus/score`,
+not the `software/fencers` carve-out), the scoresheet-side reaction (§18 "Fencer swap
+mid-bout" — same `slot_id`/bout id but changed `left`/`right` means flip `side` on
+existing annotations, not a slot change), and the NAK-gating extension (§25.4 — an
+unresolved mismatch blocks END regardless of score/priority correctness).
+
+Atlas-side implementation, `lib/opp2Client.js`:
+- New `handleApparatusFencers(pisteId, payload)`, wired to a new
+  `openpiste/+/apparatus/fencers` subscription. Compares the received ids against the
+  active bout on file, in this order: **empty** (both sides absent — normal idle
+  between bouts) → ignore; **identical to current** (same two ids, same sides — a
+  confirmation echo, not a swap) → ignore; **clean swap** (same two ids, exchanged) →
+  calls `Bout.swapSides`, then `_republishSwappedFencers` re-sends `software/fencers`
+  (`identifyingOnly`, so it never resets score/clock/uw2f) and `software/record`;
+  **anything else** (no active bout, the bout already has a result, or a pairing that's
+  neither identical nor a clean exchange) → `_flagFencersMismatch` logs it, stores
+  `state.fencersMismatch` (surfaced via `emitPisteState`/SSE to `public/index.html`'s
+  "Live pistes" pills and `public/strips.html`'s table — a `badge-error` "⚠ fencer
+  mismatch" tooltip naming the detail), and `handleEnd` NAKs unconditionally while it's
+  set. Cleared whenever `state.boutId` changes (`handleNext`/`handlePrev`).
+- The existing web-UI swap (`Bout.swapSides` via `POST /api/bouts/:id/swap-sides`) had
+  the same desync risk in the *other* direction — a director swapping via the web page
+  while an apparatus already had that bout loaded would leave the apparatus with a
+  stale mapping. Fixed by extracting `_republishSwappedFencers` as a shared helper and
+  exposing `OPP2.notifyBoutSwapped(boutId)` (`routes/bouts.js` calls it right after
+  `Bout.swapSides`) — finds whichever piste currently has that bout active and pushes
+  the same re-publish, regardless of which direction triggered the swap. Safe no-op
+  when OPP2 isn't connected or no piste matches.
+
+**Cross-checked against a real implementation, 2026-07-08** — `esp32scoringdeviceMqtt`
+(`/home/piet/esp-idfProjects/esp32scoringdeviceMqtt`), an existing ESP32 scoring-device
+firmware. Its swap feature (`Opp2Handler.cpp`'s `UI_SWAP_FENCERS` handling, triggered by
+an already-implemented OPRCP remote-control command) **predates this design session by
+over a month** (implemented 2026-05-24) — it already swaps fencers/scores/cards/
+priority/lights/UW2F together, publishes under `apparatus/fencers` (`BuildTopic` always
+uses the apparatus role), and marks it retained — all independently matching what this
+session converged on. The legacy Cyrano/EFP1 path needs no separate swap code at all:
+`PushCachedStatusToCyrano()` rebuilds the EFP1 cache fresh from the already-swapped
+canonical state, leaving `EFP1Message::SwapFencersInclScoreCardsEtc()` genuine dead code
+(never called, superseded by that refactor).
+
+This comparison caught a real bug before it shipped: the firmware republishes
+`apparatus/fencers` any time its assignment changes for *any* reason (a fresh
+`software/fencers` arriving — e.g. every normal `NEXT` — MQTT reconnect, or clearing to
+empty between bouts), not only after a genuine swap. The original Atlas handler only
+recognized "clean swap" or "anomaly," so it would have flagged a false mismatch on
+every ordinary bout transition. Fixed by adding the empty/identical no-op cases above,
+verified against all five branches (empty, identical, anomaly, clean swap, no-active-
+bout) using a temporary test hook (added, exercised, then removed — no test scaffolding
+shipped). Also amended upstream: `docs/level2.md` §15 now documents that
+`apparatus/fencers` isn't always a swap, pushed as a second commit to
+[OpenPiste/protocols#7](https://github.com/OpenPiste/protocols/pull/7) — **merged
+2026-07-08**; `./scripts/sync-spec.sh` confirmed Atlas's local mirror is byte-identical
+to the merged version.
+
+**Verified:** `Bout.swapSides` end-to-end (pool bout, pre-existing card follows the
+fencer to its new side, rejected on a finished bout, `undo()`→swap→re-score recovers);
+`OPP2.notifyBoutSwapped` no-ops safely with no live connection and with no matching
+piste; all touched modules (`lib/opp2Client.js`, `routes/bouts.js`, plus every route
+mounted alongside it in `server.js`) load with no circular-dependency issues. **Not
+verified against a live or simulated MQTT broker** in this environment — same
+documented limitation as `bout_duration_standards`' adaptive average (OPP2 section
+above) — the actual `apparatus/fencers` message routing, the mismatch NAK-gating, and
+the SSE-driven UI warnings are code-reviewed but not exercised end-to-end over real
+MQTT traffic yet. **Next session:** live-MQTT testing against the real
+`esp32scoringdeviceMqtt` firmware (broker + real device, not just code review) is
+planned to close this gap.
+
+Verified end-to-end with a throwaway competition: a 6-fencer pool with alternating R/L
+handedness produced zero R-left/L-right pairs; the same setup with the shipped
+`pool-standard.json` (before the always-on change, using the then-existing opt-in flag
+off) reproduced several unswapped R-L pairs, confirming the gate worked as designed at
+the time. An 8-fencer DE (including one fencer with unknown handedness) showed zero
+violations in round 1 (created) and rounds 2-3 (filled in dynamically via `simulate()`),
+confirming the cascade hook fires correctly as later rounds' pairings become known.
+`swapSides` verified separately: a card recorded pre-swap correctly followed its fencer to the new
+side; swapping a finished bout was correctly rejected; `undo()` → swap → re-score
+correctly recovered from an already-finished bout.
+
+### OPP2 roles/responsibilities discussion — ongoing (started 2026-07-08)
+
+`docs/roles-and-responsibilities-discussion.md` is a **non-normative** draft document
+(not part of the spec, not yet sent to the external friend it's intended for) working
+out a general model for which OPP2 element should originate/execute each bout function,
+rather than arguing it per-function. Core model: referee **intent** → **executor**
+(decided by the "locality principle" — whichever element already has to hold the
+resulting state for an unrelated reason; only the CMS and the apparatus ever qualify) →
+**state** → **display**. Read the file directly for the full reasoning — this entry is
+a pointer, not a substitute.
+
+### OPP2 security and provisioning discussion — started 2026-07-13
+
+`docs/security-provisioning-discussion.md` — another **non-normative** draft, same
+spirit as the roles/responsibilities one above: needs first, then a model, before any
+spec language. Complementary, not overlapping — that document assumes a message
+arrived from an already-authorized publisher and asks who executes it; this one is
+about how a publisher becomes authorized to begin with (today, none of them are —
+every Mosquitto listener in Atlas's reference deployment is `allow_anonymous true`).
+
+Surfaced concretely while building the standalone e-scoresheet PWA's pairing flow
+(`docs/e-scoresheet-standalone-design.md` §4.3/§4.8) — realized partway through that a
+fix scoped to "Atlas talking to Mosquitto" doesn't actually serve OPP2's stated
+multi-vendor interoperability goal, so this was pulled out into its own document rather
+than folded into Atlas's own implementation notes.
+
+**10 needs established** (cross-vendor interop; device-capability diversity —
+embedded/browser/native each have genuinely different capabilities, browsers
+specifically cannot select a client cert from JS or touch a platform keystore at all;
+no internet dependency; no specific-broker assumption; an explicit "not bank-grade"
+trust-model statement; authorization scoped to the existing publisher-role topic
+structure; revocation as a required *capability*, mechanism-defined; interoperability
+pinned at the MQTT/TLS protocol level, not a broker's proprietary management API — only
+the *provisioning exchange* itself is genuinely OPP2's to standardize; read stays open,
+only write is gated; additive/backward-compatible, doesn't break already-fielded
+hardware like the real ESP32 firmware).
+
+**Model, briefly:** perimeter trust (physical/network access, already assumed) vs
+component trust (what provisioning establishes) are kept separate; every provisioning
+path traces back to a human vouching for the new component, same as physically
+deploying an apparatus already does; **two device-capability tiers, both legitimate,
+neither a workaround** — Tier A (embedded/native, fully scripted, e.g. the real ESP32
+firmware's existing CSR-based enrolment) and Tier B (browsers/PWAs, requires at least
+one manual OS-level trust action — installing a CA root, entering a relayed code — an
+inherent property of the browser platform, confirmed directly against Atlas's own PWA
+build, not a defect to keep trying to engineer away); credential *shape* is standard
+MQTT/TLS, the *provisioning exchange* is what OPP2 actually defines; role-scoped
+authorization with mechanism-agnostic revocation; additive/negotiable, not a breaking
+requirement.
+
+**Fully designed and pushed upstream, 2026-07-14** — the provisioning exchange
+converged through several rounds of the user catching real gaps in each pass (a role/
+tier field conflation bug; Tier A's revocation being hand-waved as "CRLs, OCSP" with
+neither picked; an assumption that per-device Tier B credentials required a live/
+dynamic broker capability, which turned out to be false once creation and assignment
+were separated; an HTTP-based delivery design for Tier B that got replaced by
+out-of-band QR/manual delivery, which is simpler *and* closes a residual third-party-
+CORS gap the HTTP version still had). Final shape: Tier A is a scripted MQTT
+request/response exchange against the deployment's CA with CRL-based revocation; Tier
+B is a pre-generated, per-device credential pool with out-of-band (QR/manual)
+delivery — no dynamic broker capability needed for either tier. Capability signaling
+proposed as an optional `connection`-message field. Written into `docs/level2.md` §30
+(filling what was an explicit "Open item — decision required" placeholder) and pushed
+upstream as [OpenPiste/protocols#10](https://github.com/OpenPiste/protocols/pull/10)
+— **merged 2026-07-14**. `./scripts/sync-spec.sh` confirms the local mirror is
+byte-identical to the merged upstream version.
+
+Atlas's own e-scoresheet pairing flow (`docs/e-scoresheet-standalone-design.md` §4.8,
+"Option 1" — a single shared Mosquitto credential, HTTP-delivered) predated this
+converged design and has been **rebuilt to match, 2026-07-14** — see
+`docs/e-scoresheet-standalone-design.md`'s "Rebuilt to match the converged design" note
+and `docs/security-provisioning-discussion.md` §4.6. Summary: unique-per-device MQTT
+credentials, pre-generated into a `mqtt_credentials` pool (migration
+`028_scoresheet_credential_pool.sql`, `scripts/top-up-credential-pool.js`) and pushed to
+Mosquitto via `scripts/sync-mosquitto-scoresheet-acl.sh`; assignment
+(`services/pairing.js`'s `assignCredential`, `routes/pairing.js`'s `POST /assign`) is a
+pure Atlas-DB action with no network round-trip to the device; delivery is a QR/manual
+credential in a URL **fragment** (never reaches Atlas's server or its logs) that
+`escoresheet/js/app.js` reads and immediately scrubs via `history.replaceState`. The old
+ticket-code/HTTP-redeem flow (`routes/pair.js`'s `POST /redeem`, `pairing_tickets`/
+`paired_devices` tables, the dead `token` bearer concept) is fully removed, not kept
+alongside the new flow. `apparatus`/`software`/`remote`/`var` topics were left untouched
+in this pass — Tier A (apparatus certs) wasn't built yet at the time; this pass was
+scoped to Tier B only, per `docs/security-provisioning-discussion.md` §3.3.1's own
+conclusion that the e-scoresheet was, at the time, the only component that needed it.
+**Tier A is now built too** — see "Tier A (certificate-based) device provisioning"
+below. Verified end-to-end at the service layer
+and over real HTTP (full pool lifecycle, route auth gating, QR image, fragment-URL
+parsing) against a throwaway director account and a temporary credential batch on a
+second, non-default-port server instance — the real dev server was left untouched and
+all test rows were cleaned from the live DB afterward.
+
+**Real bug found on the first live run, fixed same day.** Once the user actually ran
+`sync-mosquitto-scoresheet-acl.sh` and paired a real device, the apparatus stayed
+correctly online per Atlas's own backend but the e-scoresheet saw nothing. Cause: on
+Mosquitto 2.0.18 a global/unscoped `topic read #` ACL line only reaches truly anonymous
+connections — an authenticated device only gets what's inside its own `user <name>`
+block, so every paired e-scoresheet's subscriptions silently received zero messages
+(`SUBACK` still succeeded, hiding the failure). Fixed at the time by adding
+`topic read #` inside each generated `user` block in `sync-mosquitto-scoresheet-acl.sh`
+— **later superseded, 2026-07-15, by a more robust fix found while building Tier A**:
+every genuinely universal grant now uses Mosquitto's `pattern` directive instead of
+`topic`, which reaches every client regardless of auth state with no per-user
+repetition at all — see "Tier A (certificate-based) device provisioning" below for the
+full story (this same per-user-repetition gap turned out to also block Tier A device
+re-provisioning, which is what prompted finding the better fix).
+`docs/implementation-notes/mosquitto-security.md`'s examples had the same latent bug,
+corrected the same way both times. Also **wired both provisioning steps into `install.sh`**
+(credential-pool seeding, always; broker sync, only if Mosquitto is found on the same
+host — otherwise printed as a manual next step) — previously both were undiscoverable
+manual steps, which is exactly what let this bug go unnoticed until a real pairing.
+
+One real spec change has come out of it so far and **is shipped**: `software/score`
+changed from `Retained: Yes` to `Retained: No` in `docs/level2.md` (§4.5, §6, §13) —
+`apparatus/score` is unaffected and stays retained. Reasoning: the apparatus is the
+executor/authority for score/cards/priority regardless of network presence, so
+`software/score` is a correction pushed to it, not a fact it should adopt unattended
+from a stale retained replay — the same reasoning already applied to
+`software/fencers`/`software/match`, just never carried back to `score` (confirmed via
+git history: `Retained: Yes` predates the whole model, it was inherited spec text, not
+a deliberate choice). No Atlas code change was needed — `lib/opp2Transport.js`'s
+`publish()` helper already defaults to `retain: false` and both `software/score` call
+sites in `opp2Composer.js` rely on that default, so Atlas was already spec-conformant
+in practice; this closed a spec/implementation mismatch. Pushed upstream as
+[OpenPiste/protocols#8](https://github.com/OpenPiste/protocols/pull/8), **merged
+2026-07-09**; `./scripts/sync-spec.sh` confirms the local mirror is byte-identical.
+
+### Standalone e-scoresheet (PWA) — architecture discussion, ongoing (started 2026-07-12)
+
+`docs/e-scoresheet-standalone-design.md` — **non-normative, nothing implemented yet.**
+Today's `public/scoresheet.html` is Atlas-rendered and SSE-driven, which means it (a)
+doesn't demonstrate multi-vendor OPP2 interop and (b) dies if Atlas's own web server is
+unreachable, even though the apparatus/referee could otherwise keep fencing. Target
+shape agreed: a standalone **PWA** (no native iOS/Android app, one codebase, installable,
+offline-capable via service worker) that talks OPP2/MQTT directly as its own ecosystem
+participant. Read the file directly for full reasoning — pointer only, not a substitute.
+
+Key conclusions so far:
+- **Transport:** browsers can't open raw TCP sockets, so a browser OPP2 client needs
+  MQTT-over-WebSockets. Purely additive on the broker side (a second Mosquitto
+  listener) — no change to Atlas's own TCP-based `lib/opp2Client.js` or the apparatus
+  firmware.
+- **TLS trust, chosen approach:** each CMS install generates its own local CA (no
+  shared ecosystem-wide root — avoids needing cross-vendor PKI governance; fine to
+  regenerate the root per competition). The CMS's own cert is issued for
+  **`openpiste.local`** (the existing mDNS hostname, not an IP) — this is what makes
+  the whole thing DHCP/subnet-agnostic with zero internet dependency, since mDNS already
+  re-resolves to whatever IP a venue's router hands out. Public-CA tricks (a
+  `plex.direct`/`sslip.io`-style IP-embedded hostname, or Atlas's own domain + DDNS) were
+  considered and rejected — they either share a published private key (weaker
+  anti-impersonation) or need a fixed/trackable IP plus a live DNS dependency, which
+  conflicts with Atlas's own "local operation needs zero internet" principle.
+- **Pairing precedent:** `~/mqtt-web/enrolment.js`'s existing ESP32 scoring-device
+  enrolment flow (local CA + operator-gated time-boxed window + CSR/HMAC challenge) is
+  the model, adapted rather than copied. Its localhost-only gating and global
+  single-pairing-slot don't work for an operator walking strip-to-strip with their own
+  phone — reworked into: reusing Atlas's existing QR+PIN director/admin session instead
+  of an IP check (`docs/security-and-roles.md` already lists "Electronic scoresheet
+  (future)" in the access matrix), per-attempt single-use PIN tickets instead of a
+  global slot (closes a real race condition and adds a human-verification step), and a
+  bearer token instead of a client cert/CSR (no crypto library needed in-browser,
+  trivial revocation).
+- ~~**Open, unverified:** whether an installed/home-screen PWA handles a self-signed
+  cert warning the same way a normal tab does~~ — **resolved.** Needs a real CA-profile
+  install (a click-through alone isn't enough), confirmed hands-on on both real Android
+  Chrome (2026-07-13) and real iOS Safari (2026-07-15 — Safari specifically; Chrome on
+  iOS can't produce a true standalone install at all, see "iOS verified for real" below).
+- ~~**Not yet designed:** the pairing-ticket API/payload shape, the PWA-side pairing
+  UI~~ — **built** (see "pairing-ticket flow" below), **then rebuilt** to the converged
+  Tier A/B credential-pool design (see "Device Pairing Tiers" / §4.5 of
+  `docs/security-provisioning-discussion.md`) — no longer ticket-based. **Still
+  genuinely open:** the three older scoresheet-authority sub-problems (offline
+  bundle/pre-round export, local §23.4 correct-ending enforcement when Atlas is
+  unreachable, stale-replay reconciliation) — see
+  `docs/e-scoresheet-legacy-mode-discussion.md` for where that thread stands now
+  (paused mid-design, 2026-07-15).
+- **Implemented 2026-07-13:** the PWA app shell itself — `escoresheet/` (manifest,
+  service worker with versioned app-shell caching, install/online-status page, no
+  OPP2/pairing logic yet), mounted in `server.js` at `/escoresheet` as a plain static
+  folder with no Atlas session/auth dependency. And the TLS piece: `./scripts/generate-
+  tls-cert.sh` generates the local CA + `openpiste.local` leaf cert into `data/tls/`
+  (gitignored); `server.js` now also listens on a second, additive HTTPS port
+  (`HTTPS_PORT`, default 3443) on the same Express app — existing HTTP workflows are
+  untouched. Verified via `openssl verify` + `curl --cacert` (full chain validation, no
+  `-k`) against both `localhost` and the real `openpiste.local` mDNS hostname. **Not
+  done:** the broker's MQTT-over-WebSockets listener, and any actual OPP2 client code in
+  the PWA — nothing to connect to yet.
+- **Verified 2026-07-13 on a real Android phone (Chrome), end to end:** HTTP
+  reachability → HTTPS untrusted-cert warning before pairing (expected baseline) →
+  installed `data/tls/ca.crt` via Android's certificate-install flow → HTTPS with no
+  warning, service worker active → Add to Home Screen → launched from the home-screen
+  icon in genuine standalone mode (no address bar/tabs). This resolves §4.4's open
+  question **for Android**: once the manifest/SW/cert are all valid, Chrome does launch
+  a real standalone PWA. One
+  real snag hit and fixed along the way: on a dev machine with Docker installed, avahi
+  was advertising `openpiste.local`'s IPv4 as the Docker bridge (`172.17.0.1`) instead of
+  the real LAN interface — fixed with `deny-interfaces=docker0` in
+  `/etc/avahi/avahi-daemon.conf` (not an interface allowlist, which would break under
+  Ethernet). Also found: the first "Add to Home Screen" attempt produced a plain
+  bookmark (not a real install) because it was tried before Chrome had settled on
+  installability — retrying after the service worker was confirmed active fixed it;
+  the eventual pairing UX should prompt for home-screen install only after confirming
+  SW-active + warning-free, not immediately on first load.
+- **iOS verified for real, 2026-07-15.** Resolved §4.4's open question for iOS too —
+  genuinely works, but only from Safari specifically. First attempt failed because the
+  device was using Chrome on iOS: Apple restricts true standalone-launching "Add to
+  Home Screen" to Safari — every other iOS browser is a WebKit wrapper that at best
+  produces a plain bookmark (opens with the browser's own address bar/tabs), never a
+  real standalone window, regardless of manifest/service-worker correctness. Once
+  switched to Safari and both cert-trust steps were completed (install the profile via
+  `install-cert.html`, then separately enable **Full Trust** for the root CA in
+  Settings → General → About → Certificate Trust Settings — the step that's easy to
+  miss, since installing the profile alone leaves it untrusted for actual TLS use),
+  install worked cleanly. No manifest/HTML changes were needed — `escoresheet/manifest.json`
+  (`display: standalone`) and `escoresheet/index.html`'s iOS meta tags
+  (`apple-mobile-web-app-capable`, `apple-touch-icon`, etc.) were already correct;
+  this was purely a browser-choice + cert-trust-completeness issue on the device side.
+- **Implemented 2026-07-13: broker WSS trust unification.** Mosquitto already had a
+  `wss://` listener (`9002`, alongside plain-`ws://` `9001`) — nothing new needed on the
+  transport side. It was presenting a cert from an unrelated pre-existing CA
+  (`openpiste-CA`, likely from `mqtt-web`'s own setup), which would have meant pairing a
+  device against two separate trust roots. Fixed via new `scripts/install-broker-cert.sh`
+  — installs Atlas's own CA-signed cert into Mosquitto's TLS listeners (`8883`, `9002`);
+  deliberately location-agnostic (works whether the broker is co-located with Atlas or
+  on separate hardware — copy `data/tls/` there and run it there). Verified: both
+  listeners now show `issuer=CN = Atlas Local CA`, chain validates (`Verify return
+  code: 0`), and Atlas's own OPP2 client (plain `1883`, untouched) reconnected cleanly
+  after the broker restart. *(True only at this specific point on 2026-07-13 — the PWA
+  gained its first real OPP2 client code later the same day; see "Live piste display"
+  below, and by 2026-07-16 the PWA has a full OPP2 client with published resilience
+  fixes too.)*
+- **Implemented 2026-07-13: pairing-ticket flow.** Migration `027_scoresheet_pairing.sql`
+  (`pairing_tickets`, `paired_devices`); `services/pairing.js`
+  (create/redeem/list/revoke/verifyToken — 6-digit codes, 5-min TTL, single-use, not
+  DB-uniqued forever since codes are meant to be reused over a competition's lifetime).
+  Two routers split by trust level: `routes/pairing.js` (`/api/pairing`,
+  `auth.require('director')` on everything — ticket creation, device list/revoke, a
+  ticket QR endpoint) and `routes/pair.js` (`/api/pair`, no auth — the device-facing
+  `redeem` call). `public/pairing.html` is the operator UI (code + QR + countdown +
+  device list), linked from `opp2.html`. `escoresheet/`'s pairing form now really calls
+  `/api/pair/redeem`, generates+persists its own `deviceId` via `crypto.randomUUID()`,
+  and stores the returned bearer token — assumes same-origin with Atlas's API (no
+  CMS-address field; a true third-party scoresheet would need one). Service-worker
+  cache bumped to `v2` since the app shell changed. **Real bug found and fixed:** the
+  pre-existing `app.use('/api', writeOnly('director'), require('./routes/teamMatches'))`
+  matches any `/api/*` path by prefix, so it was silently auth-gating the new public
+  `/api/pair/redeem` too — fixed by registering `/api/pairing` and `/api/pair` before
+  that catch-all. **General lesson: a bare `app.use('/api', ...)` mount traps anything
+  registered after it — check route order whenever a new `/api/*` path is added.**
+  Verified end-to-end over real HTTP: create→redeem→verify→single-use-rejection→
+  revoke→re-verify-fails, plus `/api/pair/redeem` returns 403 (not 401) for a bad code
+  confirming it's genuinely unauthenticated. **Verified fully on real devices** the
+  same day: QR scan → e-scoresheet opens with code pre-filled → Pair → shows paired,
+  and appears in `pairing.html`'s device list. One real bug caught along the way: a
+  stale server process (predating the QR route being added — Node doesn't hot-reload
+  route files) made the QR image 404; general lesson, restart after any
+  `server.js`/`routes/*`/`services/*` edit, unlike `public/`/`escoresheet/` static
+  files which reload on every request with no restart needed.
+- **Implemented 2026-07-13: cert-onboarding friction reduction.** New `GET /ca.crt`
+  (`server.js`, public, plain HTTP — deliberately not HTTPS, since a new device has no
+  reason yet to trust what this CA signs) replaces the old ad hoc "copy into `public/`"
+  workaround. New `public/install-cert.html` — unauthenticated onboarding page with a
+  QR (`GET /api/pair/ca-qr`) + platform-detected instructions (Android/iOS/desktop
+  Chrome/Firefox, shown via user-agent sniffing so nobody reads all four), linked from
+  `pairing.html`. Also: `scripts/generate-tls-cert.sh` now **defaults to reusing the
+  existing CA** (was: fresh CA every run, opt-in reuse) — `--rotate-ca` to deliberately
+  start over. Rotating means every already-onboarded device redoes the one-time
+  OS-level install dance, for every competition — real friction, not a one-off — so
+  reuse is now the default and rotation is deliberate. After a rotation,
+  `install-broker-cert.sh` must be re-run too (broker cert would otherwise still chain
+  to the old, replaced root).
+- **Implemented 2026-07-13: live piste display — the first real OPP2 client code in
+  the PWA.** Deliberately read-only (subscribes/mirrors, never publishes) — the
+  "display" role in the roles-and-responsibilities model. `escoresheet/js/app.js` uses
+  `mqtt.js` (CDN, browser build of the same `mqtt` package Atlas's backend already
+  depends on) to connect to `wss://{hostname}:9002` and subscribe to
+  `apparatus/connection`, `apparatus/fencers`, `apparatus/score`, `apparatus/clock`,
+  `software/match` for an operator-entered piste id, rendering fencer names, score,
+  card chips, priority, clock, and an online/offline badge. Deliberately tracks only
+  `apparatus/fencers` (not `software/fencers` too) — it's retained and always reflects
+  the current correct assignment, so a passive display doesn't need to replicate the
+  CMS's swap-reconciliation logic. No MQTT auth used (broker is `allow_anonymous
+  true`, matching how apparatus already connects) — the pairing bearer token remains
+  issued but unconsumed, reserved for a possible future Atlas REST API, not broker auth.
+  **Verified without a real browser:** Node's own `mqtt` client replayed the exact
+  subscribe flow against `wss://localhost:9002` with `data/tls/ca.crt` while a second
+  connection published all 5 message types via plain `mqtt://localhost:1883` — all
+  arrived with topics parsing correctly. **Confirmed for real 2026-07-13**: connected
+  a real paired Android phone to an actual live, in-progress piste (not simulated
+  data) and watched fencer names, score, cards, and clock render correctly in real
+  time — closes the real-browser-rendering gap the Node-only test couldn't reach.
+  Confirmed working on iOS too the same day.
+- **Implemented 2026-07-13: card-reason recording — the PWA's first *publishing*
+  feature**, everything before this was read-only. Ported from the existing
+  `public/scoresheet.html` (Atlas's own Alpine.js/Paho scoresheet, which already
+  implements this exact feature over the legacy plain `ws://:9001` listener) rather
+  than designed from scratch — same card-detection logic, same `/data/reasons.json`
+  data source, same dialog flow (reason grid, "Repeated Group 1" drilldown, free-text,
+  official picker, skip), rewritten as vanilla JS/`mqtt.js`/`wss://` instead of
+  Alpine/Paho/plain `ws://`. **No server-side code needed** — `lib/opp2Client.js`
+  already subscribes to `scoresheet/event` and persists `CARD_REASON` annotations via
+  `services/cardReasons.js`, built for the existing scoresheet, works identically for
+  any compliant publisher — the ecosystem-independence principle actually paying off.
+  New: subscribes to `software/record` (slot/active_bout/officiating roster) and
+  `scoresheet/record` (retained history, for reconnect); `detectCards()` diffs
+  successive `apparatus/score` payloads (skips the very first, so reconnecting to an
+  already-carded piste doesn't false-trigger); publishes `scoresheet/event` per
+  annotation and republishes the full `scoresheet/record` after each one; slot-change
+  vs same-slot semantics per §17/§18 (new `slot_id` clears history, same `slot_id`
+  keeps it). **Known imperfection, not fixed:** `scoresheet/record`'s `bout_id` is
+  spec-mandatory but could be `null` if a card is detected before any `software/record`
+  has arrived (unset `activeBoutId`) — narrow edge case, left as a known gap.
+  **Verified:** syntax check, `/data/reasons.json` reachability, and a Node-simulated
+  `software/record` + card-triggering `apparatus/score` sequence over the real `wss://`
+  listener. **Tested on a real device — one real bug found and fixed:** the dialog
+  opened correctly but wouldn't dismiss (Skip/submit did nothing visible). Root cause
+  was CSS, not the dialog logic — `.overlay` set `display: flex` unconditionally, and
+  an *author* stylesheet rule outranks the browser's built-in `[hidden]{display:none}`
+  *user-agent* rule by cascade origin alone, regardless of specificity. The JS was
+  correctly setting `hidden = true` the whole time; the CSS just kept showing it
+  anyway. Fixed by scoping to `.overlay:not([hidden])`. Checked every other
+  `hidden`-toggled element in the stylesheet (`.card`, `.error`, `.back-btn`,
+  `.official-picker`) — none of the others set `display` at all, so this was isolated,
+  not systemic. Confirmed fixed on a real device after a full reload (to verify the
+  service worker's `skipWaiting()`/`clients.claim()` actually served the new CSS
+  rather than a stale cached copy).
+- **Implemented 2026-07-13: full feature parity with `public/scoresheet.html`.**
+  Everything before this showed only the single active bout. Ported (same
+  algorithms/data shapes, vanilla-JS/`mqtt.js` instead of Alpine/Paho): full bout list
+  from `software/record`'s `bouts[]` (collapsible, LIVE badge + auto-expand for the
+  active/unfinished bout, final result or placeholder for others, any bout
+  manually expandable via event delegation since rows regenerate via `innerHTML`);
+  pool results matrix (`computeMatrix`/`renderMatrix` — participants × participants
+  grid, V/M, indicator, ranking, ported line-for-line from `scoresheet.html`'s `matrix`
+  getter); team relay banner (relay/team/cumulative-score/target — Atlas-specific
+  `software/match` extensions, not core §16 fields, handled defensively); slot-info
+  line (label + officiating roster); manual theme toggle
+  (`:root[data-theme]` overrides alongside `prefers-color-scheme`, mirrors `nav.js`'s
+  pattern). **Deliberately carried over:** resetting `lastScoreForCards`/`lastFencers`/
+  `lastClock` to `null` on every active-bout change — without it, card detection could
+  diff the new bout's first score against the previous bout's final card state,
+  causing spurious or missed triggers. **Verified:** every DOM id cross-checked against
+  the HTML (two expected non-matches are dynamically-generated, correctly null-guarded);
+  a fuller Node-simulated pool `software/record` (3 participants, 3 bouts, one
+  finished) over the real `wss://` listener. **Tested on a real device — one real bug
+  found and fixed:** the pool matrix never appeared. `#matrix-section` (outer
+  container) was correctly shown by `renderMatrix()`, but the inner `#matrix-wrap`
+  (the actual table) had a static `hidden` attribute only the manual toggle-button
+  click handler ever cleared — stayed collapsed by default, unlike `scoresheet.html`'s
+  `matrixOpen: true` (expanded by default). Fixed by removing the static `hidden` and
+  defaulting the arrow to `open`. Bout list, team relay banner, slot info, and theme
+  toggle all worked correctly on first real-device try, no fixes needed.
+- **Tracked gap, raised 2026-07-13 — role-scoping now DONE, piste-scoping still
+  open (corrected 2026-07-16).** The original note described `services/pairing.js`'s
+  `verifyToken()`/bearer-token model, and `watchPiste()` sending no credentials at
+  all — that whole system no longer exists. It was fully replaced by the Tier A/B
+  credential-pool design (see "Device Pairing Tiers"): `escoresheet/js/app.js`'s
+  `watchPiste()` now sends a real per-device MQTT username/password
+  (`mqtt.connect(url, { username: mqttUsername, password: mqttPassword })`), required
+  by the broker, and `scripts/sync-mosquitto-scoresheet-acl.sh` scopes each
+  authenticated credential's write access by *role* (`topic write
+  openpiste/+/scoresheet/#`, not open to anyone anonymous). So "any device that can
+  reach the broker, paired or not, can watch/publish for any piste" is no longer
+  true — an unpaired/unauthenticated device can no longer publish at all.
+
+  **What's still genuinely open:** that same ACL line uses `+` (any piste), not a
+  specific one — a paired e-scoresheet credential can still write to *any* piste's
+  `scoresheet/*` topics, not just the one it's actually watching. True per-piste
+  scoping (e.g. `%u`/`%c` substitution binding a credential to one specific piste)
+  is still not implemented — confirmed directly against the sync script, not assumed.
+  Mosquitto's `read`/`write` ACL rules are independent per topic pattern, so "read
+  stays open, write gets scoped per-piste" would still be directly supportable on the
+  same listener if this is ever prioritized — see `docs/e-scoresheet-standalone-design.md`
+  §4.8 for the full writeup. Not decided whether/when to build it.
+
+**Piste transfer** (moving an ongoing match, or an entire pipeline, to a different piste
+mid-competition — apparatus failure, scheduling) is raised 2026-07-09, explicitly
+CMS-executed (only the CMS has pipeline structure and an already-mirrored snapshot of
+live score/UW2F state). Moving a whole pipeline is mostly free (unstarted slots are pure
+CMS bookkeeping); moving the *currently active* bout is new territory — the first case
+requiring the executor itself (the physical apparatus instance) to change mid-bout. This
+surfaced two concrete protocol gaps (see `docs/roles-and-responsibilities-discussion.md`
+§5 and §7):
+
+1. **DONE 2026-07-10 — software→apparatus seeding message for clock and UW2F.**
+   `software/clock` and `software/uw2f` are now spec'd (`docs/level2.md` §11/§19),
+   non-retained, QoS 1, symmetric to `software/score` — pushed upstream as
+   [OpenPiste/protocols#9](https://github.com/OpenPiste/protocols/pull/9) (**merged
+   2026-07-14**). Atlas-side: `lib/opp2Composer.js`'s two duplicated `isFresh` blocks
+   (in `sendMatchData`/`_sendRelayData`) were extracted into a shared
+   `sendFreshClockAndUw2f()` that publishes both through the standard envelope helper —
+   `software/clock` previously wrote an undocumented, off-spec QoS-0 `rawPublish`
+   mirroring `apparatus/clock`'s own QoS instead of the spec's QoS-1 requirement for the
+   software side. `software/uw2f` needed no code change; it already published through
+   the standard helper and was already spec-conformant, just undocumented.
+
+   Cross-checked against the real `esp32scoringdeviceMqtt` firmware
+   (`opp2-library`'s `Dispatcher.onClock`/`onUW2F`, wired in `Opp2Handler.cpp` — the
+   library's initial commit is 2026-05-20 and the handler wiring hasn't been touched
+   since 2026-07-01, both predating this whole discussion) — found the receiving side
+   already implemented and correctly gated: `updateClockExternal` refuses an incoming
+   `software/clock` unless the apparatus's *own* clock is currently stopped, exactly the
+   invariant this design assumes. That check surfaced a real gap, though: it applies the
+   incoming message's `running` field verbatim rather than forcing it false, so a
+   `"running": true"` `software/clock` payload would start the apparatus's clock from a
+   network command alone, bypassing the physical interlock. Spec tightened same-day to a
+   hard MUST/MUST NOT on this (`software/clock`'s `running` MUST be `false`; an
+   apparatus receiving `true` MUST NOT start its clock from it), same PR #9. **Low-
+   priority TODO, not yet actioned:** `esp32scoringdeviceMqtt`'s `updateClockExternal`
+   (`Opp2Handler.cpp:2062`) doesn't yet enforce this — it would currently honor a stray
+   `running: true`. Nothing in Atlas exploits this today (`sendFreshClockAndUw2f`
+   always sends `running: false`), so it isn't blocking anything; flagged for whenever
+   the firmware repo is next touched, not scheduled.
+
+2. **Still open:** no `control` value meaning "relinquish this bout, no result" — every
+   existing value (BEGIN/NEXT/PREV/END) assumes normal completion. Also still open:
+   Atlas doesn't mirror the clock into `pisteState` at all (`lib/opp2Client.js` tracks
+   `lastScore`/`lastUw2f`, no `apparatus/clock` handler). Both block the actual
+   mid-bout piste-transfer feature — 2026-07-10 only closed the messaging-format
+   prerequisite (item 1), not the feature itself.
+
+### e-Scoresheet network-drop resilience fixes — complete, 2026-07-16
+
+Investigated "how resilient is the already-shipped e-scoresheet to network drops?"
+by reading the actual connection code, not from memory. Found brief blips were
+already handled reasonably well (`reconnectPeriod: 2000`, full resubscribe on every
+reconnect, retained topics mean a reconnect gets current state immediately, `qos: 1`
+card-reason publishes queue in `mqtt.js` while disconnected and flush on reconnect,
+service worker keeps the app shell rendering through a drop) — but found and fixed
+three real, independent bugs in `escoresheet/js/app.js`:
+
+1. **Conflated status badge.** `#conn-badge` ("apparatus online/offline") was driven
+   by *both* the retained `apparatus/connection` message *and* this e-scoresheet's
+   own MQTT `error`/`close` events — same badge, same text either way. A referee
+   couldn't tell "the scoring box disconnected" from "my phone lost WiFi." Fixed by
+   adding a second, independent `#broker-badge` (new `renderBrokerStatus()`) driven
+   only by this device's own connection lifecycle (`connect`/`reconnect`/`close`/
+   `offline`) — `renderConnection()` (the apparatus badge) is now only ever called
+   from the `apparatus/connection` message handler.
+2. **Retained delivery can collapse more than one event into a single diff.**
+   `detectCards()` compares two consecutive `apparatus/score` payloads to infer new
+   cards. Since `apparatus/score` is retained, a reconnect only ever delivers the
+   *current* state — if e.g. two red cards were given while disconnected, the diff
+   against the pre-drop snapshot would only fire one dialog, silently
+   under-representing what happened. Fixed by resetting `lastScoreForCards`/
+   `lastFencers`/`lastClock` to `null` on every reconnect (tracked via a new
+   `hasConnectedOnce` flag, distinguishing "first connect for this piste" from
+   "reconnected after a drop") — reuses the exact guard (`if (lastScoreForCards)`)
+   already in place to skip detection on the very first message ever, for the same
+   reason: silently resync rather than risk a false or incomplete trigger. Tradeoff,
+   accepted deliberately: a card given entirely within a gap gets no annotation
+   recorded (there's still no manual card-assignment path — see the paused
+   legacy-mode discussion below) — safer than logging a wrong or partial one, and
+   consistent with cards being audit/annotation data only, not the authoritative
+   record.
+3. **`navigator.onLine`-driven status is a weak signal on its own** — reflects
+   whether the device's network interface is up, not whether the broker is actually
+   reachable; can read "Online" while the WSS connection is failing outright. Not
+   removed (still legitimate, lower-cost information) but no longer the only signal
+   — the new `#broker-badge` from fix 1 is the authoritative "is live data actually
+   flowing" indicator.
+
+Service worker cache bumped to `v11` (app shell — `index.html`/`app.css`/`app.js` —
+all changed). Verified via `node --check` and manual code-path review; confirmed the
+update itself reaches a real device (`git pull` + close/reopen picked up `v11`
+cleanly). **Not yet confirmed:** actually triggering a real network drop on that
+device and watching the new broker/apparatus badge split and reconnect-safe card
+detection behave as designed — still worth a real test.
+
+### e-Scoresheet legacy/no-apparatus mode discussion — paused 2026-07-15
+
+`docs/e-scoresheet-legacy-mode-discussion.md` — **non-normative, nothing implemented,
+paused pending reconsideration.** Started from a concrete ask: when no scoring
+apparatus is connected, the e-scoresheet should still be usable to increment/correct
+scores, assign cards outright (not just record a reason — today's `CardReason.record()`
+is *only* ever called from apparatus-driven card detection, no manual path exists
+anywhere, not even in Atlas's own director UI), assign and log priority (currently not
+persisted anywhere at all — it's a transient MQTT payload field, discarded after use),
+and manually activate/end a match. Directly revives the three sub-problems already
+flagged as open in `docs/e-scoresheet-standalone-design.md` §5 (offline bundle/
+pre-round export, local §23.4 enforcement, stale-replay reconciliation).
+
+Worked through several decision axes (auth = real Atlas login on-device; activation =
+fallback-only-when-apparatus-absent; DE deferred, pools only; frozen per-piste
+pipeline snapshot, not live reassignment; trust the referee, no local correct-ending
+enforcement; reconnect conflicts flagged for a human, never auto-merged) — see the doc
+for the full table. **Paused by a reframing the user raised partway through:** brief
+network instability and a sustained loss of connection for an entire bout/pool are
+qualitatively different problems, not one continuum. Brief instability is exactly
+where OPP2 earns its keep (real-time, time-accurate data) and is worth engineering
+resilience for. Sustained loss has *no* real-time data to protect — OPP2 has nothing
+to offer there, and the honest answer is a much simpler offline paper-scoresheet
+replacement synchronizing at just two points (start/end of pool or bout), same
+approach already used by existing systems like FencingTime via their own REST API —
+not a scaled-down OPP2 client. Whether this means splitting into two genuinely
+separate modes (a live/connected mode for the new manual capabilities, riding on
+OPP2/MQTT as today; a separate two-sync-point "digital paper scoresheet" mode for
+real disconnection) — and whether the second mode even belongs in the e-scoresheet
+PWA rather than being its own smaller tool — is exactly what's left open.
+
+**Corrected 2026-07-16:** an earlier tentative note in the doc had proposed the
+two-sync-point mode call Atlas's own REST API directly — wrong, and flagged by the
+user as violating this project's own ecosystem-independence principle (see "OPP2
+design principle" above): that would mean only an Atlas-specific e-scoresheet could
+ever run in this mode, exactly the fragmentation OPP2 exists to prevent. **Even the
+disconnected mode's two sync points must be standardized OPP2 messages**, so any PWA
+or non-PWA e-scoresheet works against any compliant CMS, not just Atlas — a real spec
+extension is likely needed, since no existing OPP2 message carries pipeline/pool-
+structure data today. The connection doesn't need to be *continuous* to be OPP2 —
+brief-connect/sync/disconnect at each of the two points is still protocol-pure; only
+the live window in between has no OPP2 involvement. Read the doc directly before
+resuming this thread.
+
+### Tier A (certificate-based) device provisioning — complete, 2026-07-14/15
+
+Implements `docs/level2.md` §30.5 for real: embedded/native components (the scoring
+apparatus firmware, and by extension anything else that can't run in a browser) prove
+themselves with a TLS client certificate instead of a Tier B username/password —
+generated locally, private key never transmitted, exchanged for a signed cert over the
+reserved `openpiste/_provision/request` / `openpiste/_provision/response/{device_id}`
+topics. Built across **both** repos this project depends on: this one (the CMS/signing
+authority) and `esp32scoringdeviceMqtt` (the real device — see
+[[reference_scoring_device_firmware]]), and paired against **actual hardware**, not
+just simulated — the first Atlas feature verified that way end-to-end.
+
+**Atlas side:** migration `029_tier_a_provisioning.sql` (`tier_a_tickets`,
+`tier_a_certificates`); `services/provisioning.js` — ticket issuance,
+`signCertificate` (shells to `openssl x509 -req` against `data/tls/ca.{key,crt}`,
+overriding the CSR's own subject with an Atlas-controlled `{role}-{deviceId}` CN so it
+maps directly to a Mosquitto ACL identity), `revokeCertificate`
+(CRL regen via a minimal bootstrapped OpenSSL CA database at `data/tls/ca-db/`),
+`purgeRevokedCertificates` (operator-list cleanup only, never touches the CRL);
+`lib/opp2Provisioning.js` — the MQTT-side handler, wired into `lib/opp2Client.js`
+ahead of the normal piste-scoped message parsing (the `_provision/*` topics are a
+reserved 3-segment shape the opp2-library-style parsing can't handle); new
+`routes/pairing.js` endpoints and a "Pair a scoring device" ticket-issuing flow.
+`scripts/sync-mosquitto-tier-a.sh` (new) handles the broker-listener half:
+`require_certificate`/`use_identity_as_username`/`crlfile` on 8883, CRL pushing.
+
+**Firmware side:** new `TierAProvisioning` singleton — mbedtls EC keypair + CSR
+generation, NVS persistence (`"tier_a"` namespace), the MQTT exchange, and a new
+`/provision` page on the existing calibration web server (the device has no camera to
+scan a Tier B–style QR with, so the operator-relayed ticket code is typed in there).
+Filled in `AtlasAsyncMqttClient`'s previously-unimplemented `setTlsCerts()` stub.
+
+**Real bugs found only by pairing an actual device — this is the valuable part, not
+just "it compiled":**
+- **MQTT message fragmentation.** esp-mqtt delivers any message over its internal
+  buffer (default 1024 bytes) across multiple `MQTT_EVENT_DATA` callbacks;
+  `AtlasAsyncMqttClient::handleEvent` treated every fragment as a complete message.
+  Invisible until now because every prior OPP2 message (score, clock, control) was
+  small enough to arrive whole — Tier A's response (two PEM certificates) was the
+  first payload big enough to fragment. Fixed with proper
+  `current_data_offset`/`total_data_len` reassembly.
+- **Broker ACL let the device publish its request but never let Atlas publish the
+  response.** Atlas's own OPP2 client connects anonymously (by design); the ACL only
+  ever granted the request-topic write to anonymous connections, so every exchange
+  died silently on the response leg — no error either side, `SUBACK`/`PUBACK` both
+  looked fine.
+- **Crash on the first successful grant.** `esp_mqtt_client_stop()`/`_destroy()`
+  (needed to switch the device onto mTLS) must never be called from inside the MQTT
+  client's own event-handler task — doing so crashed the device with a FreeRTOS mutex
+  assertion. Fixed by deferring the actual reconnect to
+  `Opp2Handler::CheckConnection()` (the main loop task) via a staged
+  "reconnect pending" flag rather than doing it synchronously in the response handler.
+- **TLS handshake failed even with a valid, correctly-signed cert.** The device
+  connects via a resolved IP; the broker's cert SAN only covers the mDNS hostname.
+  Fixed with `skip_cert_common_name_check` (the certificate *chain* is still fully
+  verified against Atlas's CA — only the hostname/CN match is skipped). Documented as
+  a deliberate, revisitable tradeoff in the firmware repo's `TECHNICAL_NOTES.md`, not
+  silently patched over.
+- **Re-provisioning was permanently impossible after the first successful pairing.**
+  Confirmed the hard way, with a real device: once authenticated (via its own
+  certificate), a client no longer inherits *any* global/unscoped ACL rule on this
+  Mosquitto version — only what's in its own per-user stanza. The provisioning-request
+  grant had only ever been added globally (for first-time anonymous devices), so an
+  already-provisioned device could never request a renewal. Root-fixed, not patched
+  per-instance: every genuinely universal grant (`read #`, both `_provision/*` topics)
+  now uses Mosquitto's `pattern` directive instead of `topic` — confirmed empirically
+  (disposable broker, several angles) to reach *every* client regardless of auth
+  state, closing this entire bug class rather than the one symptom.
+- **Certificates accumulated instead of superseding.** Every re-pair left the previous
+  certificate for the same device+role sitting around as a separate "active" row
+  forever. `signCertificate` now auto-revokes any prior active certificate for the
+  same device+role on each new issuance.
+- **`openssl ca -gencrl` failed outright the first time that supersession logic ran.**
+  OpenSSL enforces unique certificate subjects by default; Tier A deliberately reuses
+  the same CN across re-provisioning (that's what makes "find and revoke the old one"
+  possible). Fixed with the standard `index.txt.attr` → `unique_subject = no`
+  override.
+- **Device label never appeared in the certificate list.** The label typed at
+  ticket-issue time was stored on the *ticket*; the certificate's own label came only
+  from a `device_label` field in the device's MQTT request, which the firmware never
+  actually sends. `signCertificate` now falls back to the ticket's label when the
+  device doesn't send one.
+- **Unbounded CRL/index.txt growth.** A revoked entry only needs to stay listed until
+  its own original expiry passes — after that the TLS handshake already rejects it
+  for being expired, CRL or not. New `pruneExpiredRevocations()`, wired into
+  `scripts/sync-mosquitto-tier-a.sh` (the same script already re-run after every
+  revocation, not a separate thing to remember).
+
+**UI:** `public/pairing.html` rebuilt as two consistently-styled, collapsible sections
+— "Device-locked credentials" (Tier A, expanded by default — the common case) and
+"Username & password" (Tier B, collapsed) — replacing four mismatched cards, with
+matching show/clear-revoked controls added to both. `public/admin.html`'s card
+retitled "Device pairing" (was "Scoresheets" — no longer accurate once this covered
+more than the e-scoresheet).
+
+**Pairing vs. e-scoresheet installation fully separated, 2026-07-15 (later pass).**
+An initial attempt at this UI baked e-scoresheet-specific QR/link generation directly
+into the Tier B "assign a credential" flow — confusing (per user feedback: "everything
+still smells escoresheet mixed with pairing"), and wrong in principle: Tier B is a
+generic browser-credential mechanism, and a future Tier B device that isn't the
+e-scoresheet (has a camera, is browser-based, but isn't a scoresheet) shouldn't be
+steered through escoresheet-flavored UI at all. Fixed by fully separating the two into
+independent steps:
+- `pairing.html` is pure credential issuance again (Tier A tickets, Tier B
+  username/password) — zero e-scoresheet awareness, identical UI for any device type.
+- New `public/install-escoresheet.html` — picks an already-paired, active Tier B
+  device from a dropdown and shows its e-scoresheet QR code plus a plain clickable
+  link (`escoresheetPairingUrl`, for testing on the same machine or when there's no
+  camera to scan with — a real gap in the first attempt, which only ever offered a QR
+  image). This is now the *only* place any e-scoresheet-specific logic lives.
+- `admin.html` gained a separate "Install e-scoresheet" card alongside "Device
+  pairing", linking to the new page.
+- `routes/pairing.js`: `/devices/:id/reveal` now also returns `escoresheetPairingUrl`
+  as data (cheap to compute, harmless to include) but `pairing.html` never renders it
+  — only `install-escoresheet.html` does. `/devices/:id/qr` renamed to the explicitly
+  e-scoresheet-scoped `/devices/:id/escoresheet-qr`.
+
+**Verified end-to-end against real hardware**, not just compiled: ticket issue → code
+typed on the device's own `/provision` page → CSR generated and never leaves the
+device → signed certificate received → persisted to NVS → clean mTLS reconnect on
+8883 → re-provisioning without manual intervention → correct label and
+single-active-row bookkeeping in `pairing.html`. `docs/implementation-notes/mosquitto-security.md`
+updated to document the `pattern`-vs-`topic` finding for future implementers (not the
+spec itself — this is Mosquitto-specific, deliberately out of `docs/level2.md`'s
+scope per its own vendor-neutrality principle). Committed to both repos: Atlas
+`1547f03`, `esp32scoringdeviceMqtt` `714250d`.
+
+**Not done:** flashing/testing a *second* physical device (only one has been paired
+so far); per-piste/per-instance scoping beyond role (tracked, longstanding, not
+specific to Tier A); OCSP (CRL was always the intended mechanism, per spec).
+
+**CMS self-authentication — complete, 2026-07-15.** A real gap surfaced once Tier A
+was working against real hardware: Atlas's own OPP2 client (`lib/opp2Transport.js`)
+still connected to the broker anonymously, relying on a backward-compat, anonymous-only
+`topic write openpiste/+/software/#` ACL grant to publish at all. Since Tier B/Tier A
+had already scoped `scoresheet`/`apparatus`/etc to their own authenticated identities,
+`software` was the one role left wide open — any other anonymous client on the network
+could spoof `software/*` messages the apparatus is spec-required to trust
+unconditionally (e.g. `software/clock`'s `running:false` invariant). Fixed by giving the
+CMS its own Tier A client certificate, CN `software-cms`:
+- `services/provisioning.js`'s `signCertificate` was refactored into two shared
+  helpers (`_signCsr`, `_recordAndSupersede`) plus a new `issueCmsCertificate()` —
+  unlike every other Tier A device, the CMS doesn't need the ticket/MQTT
+  request-response exchange at all, since it already holds the CA's own private key
+  locally; keypair, CSR, and signing happen in one local `openssl` step. Writes
+  `data/tls/software-client.{key,crt}` and records the cert in `tier_a_certificates`
+  (role `software`, device_id `cms`) for the same CRL/revocation/pruning machinery
+  every other Tier A cert gets.
+- Migration `030_cms_self_certificate.sql` — `tier_a_certificates.role`'s CHECK
+  constraint gained `'software'` (table rebuild, SQLite has no ALTER for CHECK
+  constraints). Deliberately did **not** touch `tier_a_tickets.role`'s CHECK, which
+  still excludes `'software'` — that's the real invariant (no operator-issued ticket
+  can ever grant an external device the software role); the CMS's self-issuance
+  bypasses the ticket flow entirely, so only the certificate *record* needed the
+  schema change.
+- `lib/opp2Transport.js`'s `connect()` now checks for
+  `data/tls/software-client.{key,crt}` + `ca.crt`; if present, upgrades to
+  `mqtts://host:8883` with the client cert. If absent, behaves exactly as before
+  (anonymous) — fully additive/opt-in, can't break an install that hasn't issued the
+  cert yet.
+- New `scripts/provision-cms-client-cert.sh` — issues the cert and prints the
+  sequenced next steps (restart Atlas, re-run `sync-mosquitto-scoresheet-acl.sh`,
+  re-run `sync-mosquitto-tier-a.sh` if 8883 doesn't already require a client cert).
+  The sequencing matters: `sync-mosquitto-scoresheet-acl.sh` already read
+  `tier_a_certificates` generically (no script change needed to pick up
+  `software-cms`), but if Atlas reconnects via mTLS *before* that script re-runs, it
+  authenticates successfully yet has no ACL stanza yet — same "an authenticated
+  client inherits nothing from an old anonymous grant" lesson as everywhere else in
+  Tier A/B, this time biting Atlas's own connection instead of a device's.
+- Once the certificate was confirmed working live (server log showed `(mTLS, cert CN
+  software-cms)`, existing piste state kept publishing normally), the anonymous
+  `topic write openpiste/+/software/#` line was removed from
+  `sync-mosquitto-scoresheet-acl.sh`'s generated ACL — closing the spoofing gap for
+  real, not just adding a redundant authenticated path alongside the open one.
+  `apparatus`/`remote`/`var` deliberately keep their anonymous fallback (Tier A is
+  still optional for those roles; `software` is different because only Atlas itself
+  ever legitimately publishes it).
+- `install.sh` updated to issue the CMS certificate at install time (same
+  skip-if-already-provisioned pattern as the Tier B credential pool) and to print a
+  reminder that `sync-mosquitto-tier-a.sh` (listener 8883's
+  `require_certificate`/`use_identity_as_username`/`crlfile`) is a separate, more
+  invasive step (full broker restart, not a reload) left manual rather than run
+  automatically on every install.
+
+**Verified against the real, already-live deployment** (not simulated): cert issued,
+chain-verified against `data/tls/ca.crt`, key/cert match confirmed; ACL regenerated and
+pushed with the operator's own broker (`sudo grep` confirmed `software` absent from the
+anonymous block and present under a `user software-cms` stanza); Atlas reconnected over
+mTLS with no disruption to already-live piste state.
+
+### Mid-competition failover bundle — complete, 2026-07-15
+A pre-provisioned standby server (Atlas + Node + Mosquitto already installed, just
+idle — a live failover has no time for `install.sh` from scratch) can take over from a
+failed primary without every device needing to re-pair. Two scripts:
+- `scripts/create-failover-bundle.sh` — bundles a live, consistent `data/atlas.db`
+  snapshot (`sqlite3 .backup`, safe without stopping the server) and the *entire*
+  `data/tls/` directory (CA + every issued certificate, including `ca-db/` so serial
+  numbers and revocation history survive too) into a `7z` archive with **AES-256
+  encryption and encrypted filenames** — deliberately not `zip -e`'s legacy
+  ZipCrypto, since the archive contains the CA private key. Deliberately does *not*
+  bundle Mosquitto's own `acl.conf`/`passwd`/`mosquitto.conf` — those are fully
+  regenerable from the two bundled things via scripts this project already has, so
+  regenerating on restore avoids a second, independently-drifting snapshot.
+- `scripts/restore-failover-bundle.sh` — extracts, shows the bundle's manifest
+  (created-at/source host/git commit) so the operator can confirm it's the right
+  one, asks for explicit confirmation, backs up the standby's *own* current
+  `data/atlas.db`/`data/tls/` first (reversible), installs the restored files, then
+  re-runs `install-broker-cert.sh` + `sync-mosquitto-scoresheet-acl.sh` +
+  `sync-mosquitto-tier-a.sh` if Mosquitto is co-located, and restarts Atlas.
+- `p7zip-full` added to `install.sh`'s package list. Verified: the `sqlite3 .backup`
+  snapshot (integrity check passes, tables match the live DB) and the `data/tls/`
+  copy logic tested against the real repo.
+- **Full encrypted round trip verified for real, 2026-07-15** (same day, later
+  pass) — the gap above is closed. `p7zip-full` installed, bundle created from this
+  dev checkout's real pairing data (an active apparatus Tier A cert plus the Tier B
+  e-scoresheet credential pool), `scp`'d to the real standby (`atlas@openpiste.local`),
+  and restored there with `restore-failover-bundle.sh`: manifest matched the source
+  host/commit, Mosquitto ACL/CRL/listener-8883 resync and Atlas restart both completed
+  cleanly, and the previously-paired device showed as paired again with no re-pairing
+  needed. One real, non-obvious wrinkle found: an already-open browser session on the
+  standby didn't reflect the restored state until a fresh login — restoring
+  `atlas.db` mid-session replaces the `users`/session tables out from under the
+  existing session cookie, so a relogin (not a bug, not a re-pair) is needed to see
+  the restored data. Worth calling out to whoever runs a real failover so it isn't
+  mistaken for the restore having failed.
+- **Two more real bugs found finishing that same test, both fixed same day.**
+  - The e-scoresheet PWA still couldn't see its piste as online after the restore even
+    though the CMS could. Root cause: `install-broker-cert.sh` only *creates* a TLS
+    listener stanza if one doesn't already exist at all — it never normalizes an
+    *already-existing* one's `cafile`/`certfile`/`keyfile` paths. Listener `8883` had
+    always been Atlas-only so this never mattered; listener `9002` (wss) on the real
+    standby predated Atlas (inherited from `mqtt-web`'s original setup) and pointed at
+    `/etc/mosquitto/certs-web/server.cert`, not `/etc/mosquitto/certs/server.crt` —
+    so the script kept installing fresh cert bytes at a path nothing read from, `9002`
+    kept serving a year-old unrelated self-signed cert, and the e-scoresheet's own TLS
+    chain validation correctly refused to trust it (the CMS, on the correctly-configured
+    `8883`, had no such problem — which is what made "CMS sees it online, e-scoresheet
+    doesn't" so confusing at first). Fixed: `install-broker-cert.sh` now rewrites just
+    the three cert-path directives inside an existing listener's own stanza, leaving
+    every other directive (`protocol`, `allow_anonymous`, `require_certificate`, …)
+    untouched. Caught a `set -e` footgun while testing the fix itself:
+    `[[ -z "$file" ]] && return 0` aborts the *whole script* when the condition is
+    false (the bare `&&`'s left side exits non-zero as a statement) — switched to an
+    explicit `if`. Also used portable `awk` throughout (no GNU-only `\y`), since
+    Raspberry Pi OS ships `mawk`, not `gawk`, as the default `awk`.
+  - Separately, `git pull`/`update.sh` failed on the standby with "insufficient
+    permission for adding an object to repository database .git/objects" — unrelated
+    to the failover bundle itself, but found in the course of pulling these very
+    fixes. Root cause: the box's original clone had been done as root, leaving a large
+    fraction of `.git/objects`/`.git/refs/tags` root-owned while newer objects were
+    `atlas`-owned; whether any given `git pull` hits this is a coin flip (only fails
+    if a new object's hash lands in an existing root-owned bucket directory). Gone
+    unnoticed until now partly because the *old* `update.sh` ran `git pull` unwrapped,
+    so under `sudo bash update.sh` it always ran as root — masking the problem (and
+    likely growing it, since root-run pulls create their new objects as root too).
+    Same root-cause shape as the `node_modules` ownership bug found earlier the same
+    day (`install.sh`'s initial `npm ci` also ran as root instead of `APP_USER`).
+    `sudo bash update.sh` now self-heals both `node_modules` and `.git` ownership
+    before touching them.
+
+### Hostname provisioning — complete, 2026-07-15
+`install.sh` never actually set the hostname to `openpiste` anywhere — that had been
+done by hand on the reference deployment, with avahi's default `<hostname>.local`
+advertisement doing the rest; there was no script at all, contrary to what a stale
+assumption held. Built properly instead of just documented:
+- `scripts/set-hostname.sh` — asks first, backs up the original hostname to
+  `data/hostname.backup` (never overwritten by a later run — that file is the ONE
+  true original), then `hostnamectl set-hostname openpiste` + updates `/etc/hosts`'s
+  `127.0.1.1` line. Idempotent (no-ops if already `openpiste`). Callable standalone
+  or from `install.sh` (skipped there if not an interactive terminal, e.g. piped
+  installs — `avahi-daemon` also added to `install.sh`'s package list, since mDNS
+  advertisement depends on it).
+- `scripts/restore-hostname.sh` — restores from that backup (and deletes it once
+  restored); if no backup exists, asks interactively what hostname to set instead
+  rather than failing.
+- Verified logic end-to-end in an isolated sandbox (fake `hostname`/`hostnamectl`/
+  `sudo`) covering all branches: fresh set, idempotent re-run (doesn't clobber the
+  backup), decline, empty-answer-defaults-to-no, already-`openpiste`, restore with
+  backup present, restore with no backup. Never touched the real dev machine's
+  hostname while building this.
+
+### Clean-install broker/NTP provisioning — complete, 2026-07-15
+Auditing "will a truly clean Pi get everything `install.sh` needs?" (prompted by a
+direct question, not assumed) surfaced a real gap: **Mosquitto itself was never
+installed by anything in this repo**, and no script created its listener config
+(1883/8883/9001/9002) from scratch — every broker-touching script only ever
+`command -v mosquitto`-checked and silently skipped if absent. Worse, confirmed by
+reading it: `sync-mosquitto-tier-a.sh`'s listener-8883 editor specifically searches
+for an *already-existing* `listener 8883` block to edit — on a stock Mosquitto
+install (only the default port 1883, no extra listeners), it would silently do
+nothing at all, no error. The whole 4-listener layout had always been set up by hand
+on the reference deployment (traces back to the sibling `mqtt-web` project).
+- `scripts/provision-broker.sh` (new, called interactively from `install.sh`,
+  same skip-if-not-interactive handling as the hostname step) — installs Mosquitto
+  if missing and creates the two listeners that never depend on TLS material (`1883`
+  plain MQTT, `9001` plain WebSockets) if they don't already exist anywhere in
+  `mosquitto.conf` or `/etc/mosquitto/conf.d/*.conf` (won't duplicate or fight a
+  hand-customized broker — confirmed harmless against the real, already-configured
+  reference deployment, since its listeners already exist and the check just skips).
+  Backs up `mosquitto.conf` first, same convention as `sync-mosquitto-tier-a.sh`.
+  Also installs and configures **chrony as a local NTP server**, per
+  `docs/level2.md` §4.3 ("The broker host SHOULD also run a local NTP server...
+  chrony is recommended") — bundled into the same script rather than a separate one
+  because devices reach the NTP server at the same address as the broker, so it only
+  makes sense on whichever machine actually runs Mosquitto. Keeps the distro's
+  default upstream `pool`/`server` lines (real internet time when available) and
+  only adds `allow` for the three common private-network ranges plus
+  `local stratum 10`, so it still serves time to local clients with zero working
+  upstream source — the actual "self-contained competition network" requirement.
+- `scripts/install-broker-cert.sh` extended to also create the `8883`/`9002` TLS
+  listener stanzas if they don't exist yet (`require_certificate false` — still
+  `sync-mosquitto-tier-a.sh`'s job to flip that to `true` once a real Tier A cert
+  exists), right before installing the cert files — deferred out of
+  `provision-broker.sh` specifically because these listeners need real certs to
+  reference, which don't exist yet on a clean box.
+- `openssl`/`curl`/`lsof` added to `install.sh`'s package list — all three were
+  already shelled out to by existing scripts (`generate-tls-cert.sh`,
+  `provisioning.js`, the NodeSource fallback, the port-in-use check) but never
+  explicitly installed; likely present already on most Debian-based images but not
+  guaranteed, especially `lsof` on a minimal image.
+- **Verified against a real disposable Mosquitto instance** (this dev machine
+  already has mosquitto 2.0.18 installed) — extracted the exact content both
+  scripts generate (not a hand-typed approximation) and confirmed it starts cleanly
+  with all four listeners open, anonymous plain MQTT pub/sub works, and anonymous
+  TLS (`require_certificate false`, no client cert offered) works. Sandbox testing
+  hit two artifacts worth remembering if reused: `sudo install -o root -g root`
+  genuinely returns exit 1 when not truly root (file still gets copied; only the
+  chown fails) — irrelevant in real deployment since these scripts always run under
+  real `sudo`/root; and `set -e` does **not** reliably abort on a failing pipeline
+  in this environment even as the pipeline's last command, confirmed empirically
+  (`true | false` does not trigger `-e`) — a real bash quirk, not specific to these
+  scripts, but worth knowing before trusting `set -e` alone to catch a pipeline
+  failure elsewhere.
+- Time sync itself (not just chrony's presence) was *not* found to be a gap —
+  Debian/Raspberry Pi OS ships `systemd-timesyncd` active by default, which is what
+  actually matters for TLS handshakes; worth a one-time `timedatectl status` check
+  on a truly offline-at-first-boot Pi, not an `install.sh` package addition.
+
+### Competition formats (complete)
+- Format files in `formats/*.json` (**shapes** — stage-pipeline definitions, id unchanged
+  since before the catalog existed) define multi-phase flows with cohorts and exemptions
+- `formats/catalog.json` (added 2026-07-05) — named, taggable entries that alias a shape;
+  multiple entries may share one shape (e.g. Worlds/World Cup/Grand Prix Senior Individual
+  all alias `grand-prix-fie`, per FIE o.83). See `docs/format-system-comparison.md` §9.
+- `services/formats.js` — `loadFormat` resolves a catalog id first, falling back to the
+  pre-catalog direct-shape-file lookup for any `format_id` that predates the catalog (no
+  migration needed); `listFormats` returns catalog entries plus a synthesized
+  `scope: "custom"` entry for any shape with no catalog entry (still how self-defined
+  formats surface); other exports (`resolveParticipants`, `applyPoolClose`,
+  `closeFormatDE`, `validateCounts`) unchanged
+- Migration 021: `format_id` on competitions, `format_cohort` on competitors, `format_stage` on phases
+- Shapes: `grand-prix-fie.json` (3-stage GP/Worlds/WC — bronze-bout bug fixed 2026-07-05,
+  see below), `mixed-formula-b.json`, `two-pool-rounds.json`, `two-pool-rounds-round2.json`,
+  `two-pool-rounds-repechage-t32-t8.json`, `two-pool-rounds-apf-t16.json`,
+  `pool-level-pools.json`, `pool-de.json`, `pool-de-repechage-t32-t8.json`,
+  `pool-de-repechage-t64-t4.json`, `pool-de-apf-t16.json`, `pool-top8-de-fo3.json`,
+  `pool-top16-de-fo3.json`, `de-only-bronze.json`, `de-only-no-bronze.json` — 22 catalog
+  entries across them (`docs/format-system-comparison.md` §9-9.1). Audited 2026-07-05
+  against every Engarde `.fta` formula and all 35 FencingTime `EventTemplates.xml` entries
+  — fully covered except formats needing new engine capability (Division 1/2 parallel
+  competitions, repechage-to-a-specific-standalone-placement, "tableaux by levels,"
+  multi-round pool→DE→pool/APF shapes like `SUPERPOOLS`) — see doc §9.1 for the full list.
+- GP format verified against real FIE Grand Prix XML (Shanghai 2026, 233 fencers): 16 initial exempts, 70% pool advancement, 32 survivors from preliminary tableau, T=64 final
+- UI: format picker in competition detail (`public/competition-detail.html`) — "Official
+  FIE formats only" checkbox (default on) + `<optgroup>` grouping by tier/age category,
+  inline display of a catalog entry's `note` (caveats/approximations); stage plan with
+  "+ Next stage" guided creation unchanged
+- **Comparison study vs. Engarde and FencingTime (2026-07-03):** see
+  `docs/format-system-comparison.md` for the full analysis. Summary: Atlas's
+  `formats/*.json` shape matches FencingTime's linear `Round`-list model closely (and
+  already covers Engarde's GP-shape, Brazilian, repechage, and all-places-fenced
+  patterns). Confirmed real gaps, prioritized: (1) **fix dead docs/code** — (then)
+  `rules/RULES.md` documented `minimumVictories`/`top_per_pool` advancement methods that
+  `services/phases.js:408-426` never implements, and `rules/pool-advancement-choices.json`
+  was an unwired stub with literal `"?"` placeholders — **fixed 2026-07-08**, see the
+  Pool phase section below; `rules/RULES.md` no longer exists, folded into
+  `docs/format-authoring-guide.md` (2) add a `minForCut` guard to pool
+  `advancement` (don't cut a small field); (3) percentage-range advancement
+  (`fromPercent`/`toPercent`, FIE rules often specify a range e.g. o.86.1's 20–30%); (4)
+  "tableaux by levels" for DE (parallel same-size brackets by rank block — pools already
+  have this via `pool-level-pools.json`, DE doesn't). Also checked FIE's Organisation Rules
+  PDF directly against the codebase (doc §6-7): nationality/club pool separation (o.68.2)
+  and the nationality-conflict special bout-order tables (o.70, pools of 6/7) are both
+  **confirmed correct**, byte-verified against the rules text and (for the no-conflict
+  pool-of-7 case) real GP XML in `docs/GP/`. `lib/boutOrder.js`'s `STANDARD[6]` was
+  initially flagged as a likely bug from that cross-reference, then wrongly retracted after
+  matching a document that turned out to be a probable USA-Fencing-domestic reference
+  (not FIE-international) — then **actually fixed** 2026-07-04 once real data from an
+  actual FIE World Cup (Lion of Bonn 2019) confirmed the original suspicion. `STANDARD[6]`
+  now holds the table backed by that real competition and by a column-major reading of the
+  current Organisation Rules PDF; the old value moved to its own `TRIO_6` (no longer an
+  alias), which is still correct for the trio-conflict case. See doc §7 for the full
+  four-round investigation — the short version is that no single document was trustworthy
+  enough on its own here; it took two independent real/current sources agreeing to close
+  it. **Pairwise lot-draw seeding**
+  (o.87/o.102 "drawing lots in pairs") is now implemented for the individual GP/Worlds
+  cohort merge (`formats/grand-prix-fie.json`'s `initial_exempt` cohort +
+  `services/formats.js`'s `pairedLotDraw` flag) — team side (o.102) still open, needs its
+  own design since team seeding doesn't go through the cohort system at all. Also added
+  `formats/mixed-formula-b.json` (Junior/Cadet Worlds, Cadet/Junior WC, Zonals — pools then
+  single DE, no bronze bout, o.89-94), which didn't exist as a ready preset before even
+  though both ingredients (`pool-de.json`'s shape, `de-no-bronze.json`) already did. Lower
+  priority / still open: sharks-and-minnows pools, Engarde/FencingTime import (export lower
+  value), external/combined seeding lists + ranking-points classification (would make Atlas
+  a cross-event ranking authority — separate scope decision), team DE repechage/
+  all-places-fenced richness, pool-sheet-position-by-lot (o.68.3), pool-size floor
+  (o.67.1). **Format catalog added 2026-07-05** (doc §9): the alias mechanism above,
+  populated with every FIE individual combo buildable at full rule-accuracy today plus the
+  common non-FIE club formats already catalogued in doc §2-3. Also fixed the
+  `grand-prix-fie.json` bronze-bout bug while populating it (o.88 — no bronze bout in
+  Mixed Formula A; confirmed against real `docs/GP/` data, no separate 3rd-place `Tableau`
+  exists in the actual bracket). Discovered a new, separate gap while scoping team
+  entries: team phase creation has **no format/rule picker at all** —
+  `competition-detail.html` hardcodes `rule_doc: 'team-fie-standard.json'` — so Team World
+  Cup/Zonal/Worlds catalog entries were dropped from this pass rather than added as
+  cosmetic-only options; distinct from the already-tracked team-DE-placement-richness gap.
+- **Independent parallel tracks added 2026-07-06** (doc §10) — the first of the two
+  "needs new engine capability" gaps from the audit above, built (scoped to exactly what
+  Engarde's Division 1/2 formulas actually need: 2 groups, straight DE per group, no pools
+  inside a division). New pieces: `resolveParticipants`'s `rank_range` source; optional
+  `dependsOn` on a stage (absent = the single preceding stage, unchanged for every prior
+  format; explicit `[]` = no prerequisite, letting two stages both be "next" at once);
+  `getFormatPlan`'s `nextStage` → `nextStages` (array); new `getTerminalStages(format)`.
+  `services/results.js` now merges every terminal DE phase (not just the single last one)
+  — offsetting each by the *actual entrant count* of tracks before it, not by how many
+  places have been decided so far (would be wrong mid-tournament). A separate,
+  format-agnostic "most recent phase must be finished" guard in
+  `services/phases.js` (`Phase.create`/`Phase.createDE`) predated and blocked this even
+  though `assertNextStage` correctly allowed it — found only during verification, fixed by
+  skipping that guard specifically once a format has already validated the real
+  dependency. `formats/division-1-2-t16.json` + 1 catalog entry. All verified end-to-end
+  including regression checks against `pool-de` and `grand-prix-fie` (unchanged behavior).
+  **Found, not fixed, unrelated to this change:** `results.js`'s "pool fencers" section has
+  a pre-existing bug on multi-stage cohort-based formats like GP — fencers eliminated in a
+  non-terminal DE stage never appear in results, causing duplicate place numbers. See doc
+  §10 and §8 item 15.
+
+### Results
+- Full competition results page combining DE + pool-eliminated fencers
+- Unique ranks except 3rd (shared); pool-eliminated appended in pool-rank order
+- UI: `public/results.html`, endpoint `GET /api/competitions/:id/results`
+- **Under-counting bug on multi-stage cohort-based formats — FIXED 2026-07-07** (doc §12).
+  `getCompetitionResults` now branches: format-driven competitions (`_getResultsForFormat`)
+  rank every *terminal* stage (`Format.getTerminalStages` — pool or DE) merged in
+  format-declared order, then walk every other phase in reverse pipeline order appending
+  eliminations as they're found, instead of guessing a boundary from one pool phase's
+  `advanced` count. Free-form/no-format competitions (`_getResultsFreeForm`) keep the
+  original code verbatim, untouched. Verified against the GP repro (100/100, all 11
+  previously-missing preliminary-tableau eliminees present) plus 5 regression checks.
+- **Pool-result-based independent split added 2026-07-06** (doc §10.1) — a Belgian club
+  experiment ("Elite Division" / "Division 1"): one no-elimination pool round purely to
+  rank the field, then split by *pool result* (not initial seed) into two independent
+  tableaux, `dependsOn: ["pools"]` on both (§10's `dependsOn` mechanism already generalized
+  to this with no further changes needed). New: `rank_range`'s optional
+  `basedOn: "last_pool"`. `formats/pool-elite-division.json` + 1 catalog entry, verified
+  end-to-end including that the split is genuinely by pool ranking, not initial seed.
+- **Per-entry descriptions added 2026-07-06** (doc §11), to stop near-duplicate catalog
+  entries from being picked by accident. Two parts: `services/formats.js`'s
+  `describePipeline(format)` computes a `mechanics` string live from stage/rule data (never
+  hand-written, can't drift stale) — including grouping independent/parallel stages into
+  "waves" so Division 1/2 shows as `[independently]` rather than a misleading `→`; and a
+  hand-written `why` field on all 24 catalog entries (`formats/catalog.json`), explicitly
+  naming the distinguishing factor for every entry with a near-duplicate sibling, plus the
+  governing article range for FIE-scoped entries. UI shows both the moment an option is
+  selected, and `why` doubles as each `<option>`'s native hover tooltip.
+
+### Team competitions
+Built to a meaningful degree — the "Out of scope" note that used to be in this file was
+stale (corrected 2026-07-03). `services/teamMatches.js`/`teamPhases.js`, `lib/teamFormation.js`,
+`rules/team-fie-standard.json` (9-relay FIE format, relay bout order verified byte-exact
+against Organisation Rules o.99.3), team DE bracket + results, OPP2 relay integration
+(fencer/score resolution, NAK-on-baseline-regression handling), pipeline scheduling for
+team matches (with `team_match_id` slot dedup matching the pool-slot dedup pattern), and
+referee/official assignment all exist. UI: `public/team-de.html`, `team-match.html`,
+`team-results.html`. **Known gap** (found 2026-07-03, see `docs/format-system-comparison.md`
+§6): `rules/team-fie-standard.json` has no `repechage`/`allPlacesFenced` equivalent, so
+Team World Championships' "all places to 16th fought for" (o.98.1) can't be expressed —
+individual DE has this richness, team DE doesn't yet.
+
+### Strips
+- CRUD for pistes/strips; inline rename (click-to-edit)
+- Strip assignment to pools: `PATCH /api/pools/:id` with `{strip_id, referee_id}`
+- Assigning a strip sets `strips.status = 'assigned'`; clearing it resets to `'idle'`
+- UI: `public/strips.html`
+
+### Frontend layout & responsive system (complete as of 2026-07-02)
+
+`public/css/style.css` defines a small named layout vocabulary — use one of
+these on every new page's `<main>` instead of inventing a new `max-width`
+value:
+
+| Class | Behavior | Use for |
+|---|---|---|
+| `.layout-form` | Capped ~700px, centered, even on 4K | Narrow single-entity forms/results |
+| `.layout-data` | Fluid up to ~1500px | Table/list pages (the majority of pages) |
+| `.layout-detail` | Grid, `1fr 1fr` side by side ↔ stacks below 720px | Two-panel detail pages (apply to a wrapper *inside* `<main>`, not `<main>` itself) |
+| `.layout-app` | No cap, fully fluid | Multi-pane dashboards/schedulers |
+| `.layout-wide` | Fluid + `overflow-x:auto` | Inherently wide content (brackets, timelines) |
+
+**Governing principle:** layout decisions are driven by **available width**,
+never by the `orientation:` CSS media feature — a landscape phone can be
+narrower than a portrait tablet, so width is the real signal and orientation
+is just a correlated proxy. No page should hard-lock rotation (WCAG 2.1 SC
+1.3.4 forbids restricting content to one orientation).
+
+Also bundled in the same pass: form inputs/selects have a 16px font-size
+floor (below that, iOS Safari auto-zooms on focus — do not drop this),
+`header`/`.nav-right` wrap instead of overflowing, `.form-grid` stacks to one
+column below 600px, and dense controls (`.row-actions button`, etc.) get
+larger tap targets under `@media (pointer: coarse)` without affecting
+mouse-driven desktop density.
+
+Two pages needed real interaction changes, not just a CSS class:
+- **`opp2.html`**: below 900px, the strip list and pipeline detail no longer
+  both shrink side by side — an Alpine `isNarrow` flag (driven by
+  `matchMedia`, set up in `init()`) switches to a master-detail drill-down:
+  full-width strip list, tap a strip to see its full-width pipeline detail
+  with a "← Back to strips" button.
+- **`scoresheet.html`**: the pool matrix and bout list sit side by side above
+  700px width instead of always stacking (`.pool-layout`), so a landscape
+  tablet/phone uses its width instead of forcing extra scrolling.
+
+**Dense tables → cards (complete as of 2026-07-02):** `table.table-responsive`
+in `style.css` — below 700px, each row becomes a bordered card instead of a
+squeezed/scrolled table, via `data-label` + `::before` (no JS). Opt-in per
+table, not global — apply it to any new dense table (label/value pairs, one
+per column). Applied to `people.html`, `fencer-roster.html`, `phase.html`
+rankings, `admin.html`, `referee-schedule.html`, `clubs.html`, `strips.html`,
+`competitions.html`, `tournaments.html`, `tournaments-detail.html`,
+`results.html`. Skipped: `team-results.html` (only 3 columns, already fine).
+
+**DE bracket narrow-screen accordion — DONE 2026-07-02:** see "DE phase (complete)"
+above for the implementation; verified in a real browser at 390px (phone) and 1400px
+(desktop) with a live repechage phase.
+
+### OPP2 design principle — ecosystem independence
+
+Every component in the OPP2 ecosystem (scoring apparatus, remote control, scoresheet tablet, display, CMS) can be from different and independent implementers who have no knowledge of each other's implementation details. Everything must work if communication follows the spec.
+
+**Consequence for Atlas OPP2 work:** never put Atlas-internal identifiers (DB row IDs, `pool_id`, `phase_id`, `pipeline_slot_id`) into MQTT payloads. Any compliant CMS must be able to produce the message; any compliant display must be able to consume it without knowing anything about Atlas.
+
+### OPP2 / MQTT integration (foundational layer complete as of 2026-05-31)
+
+**Protocol:** OpenPiste Protocol 2 (OPP2) — native JSON over MQTT.
+Spec lives in `docs/level2.md`. Read it before touching any OPP2 code.
+
+**Transport:** TCP MQTT on port 1883 (not WebSockets — those are for browsers).
+Default broker: `mqtt://openpiste.local:1883`. Configurable in `public/opp2.html`.
+
+**Topic structure:**
+```
+openpiste/{piste_id}/{publisher}/{message_type}
+```
+`piste_id` = `strips.strip_number` (integer, as string in topic).
+Atlas publishes as `software`; apparatus publishes as `apparatus`.
+
+**What Atlas does over MQTT:**
+- Publishes `software/connection online:true` (retained) for each strip on connect; LWT clears it
+- Subscribes to `apparatus/connection`, `apparatus/control`, `apparatus/score` on all pistes
+- On `apparatus/control NEXT`: finds next pending bout from the piste's pipeline, publishes `software/fencers` + `software/match`
+- On `apparatus/control PREV`: re-sends the previous bout in the pipeline (referee navigation)
+- On `apparatus/control END`: checks correct-ending rules (spec §23.4), records score via `Bout.updateScore()`, sends ACK; sends NAK if no clear winner
+- Tracks live score per piste in memory from `apparatus/score` messages
+
+**Correct-ending rules (§23.4) — when Atlas sends ACK vs NAK:**
+- ACK if: scores differ, OR scores equal with priority assigned (L/R), OR abandonment/exclusion
+- NAK if: scores equal, no priority → referee must resolve before Atlas accepts the result
+
+**Pipeline — piste scheduling:**
+Each strip has an ordered list of pipeline slots. A slot is either a pool or a DE bout range.
+- Pool slot: `pool_id` — all bouts in that pool, in FIE bout order
+- DE range slot: `phase_id` + `de_round` + `bout_start`/`bout_end` (1-based, tableau order)
+- Each slot has optional `scheduled_start` (HH:MM) and `minutes_per_bout` for predicted-end computation
+- `predicted_end` = `scheduled_start` + `bout_count × minutes_per_bout` (computed, not stored)
+- `bout_duration_standards` table holds per-weapon/gender/phase-type default minutes-per-bout,
+  seeded by migration 020 and editable via the admin UI (`GET`/`PATCH /api/opp2/bout-standards`).
+  A running average (`observed_average`/`sample_count`) is recorded automatically from real
+  bout durations over MQTT (`lib/opp2Client.js`, on `apparatus/control END`) and takes over
+  from the configured default once `sample_count >= 4` (`services/boutDurationStandards.js`)
+- Referee schedule is a derived view: all slots where the person is assigned in *any*
+  officiating role (`pipeline_slot_officials` — see below), not just as primary referee
+- On NEXT: Atlas walks the pipeline — exhausted slot auto-advances to the next one
+- Multiple competitions can run simultaneously; each piste's pipeline determines what it fences
+
+**Officiating roster & decision attribution (complete as of 2026-07-02):**
+- `pipeline_slots.referee_id` is the primary referee only. `pipeline_slot_officials`
+  (migration 024) adds up to four more roles per slot: `referee2` (second referee —
+  common in team competitions), `video_assistant`, `assessor1`, `assessor2`. Any
+  combination is optional; `Pipeline.getOfficials(slotId)` / `Pipeline.setOfficial(...)`
+  in `services/pipeline.js` manage them.
+- **Wire split, per the upstream spec (see the mirror rule above):** `software/fencers`
+  (apparatus-facing) carries only `common.referee` — the apparatus and Cyrano-compatible
+  systems never need more. The full roster (`referee`, `referee2`, `video_official`,
+  `assessor1`, `assessor2`) is published on `software/record` instead — scoresheet-facing
+  and retained, so a reconnecting scoresheet gets it immediately. Built in
+  `lib/opp2Composer.js`'s `buildFencersCommon` / `buildRecordOfficials`.
+- **Decision attribution:** `scoresheet/event` / `scoresheet/record` annotations (card
+  reasons) carry an optional `official {id, name, role}` naming which specific official
+  made that call — separate from the roster, which only says who's assigned to the bout
+  at all. `public/scoresheet.html`'s card dialog shows a "Recorded by" picker only when
+  more than one official is assigned (silent default otherwise — zero added friction for
+  the common single-referee case). Persisted via `card_reasons.official_referee_id` /
+  `official_role` (migration 025).
+- `public/referee-schedule.html` (by-piste and by-referee views) and the referee Gantt
+  chart in `public/opp2.html` both iterate every assigned official, not just the primary
+  referee, tagging each with their role.
+
+**Referee/official double-booking detection & schedule-cascade resolution (added
+2026-07-27):** Assigning any of the 5 officiating roles (`assignOfficial` in
+`public/opp2.html`) now checks every other slot on every strip for a time-window overlap
+where the same person already holds any officiating role, before committing.
+- On a conflict: a 2-step modal (`conflictModal`) — step 1 shows both overlapping
+  assignments (Cancel / Continue anyway); step 2 asks which of the two comes first,
+  pushes the later one's `scheduled_start` to right after the earlier one's predicted
+  end, and optionally cascades the rest of that piste's schedule (`_recascadeStrip`) to
+  avoid creating a new overlap further down.
+- The push is remembered on the pushed slot (`conflict_referee_id` /
+  `conflict_original_start` / `conflict_paired_slot_id`, migration
+  `031_pipeline_slot_conflict_tracking.sql`) so a later change that removes the conflict
+  (reassigning the referee, changing a time) prompts to restore the slot's original start
+  time (`restoreModal` — "Keep current time" / "Restore original time"). Persisted in the
+  DB, not just Alpine state, so it survives a page reload.
+- Clearing an assignment (setting a role to none) can never create a conflict and always
+  goes straight through.
+- **Availability-aware option ordering (added 2026-07-27):** each of the 5 officiating
+  `<select>`s is built from `officialOptionsFor(slot)`, which flags every referee `busy`
+  (same overlap check as above) and sorts available names first, busy ones last — busy
+  options stay fully selectable, just visually deprioritized (greyed, `— busy` suffix) so
+  a double-booking is still possible (e.g. deliberately, or once accepted via the conflict
+  modal) but never the default eye-catching choice.
+- **Start-time gate on assignment itself (added 2026-07-27):** a slot with no
+  `scheduled_start` has no time window to check overlap against at all — nobody can be
+  correctly flagged busy — so `assignOfficial` warns (shared `noStartTimeModal`, see
+  below) before assigning a person to such a slot, rather than silently skipping the
+  availability check. Clearing an assignment is exempt (never needs an availability
+  check either way).
+
+**`Pipeline.addSlot` defense-in-depth validation (added 2026-07-27):** rejects creating a
+`pool` slot with no `pool_id`, a `team_match` slot with no `team_match_id`, or a `de` slot
+with no `phase_id`/`tableau` — previously a client bug could silently create a phantom
+slot with nothing real behind it, still counting toward `slot_count` and showing on the
+Gantt. Mirrored client-side in `submitAddSlot` for an immediate error message.
+
+**`pools.referee_id` / `pipeline_slots.referee_id` mirroring fix (added 2026-07-27):**
+`PATCH /api/pools/:id` (assigning a referee from the pool side, in `routes/pools.js`)
+previously only updated `pools.referee_id`, leaving `pipeline_slots.referee_id` — the
+value actually sent to the apparatus over OPP2 and shown on the schedule/referee-schedule
+pages — stale. Now mirrors onto every pipeline slot for that pool (there can be more than
+one for a multi-strip pool). Conversely, `Pipeline.updateSlot` now mirrors a slot's
+`referee_id` back onto `pools.referee_id` whenever that slot is the pool's primary/home
+strip, so the two attributes can no longer drift apart from either direction.
+
+**Shared "no start time" warning modal (added 2026-07-27):** `public/opp2.html` has one
+`noStartTimeModal` (Cancel / Continue anyway) reused by both places a missing
+`scheduled_start` blocks a real check: the bulk pool/DE-round assignment modal
+(`confirmSubmitBulkAssign()` gates `submitBulkAssign()`) and single-slot official
+assignment (`assignOfficial()` gates `_assignOfficialConfirmed()`, see above). The modal
+holds a generic `onContinue` callback set by whichever caller opened it, rather than
+hardcoding which action to resume — `continueNoStartTime()`/`cancelNoStartTime()` are
+the only two exit paths.
+
+**Key files added:**
+| Path | Purpose |
+|---|---|
+| `docs/level2.md` | OPP2 protocol specification (read before implementing) |
+| `db/migrations/005_opp2_settings.sql` | `settings`, `pipeline_slots`, `bout_duration_standards` |
+| `services/settings.js` | `get(key)` / `set(key, value)` against settings table |
+| `services/pipeline.js` | Pipeline CRUD, `nextBout`, `prevBout`, predicted-end computation |
+| `lib/opp2Client.js` | MQTT singleton: connect/disconnect, per-piste state, NEXT/PREV/END handlers |
+| `routes/opp2.js` | REST: broker settings, connect/disconnect, pipeline CRUD |
+| `public/opp2.html` | Admin: broker config, live piste status, pipeline builder, referee schedule |
+
+**OPP2 admin page:** `http://localhost:3000/opp2.html`
+- Connect/disconnect to broker
+- Build per-strip pipeline (add pool or DE range slots, set times, assign referees)
+- Overlap warning when `scheduled_start` < previous slot's `predicted_end`
+- Referee schedule view (filtered across all strips)
+
+**What is NOT yet done in OPP2:**
+- Cloud bridging (Mosquitto bridge to remote broker)
+- `bout_duration_standards`' adaptive running average is built and wired (see above) but
+  unexercised — `sample_count` is 0 across the board in the dev DB, meaning no real or
+  simulated competition has run enough bouts over live MQTT to validate it yet
+- `video_review`'s `official` field is spec-documented (upstream, see the mirror rule
+  above) but unimplemented — no Atlas code publishes `var/video_review` at all yet;
+  there's no video-review tool built (Atlas only *subscribes*/handles an incoming one)
+
+### Kiosk waiting-room displays — complete, 2026-07-27
+Two new full-screen, auto-scrolling display pages for a spectator/waiting-room monitor,
+linked from a new "Kiosk displays" card on `public/admin.html`:
+- `public/kiosk-fencers.html` — per-competition fencer schedule (piste, name, club/
+  nationality, pool/DE assignment label, scheduled start). Driven by a new
+  `Pipeline.fencersForCompetition(compId)` (`services/pipeline.js`), exposed at
+  `GET /api/opp2/pipeline/competition/:compId/fencers`. Resolves each competitor's
+  currently-relevant live (non-`done`) assignment via a new
+  `Pipeline.competitorsForSlot(slot)` — the whole pool roster (`pool_competitors`) for a
+  pool slot, both rosters (`team_members`) for a team-match slot, or every fencer still
+  appearing in the DE bouts the slot's round-range/placement group currently covers (byes
+  and undecided pairings drop out naturally since their opposing `left_id`/`right_id` is
+  still null). When a competitor matches more than one live slot (e.g. a pool slot and an
+  already-built next-phase DE slot both exist), the active one wins, else the
+  soonest-starting. No `competition_id` in the URL shows a competition picker instead.
+- `public/kiosk-officials.html` — cross-competition officiating schedule, every assigned
+  role (not just primary referee) via the existing `GET /api/opp2/pipeline` payload's
+  per-slot `officials` list.
+- `public/js/kiosk-scroll.js` — continuous, constant-speed vertical auto-scroll, driven
+  frame-by-frame via `requestAnimationFrame` rather than a CSS `@keyframes` loop (which
+  visibly stutters at the iteration restart on most browsers); no-ops (static) whenever
+  the content already fits the viewport. Re-measures on each data refresh without
+  resetting scroll position, so a ~20s poll interval doesn't repeatedly yank a long list
+  back to the top before it's scrolled far enough to show later rows.
+- `public/js/kiosk-fullscreen.js` — one-time "tap anywhere for full screen" hint, since
+  `requestFullscreen()` can only ever be triggered from a real user gesture, never
+  automatically on page load; reappears if full screen is exited (e.g. Escape).
+- `.kiosk-viewport` added to `public/css/style.css` for the clipping container.
+
+---
+
+### 3. Architecture / code hygiene
+- **Architecture review, 2026-07-28** — a full health-check ("small files, clean
+  functions, no obscure side effects, clean separation of duties") across the backend and
+  the largest frontend file. Two-line summary: one live correctness bug (**fixed same
+  day**, see below), two client/server logic-duplication gaps with real drift/enforcement
+  risk, the project's own "prepared statements must be module-level" rule violated across
+  roughly 80% of `services/`, and three files that grew into god-files by accretion
+  rather than extraction. Being tackled one item at a time.
+- **Mechanical checks + KPI reference added, same day, after a discussion on how this
+  keeps happening.** A written rule alone hadn't been enough — the module-level
+  prepared-statement rule was already in this file and still got violated across most
+  of `services/`, which is exactly why: a rule that depends on remembering to
+  self-check has no enforcement mechanism. `scripts/check-architecture.sh` (calling
+  `scripts/check-circular-requires.js` for the require-graph piece) now scripts every
+  check that *can* be reduced to grep/awk — file size thresholds, prepared-statement
+  hoisting, raw SQL confined to `services/`, no `ALTER TABLE` outside migrations,
+  `'use strict'` presence, duplicate function/method names in one file, circular
+  requires/layering — and prints a warning/hard-fail summary in under a second. Run it
+  before committing any change under `services/`, `routes/`, `lib/`, or
+  `public/*.html`. **Caught two real things immediately on its first run**: the
+  already-known `opp2.html` `pendingSlotCount` duplicate (verbatim, lines ~1173/~1997),
+  and a genuinely new finding the manual review had missed — `routes/opp2.js`,
+  `routes/pools.js`, `routes/teamMatches.js`, and `routes/tournaments.js` all call
+  `db.prepare()` directly instead of going through a service, violating the "raw SQL
+  confined to services/" rule. Neither fixed at the time — that pass was scoped to
+  building the checker, not clearing its findings — **both now done, 2026-07-29:**
+  `routes/opp2.js`'s bout-standards `UPDATE` moved to a new
+  `BoutDurationStandards.setDefault()`; `routes/tournaments.js`'s dynamic
+  ownership-check `IN(...)` query moved to a new
+  `PoolRefereeAssignment.phasesOwnedByTournament()` (kept the `dynamic-sql-ok` marker,
+  since the placeholder count still genuinely varies with the phase-id list); the two
+  identical `SELECT team_match_id FROM relays WHERE id = ?` lookups in
+  `routes/teamMatches.js` (used only to pick an SSE channel after `updateRelay`/`undo`)
+  collapsed into one `TeamMatch.teamMatchIdForRelay()`; and `routes/pools.js`'s
+  `/distribute` endpoints — the most involved of the four, mixing raw strip/
+  pipeline-slot existence checks with real business logic — split across three new
+  service methods: `Pipeline.slotForPoolOnStrip()`, `Pipeline.slotsForPool()` (both
+  simple lookups), and `Pool.resetDistribution()` (the DELETE endpoint's 3-statement
+  reset, previously three unwrapped raw writes in the route — now wrapped in a single
+  `db.transaction()`, closing a latent gap against CLAUDE.md's own "multiple DB writes
+  that belong together must use a transaction" rule that had gone unnoticed until this
+  move surfaced it). The strip-existence check now reuses the existing
+  `Strip.findById`, and the "mark this newly-assigned secondary strip as `assigned`"
+  write now goes through `Strip.update()` instead of a raw one-column `UPDATE` (verified
+  `Strip.update`'s current-row-merge behavior leaves `name`/`strip_number`/
+  `network_state` untouched, matching the original raw query's effect exactly).
+  Verified end-to-end against real throwaway pools/strips/tournaments — primary+
+  secondary slot creation, distribution, reset, ownership-check (real and fake phase
+  ids), and relay-to-match resolution (real and fake relay ids) all behave identically
+  to the original inline SQL. `./scripts/check-architecture.sh` now reports 0 hard-rule
+  failures across the whole codebase. The
+  circular-require checker treats a file requiring itself (e.g.
+  `services/teamMatches.js:493`'s lazy self-reference, safe because Node's module cache
+  already holds the fully-assigned exports by call time) as a benign idiom, not a
+  violation — only cross-file cycles are flagged. `docs/architecture-kpis.md` is the
+  full KPI reference — mechanical checks (covered by the script) plus judgment-based
+  ones that need an actual read of the file (domain cohesion, side-effect transparency,
+  transaction correctness, SSE write safety, filesystem-read caching, cross-file
+  algorithm duplication, verification-before-done, documentation currency) — reserved
+  for periodic, explicitly-triggered reviews rather than every commit, since reasoning
+  about a whole file's cohesion for every small change would be disproportionate. Also
+  agreed: if a file crosses a size threshold *during* an unrelated feature commit, flag
+  it and ask whether to split now or defer, rather than letting it accumulate quietly
+  until another review is explicitly requested (which is exactly how `pipeline.js`/
+  `phases.js`/`opp2.html` got as large as they did in the first place).
+  - **Correctness bug — `_combinedSeeding` duplicated and drifted — FIXED 2026-07-28.**
+    Was: same algorithm in `services/phases.js:567` and `services/formats.js:522` (sum
+    bout stats across finished pool phases, sort by victory-ratio/indicator/touches),
+    but `phases.js`'s copy filtered competitors to `status='active' AND checked_in=1`
+    while `formats.js`'s copy only filtered `status='active'` for its main aggregation
+    query — reopening the exact bug the presence-gate work had just closed. Fixed by
+    collapsing to one implementation: `services/formats.js`'s copy (renamed
+    `_combinedSeeding` → `combinedSeeding`, exported) is now canonical — its missing
+    `checked_in=1` filter added — and `services/phases.js`'s `_getDeSeeding` calls
+    `Format.combinedSeeding(compId)` instead of keeping its own copy (safe direction:
+    `phases.js` already requires `formats.js`; the reverse never happens, so no new
+    circular require). Verified: both call paths (`Format.combinedSeeding` directly, and
+    via `Phase._getDeSeeding(compId, 'combined')`) now return identical results on a
+    real closed-pool-phase scenario; the GP-format regression case (20 competitors,
+    exclude-top-16) still resolves correctly.
+  - **Referee double-booking conflict detection was entirely client-side, with no
+    server enforcement — FIXED 2026-07-28.** Was: `Pipeline.updateSlot` blindly
+    persisted whatever `referee_id`/`conflict_*` fields the client sent — the conflict
+    modal in `public/opp2.html` was real UX but not an actual constraint. Fixed by
+    adding the same overlap check server-side, reusing `findAllStrips()`'s already-
+    computed `predicted_end` (rather than re-deriving `effective_minutes_per_bout`/
+    `bout_count` a second time): `services/pipeline.js` gained module-level
+    `ROLE_FIELDS`/`addMinutes`/`slotWindow`/`windowsOverlap` helpers, and `updateSlot`
+    now throws (`status: 409`) if any of the 5 officiating fields being set
+    (`referee_id`/`referee2_id`/`video_assistant_id`/`assessor1_id`/`assessor2_id`)
+    would double-book that person against a genuinely time-overlapping slot elsewhere.
+    Skipped (no throw) when: the value being set is null (clearing an assignment can
+    never conflict), or the target slot has no `scheduled_start` (nothing to check
+    against — same "can't verify without a start time" reasoning as the existing
+    client-side warning modal). `routes/opp2.js`'s `PATCH /pipeline/slots/:id` now
+    wraps the call in try/catch to surface the message instead of a generic 500.
+    **A real sequencing bug had to be fixed to make this safe**: `opp2.html`'s
+    `applyConflictResolution()` used to assign the referee *first*, then push the
+    other slot's schedule to eliminate the overlap — meaning the referee-assignment
+    PATCH itself was sent while the overlap still genuinely existed, which the new
+    server check would have rejected, breaking the very flow it's meant to support.
+    Fixed by reordering: push the schedule first, assign the referee second, so by the
+    time the assignment PATCH is sent the overlap is already gone. Verified: a genuine
+    overlapping assignment is rejected with a clear message; an adjacent (touching,
+    non-overlapping) one is allowed; clearing an assignment always bypasses the check;
+    a slot with no `scheduled_start` skips validation; and the corrected
+    push-then-assign sequence succeeds end-to-end against the new server check.
+  - **DE partition-range server-side validation — FIXED 2026-07-28.** Was:
+    `opp2.html`'s `boutRangeForPartition` duplicated `services/pipeline.js`'s
+    `partitionToRange` (forward direction only), and the inverse encoders
+    (`rangeToPartition`, `partitionForBoutIndex`) existed **only client-side** —
+    `rangeToPartition` returning `null` was the *only* validation that a submitted bout
+    range was structurally valid (`submitAddSlot`), and `Pipeline.addSlot` never
+    re-checked partition alignment server-side; any `partition` string reached the DB
+    unvalidated via `POST /api/opp2/pipeline/strip/:id`. Fixed by adding a server-side
+    mirror of the client's `rangeToPartition(lo, hi, n)` plus a new
+    `isValidPartition(partition, tableau)` to `services/pipeline.js` (both plain
+    module-level functions next to the existing `partitionToRange`), and a new check in
+    `addSlot` right after the existing phantom-slot-type checks: `data.type === 'de' &&
+    data.partition && !isValidPartition(...)` throws. `isValidPartition` can't just
+    bounds-check `partitionToRange`'s output — that function tolerates garbage inputs
+    (an unrecognized character is silently treated as "upper half," and an over-long
+    string can walk `lo` past `hi`) — so it round-trips: compute `[lo, hi]` via
+    `partitionToRange`, then re-encode via the new `rangeToPartition` and require the
+    result to equal the original string, which is the only way to confirm the string is
+    the *canonical* code for a real binary-tree node rather than some other string that
+    happens to decode to valid bounds. Verified via `Pipeline.addSlot` directly: `null`,
+    `'full'`, `'A'`, `'B'`, and a max-depth `'A1'` (tableau 8) all pass through to the
+    (expected, in the test) foreign-key error; a garbage character (`'Z'`), an
+    over-long string, and a wrong-depth code (`'1'` at depth 0 for tableau 8) are all
+    rejected with a descriptive error before any DB write. Only one call site sends an
+    arbitrary client-supplied `partition` at all (`routes/opp2.js`'s `PATCH
+    /pipeline/strip/:id` → `addSlot(req.params.stripId, req.body)`, driven by
+    `opp2.html`'s DE-range picker) — the pool/team-match `addSlot` call sites
+    (`routes/pools.js`) never pass a `partition`, so they're unaffected.
+    Smaller, still-open instance of the same client-recomputes-what-the-server-already-
+    knows pattern: `opp2.html`'s `effectiveMinutes()` reimplements
+    `services/boutDurationStandards.js`'s `getEffective()` instead of asking the server.
+  - **Prepared-statement retrofit — DONE 2026-07-28/29.** Every remaining `services/`
+    file (25 in total: `ageCategories`, `boutDurationStandards`, `bouts`, `clubs`,
+    `competitions`, `competitors`, `deLayout`, `events`, `fencers`, `fieImport`,
+    `formats` (41→0), `nocs`, `people`, `personImport`, `poolRefereeAssignment`,
+    `pools`, `referees`, `results`, `strips`, `teamMatches` (57→0), `teamPhases`
+    (31→0), `teams`, `tournaments`, `users`, and `pipeline` (74→0, on top of the
+    15 already hoisted earlier) — now has **zero** inline `db.prepare()` calls,
+    confirmed by `scripts/check-architecture.sh`. Genuinely dynamic SQL (a `WHERE`
+    or `IN(...)` clause whose shape varies per call — variable filter count,
+    variable placeholder count, a direction-dependent `<`/`>` operator) is left
+    inline with a `// dynamic-sql-ok` comment directly above the `db.prepare()`
+    call, which the checker script recognizes as the documented CLAUDE.md
+    exception rather than flagging it. Where only 2 possible SQL-shape variants
+    exist (e.g. `results.js`'s `fetchPoolRows` eliminated-only vs all,
+    `pipeline.js`'s `reorder`'s up/down sibling lookup), both variants are
+    pre-declared as separate named module-level statements instead — avoiding
+    inline `prepare()` entirely since the shape is knowable ahead of time.
+    Identical SQL text used at multiple call sites within one file was
+    consolidated to a single shared statement object rather than re-declared
+    per call site (e.g. `pipeline.js`'s `"SELECT * FROM team_matches WHERE id =
+    ?"`-shaped queries, `teamMatches.js`'s repeated order/relay lookups).
+    **Two real, pre-existing bugs were found and fixed in the process, both the
+    same latent schema mismatch**: `teamMatches.js`'s `_fencerName` and
+    `pipeline.js`'s `_resolveRelayFencer` both joined through a `co.fencer_id`
+    column that `competitors` has never had — that table carries its own
+    `first_name`/`last_name`/`nationality` snapshot directly (the same pattern
+    established everywhere else, e.g. `services/competitors.js`'s `BASE` query).
+    Both queries were dead/broken code since the day they were written — inline
+    `db.prepare()` only fails at the moment it's actually *called*, so this went
+    unnoticed until hoisting forced the query to compile (and, for `pipeline.js`,
+    forced a live functional test that actually exercised the call path) at
+    require-time / test-time instead. `pipeline.js`'s version is the more
+    serious of the two: it sits on `nextBout`/`prevBout`'s team-relay path, meaning
+    any team match, the instant fencer orders were submitted for it, would have
+    crashed the OPP2 NEXT/PREV navigation for that piste the first time a real
+    relay's fencers needed resolving. Both fixed identically: query `competitors`
+    directly by id instead of joining through the nonexistent column. Verified
+    via a full throwaway-competition test exercising the exact previously-broken
+    call path (draw → submit orders → `Pipeline.nextBout` on a `team_match`
+    slot) and confirming real fencer names now resolve instead of crashing.
+    Also verified end-to-end for the ordinary pool/DE cases (`addSlot`,
+    `findByStrip`, `pendingBoutCount`, `nextBout`/`prevBout` forward and
+    backward, `competitorsForSlot`, `fencersForCompetition`, `updateSlot`,
+    `reorder`, `moveToStrip`, `batchReorder`, `deleteSlot`) against real
+    throwaway pool/DE/team-match phases, and the two live dev server processes
+    were confirmed untouched throughout (all test data created directly against
+    `data/atlas.db` and fully cleaned up after each check — see
+    `feedback_live_db_test_safety` for a lesson learned earlier the same session
+    about being crash-safe when doing this).
+  - **God files, grown by accretion rather than extraction:**
+    - `services/pipeline.js` (1150 lines, grew to 1348 by the time it was split) bundled
+      slot CRUD, the live bout-cursor state machine, DE partition math, officiating
+      roster, predicted-end-time math, relay resolution, and (added 2026-07-27) kiosk
+      roster resolution. Functions named for one table silently wrote another:
+      `addSlot`/`markDone`/`updateSlot`/`deleteSlot`/`moveToStrip` all touch
+      `pools.strip_id` / `pools.referee_id` / `strips.status` beyond `pipeline_slots`.
+      `nextBout`/`prevBout` (~145/~110 lines each) each re-derived per-slot-type
+      (pool/team_match/DE/placement) SQL inline rather than delegating to shared
+      helpers. **Split 2026-07-29** — see its own entry below.
+    - `services/phases.js` (986 lines) — **split 2026-07-28**, see its own entry below.
+    - `public/opp2.html` (2111 lines) — ~28 top-level data properties, 15 computed
+      getters, ~70 methods in one Alpine `app()`, clearly bundling 5+ distinct features
+      (pipeline builder, bulk-assign + modal, conflict resolution + restore modals,
+      drag-reorder, referee Gantt/schedule). Confirmed duplicate: `pendingSlotCount` is
+      defined twice, verbatim (lines ~1173 and ~1991). Modal state mostly converged on
+      one `{open, ...}` shape, except `bulkModal`, whose Cancel button sets `open=false`
+      directly inline in the template rather than through a dedicated reset function like
+      the other three modals have. **Split 2026-07-29** — see its own entry below.
+  - **What's actually fine, confirmed rather than assumed:** no circular requires
+    anywhere (services↔services, services↔routes, lib↔services all checked); layering
+    direction is correct throughout (services never require routes or the opp2 lib;
+    `lib/opp2Client.js` correctly requires services, not the reverse); 34 migrations,
+    clean and sequential, no drift.
+  - **`services/phases.js` split — DONE 2026-07-28.** Not a clean pool/DE split, per the
+    earlier finding above: `close()`/`simulate()` both branch internally on `phase.type`
+    and needed a third home rather than fitting cleanly into either half. Final shape:
+    `services/poolPhases.js` (397 lines: `calcOptions`, `create`, `calculateRankings`,
+    plus the private `getPrevPoolRankings` helper), `services/dePhases.js` (224 lines:
+    `getDeOptions`, `createDE`, plus the private `getDeSeeding` helper), and
+    `services/phases.js` itself kept as a 408-line **orchestrator** — `findByCompetition`/
+    `findById` (genuinely shared), `close`/`simulate`/`reopen`/`delete` (the mixed-logic
+    functions that branch on type), and direct re-exports of the two split files'
+    functions (`Phase.calcOptions = PoolPhases.calcOptions`, etc.) so the external API
+    (`routes/phases.js`, `routes/phasesById.js`) needed **zero changes** — same module,
+    same method names, same signatures.
+    - **The prepared-statement hoisting was folded into this same pass**, exactly as
+      planned when deferring it earlier: every one of the original 58 inline
+      `db.prepare()` calls is now a module-level constant, split across whichever of the
+      three files actually owns that query. All three files are now 100%
+      hoisted (0 inline remaining) — confirmed by the same grep-based audit used in the
+      original review.
+    - **A JS `this`-binding hazard had to be designed around**, not just discovered:
+      `PoolPhases.create` originally called `this._getPrevPoolRankings(...)` and
+      `this.findById(...)` — if `Phase.create` were just a direct reference copy of
+      `PoolPhases.create` (`Phase.create = PoolPhases.create`), calling it as
+      `Phase.create(...)` binds `this` to `Phase`, not `PoolPhases`, so any `this.xxx()`
+      call inside would look for that method on the wrong object and throw at runtime.
+      Fixed by removing the `this`-dependency entirely from the split-out files: private
+      helpers became plain module-level functions (`getPrevPoolRankings`,
+      `getDeSeeding` — not object methods), and any place that needed `findById`'s query
+      just calls its own local `stmtPhaseById.get(id)` directly instead of `this.findById`.
+      A trivial `SELECT * FROM phases WHERE id=?` duplicated three times (once per file)
+      was judged the right tradeoff over introducing a `this`-dependent cross-file call
+      shape that would silently break depending on *how* a method happens to be invoked.
+    - **A genuinely pre-existing behavior was rediscovered, not introduced, while
+      testing the split**: `Phase.close()` unconditionally calls the pool-shaped
+      `calculateRankings` (querying `pool_competitors`/`pools`) with no `phase.type`
+      branch for the ranking computation itself — calling `close()` on a plain
+      (non-format) DE phase returns 0 rankings, always has (verified this is identical,
+      unchanged logic from the original file, not a regression). Consistent with
+      `public/de.html` having no "close" action at all — DE results are read via
+      `services/results.js` instead, `Phase.close()` is pool-oriented in practice except
+      for the one format-driven-preliminary-DE-with-`survivorTarget` case that returns
+      early via `Format.closeFormatDE`. Not fixed (out of scope for a pure split), but
+      worth knowing if DE-referee-assignment or other future DE work ever needs
+      `Phase.close()` to produce real DE rankings.
+    - **Also spotted, not fixed:** `reopen()`/`delete()` have near-duplicated (not
+      identical — `delete` has one extra `initialExemptCohort`-clearing clause and wraps
+      in `try/catch`, `reopen` doesn't) format-cohort-clearing logic. Left as encountered
+      — flagged here for a future pass, not folded into this one to keep the split's
+      diff limited to "move code, hoist statements, preserve behavior."
+    - **Verified**: a full 12-step lifecycle test (calcOptions → create → findById/
+      findByCompetition → calculateRankings → simulate → close → reopen → re-close →
+      getDeOptions → createDE → simulate → close → delete) against a plain (no-format)
+      competition, and a second 8-step test against a format-driven one (`pool-de` shape,
+      exercising `Format.resolveParticipants`/`applyPoolClose`/`closeFormatDE` and the
+      format-cohort clearing in `reopen`/`delete`) — both produced correct, expected
+      counts at every step. Also re-ran the pool-referee-auto-assignment feature's own
+      regression test against the split `Phase.create`/`calcOptions` to confirm no
+      downstream consumer broke.
+  - **`services/pipeline.js` split — DONE 2026-07-29.** The last open architecture-review
+    item. Split into four files by concern, none of which needed a mixed-logic
+    orchestrator the way `phases.js` did — every method belonged cleanly to exactly one
+    of:
+    - `services/pipelineSlots.js` (620 lines) — slot CRUD (`findById`, `addSlot`,
+      `updateSlot`, `reorder`, `deleteSlot`, `batchReorder`, `moveToStrip`,
+      `slotForPoolOnStrip`, `slotsForPool`, `findByPool`/`findByPhase`/`findByStrip`/
+      `findAllForReferee`/`findAllStrips`), officiating roster (`refereeName`,
+      `getOfficials`, `setOfficial`), and the referee/official double-booking
+      enforcement (`ROLE_FIELDS`/`slotWindow`/`windowsOverlap`) `updateSlot` uses.
+    - `services/pipelineNav.js` (516 lines) — the live OPP2 bout-navigation hot path:
+      `activeSlot`/`markActive`/`markDone`/`recoverStaleSlot`, `pendingBoutCount`,
+      `nextBout`/`nextBoutsAhead`/`prevBout`, `resolveDeSlot`, and the relay-resolution
+      helpers (`_resolveRelayFencer` — part of the real external API, called directly
+      by `lib/opp2Composer.js`, not just internally — and `buildRelayBout`).
+    - `services/pipelineRosters.js` (132 lines) — `competitorsForSlot`/
+      `fencersForCompetition` (kiosk waiting-room displays).
+    - `lib/deSlotMath.js` (134 lines, new) — pure DE tableau/partition/de_round math
+      (`DE_BOUT_ORDER`, `tableauToDeRound`, `partitionToRange`, `rangeToPartition`,
+      `isValidPartition`, `deSlotParams`, `fillDeBoutCount`) shared by all three
+      services files above — pulled into `lib/` (not another `services/` file) since
+      it's pure algorithm with no business-CRUD shape, matching the existing
+      `lib/poolFormation.js`/`lib/deFormation.js`/`lib/boutOrder.js` convention. One
+      function (`tableauToDeRound`) does run a DB query — precedented by
+      `lib/opp2Client.js`/`lib/opp2Composer.js` also touching `db` directly; CLAUDE.md's
+      layering rule is about require *direction* (lib may require services, never the
+      reverse), not about lib being forbidden from touching the database at all.
+    - `services/pipeline.js` itself is now a 39-line pure re-export
+      (`module.exports = { ...PipelineSlots, ...PipelineNav, ...PipelineRosters }`) —
+      unlike the `phases.js` split, there was no genuinely mixed/shared logic that
+      needed an orchestrator to retain; every method sorted cleanly into exactly one of
+      the three files. **Zero external API change** — every existing caller
+      (`routes/opp2.js`/`routes/pools.js`, `lib/opp2Client.js`, `lib/opp2Composer.js`,
+      `services/pools.js`) still does `require('./pipeline')`/`require('../services/pipeline')`
+      and calls `Pipeline.methodName(...)` exactly as before.
+    - **Avoided the `phases.js` split's `this`-binding hazard from the start, rather
+      than hitting it and fixing it after the fact.** Every one of the original file's
+      ~30 `this.xxx()` cross-method calls was converted to either a direct plain-function
+      call (same file), a call through the file's own exported const by name (e.g.
+      `PipelineSlots.findById(...)` from inside another `PipelineSlots` method — safe
+      because the const is fully defined by the time any method actually executes, only
+      *not* yet defined at parse time, which doesn't matter for calls that only happen
+      later at runtime), or an explicit `require()` of whichever sibling file actually
+      owns the target method (`pipelineNav.js` requires `pipelineSlots.js` for
+      `findById`; `pipelineRosters.js` requires `pipelineSlots.js` for `findAllStrips`).
+      Since nothing in any split file depends on the caller's `this`, the orchestrator's
+      `{...A, ...B, ...C}` re-export is safe regardless of how external callers invoke
+      the merged methods — the exact hazard the `phases.js` split had to design around
+      *after* hitting it doesn't arise here at all.
+    - **Verified**: full pool-phase lifecycle (`addSlot` → `findByStrip` →
+      `pendingBoutCount` → `nextBout`/`prevBout` forward+backward →
+      `competitorsForSlot` → `fencersForCompetition` → `updateSlot` → `deleteSlot`),
+      full DE-phase lifecycle (`createDE` → `addSlot` → `nextBout` →
+      `resolveDeSlot`), full team-match lifecycle (draw → submit orders →
+      `nextBout` resolving real fencer names — the exact call path the same-day
+      `co.fencer_id` bug fix targeted, confirming the split didn't reintroduce it —
+      plus a direct call to `Pipeline._resolveRelayFencer` mirroring
+      `opp2Composer.js`'s own usage), officiating (`refereeName`/`setOfficial`/
+      `getOfficials`), and multi-strip distribution (`slotForPoolOnStrip`/
+      `slotsForPool`) — all against real throwaway competitions, all producing
+      identical results to the pre-split file. `scripts/check-circular-requires.js`
+      confirms no cycles (82 files, up from 78 — the 4 new files). Both live dev server
+      processes confirmed untouched throughout. `services/pipeline.js` no longer
+      appears in `check-architecture.sh`'s god-file list at all (39 lines); the three
+      new services files are "large" (500-620 lines) but under the 800-line god-file
+      threshold.
+  - **`public/opp2.html` split — DONE 2026-07-29.** The very last open item from the
+    architecture review. A frontend split is structurally different from the two
+    CommonJS splits above — no bundler, no `require()`, one Alpine `x-data="app()"`
+    needs to stay one reactive component — so the shape is Alpine *mixins* (plain
+    functions each returning a chunk of state/methods), composed back into one object,
+    rather than files exporting a service object. Split by feature, matching the
+    review's own "5+ distinct features" finding:
+    - `public/js/opp2-core.js` — strip-list state/lifecycle loads, `ganttData`, misc
+      formatting helpers, the DE partition-math trio (mirrors `lib/deSlotMath.js`
+      server-side — an intentional, already-documented client/server duplication, not
+      something to fix here), and the two cross-cutting low-level helpers
+      (`_computeSlotEnd`/`_patchSlot`) both conflict-resolution and drag/reorder need.
+    - `public/js/opp2-add-slot.js` — the single-slot "add to pipeline" form (pool/DE/
+      team_match), including multi-strip distribution.
+    - `public/js/opp2-conflict.js` — `assignOfficial`/officiating-conflict detection,
+      the conflict-resolution modal, and the conflict-push undo/restore flow.
+    - `public/js/opp2-schedule-ops.js` — move/drag/reorder/delete + the
+      schedule-recascade logic all four trigger.
+    - `public/js/opp2-bulk-assign.js` — the bulk-assign modal + undo. **This is where
+      the confirmed duplicate `pendingSlotCount` used to live** — dropped here since
+      `opp2-core.js` already defines it and every mixin shares one merged `this`.
+    - `public/js/opp2-referee-schedule.js` — the by-referee Gantt view.
+    - `opp2.html` itself now just has six `<script src="/js/opp2-*.js">` tags plus a
+      ~15-line inline script defining `mergeMixins()` and `app()`.
+    - **A trap specific to this kind of split, verified empirically before relying on
+      it rather than assumed:** several of the original properties are `get xxx() {
+      ... }` computed getters (`sortedStrips`, `ganttData`, `bulkPreview`, etc.). A
+      naive `{...opp2Core(), ...opp2AddSlot(), ...}` spread merge would silently
+      **evaluate every getter once at spread-time and bake in that one frozen value**
+      as a plain data property — object spread copies current *values*, not accessor
+      descriptors. The failure mode is silent: no error, just permanently-stale
+      computed properties from the moment the page loads. Fixed by merging via
+      `Object.defineProperties(result, Object.getOwnPropertyDescriptors(m))` for each
+      mixin instead of spread — this copies the actual property descriptor (including
+      `get`/`set`), preserving live reactivity. Confirmed the distinction with a
+      standalone Node repro before writing any of the real mixin files (naive spread:
+      mutating the source object left the copy's getter frozen at its old value;
+      descriptor-copy: the getter stayed live and reflected the mutation).
+    - **The `this`-binding hazard the `services/phases.js` split had to design around
+      does *not* apply here, and needed no special handling** — confirmed, not just
+      assumed. Alpine calls `app()` exactly once and wraps the single returned
+      (merged) object in one reactive Proxy; every method's `this`, regardless of
+      which mixin file originally defined it, is always bound to that same one
+      object. So `opp2-conflict.js`'s `applyRestore()` calling `this._recascadeStrip()`
+      (which lives in `opp2-schedule-ops.js`) just works, with zero cross-file
+      requires needed between the six mixin files — unlike the CommonJS splits, where
+      three genuinely separate module objects existed and cross-references had to be
+      resolved explicitly.
+    - **Verified**: every one of the original ~113 top-level properties (state,
+      getters, methods) was accounted for exactly once across the six files (the
+      duplicate `pendingSlotCount` deliberately excluded, not accidentally dropped) by
+      building a Node `vm`-based test harness that loads all six files' real source
+      into one shared context (exactly mirroring how six `<script src>` tags execute
+      in one browser `window`), performs the real `mergeMixins` merge, and confirms:
+      all six mixins' state is present on the merged object; a getter (`sortedStrips`)
+      stays live after mutating its underlying `strips` array post-merge (the exact
+      hazard above); a getter in one file (`areStripsAdjacent`, `opp2-core.js`) reading
+      state owned by a different file (`multiStrips`, `opp2-add-slot.js`) resolves
+      correctly; a method in one file (`resetAddForm`, `opp2-add-slot.js`) calling a
+      helper owned by another (`round5`, `opp2-core.js`) works with no wiring; and
+      `assignOfficial` (`opp2-conflict.js`) correctly reads/writes `noStartTimeModal`
+      (`opp2-core.js`). Also verified over real HTTP against the live dev server (no
+      restart needed — static files reload per-request): `opp2.html` correctly
+      references all six new `<script>` tags, and all six files serve `200 OK` with
+      the expected byte sizes. **Not verified**: real-browser Alpine reactivity
+      end-to-end (no Chrome extension available in this environment this session) —
+      the `vm` harness is a faithful but not identical substitute; worth a real
+      browser click-through next time one's available. `scripts/check-architecture.sh`
+      extended the same day to also scan `public/js/*.js` for file-size and duplicate-
+      function-name violations (previously only `services/routes/lib` and
+      `public/*.html` were scanned — the six new files themselves would have been
+      invisible to the very checker built to catch this class of drift). `opp2.html`
+      no longer appears in the god-file list at all (2111 → 961 lines, now mostly
+      template markup); none of the six new JS files are individually over the
+      500-line "large" threshold. `pendingSlotCount` no longer appears in the
+      duplicate-function-name report.
+- `bout_duration_standards` adaptive tracking is built but unvalidated — needs a real or
+  simulated competition run over live MQTT to confirm the observed-average path behaves
+  (see OPP2 section above)
+- Resilience: discuss network loss / crash recovery across the ecosystem
+- Minor: `CyranoServer.js` missing `'use strict'`
+
