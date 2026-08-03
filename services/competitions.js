@@ -6,7 +6,7 @@ const stmtLivePhaseRows = db.prepare(`
          p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
   FROM competitions c
   JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
-  WHERE c.status != 'archived'
+  WHERE c.status NOT IN ('archived', 'finished')
   ORDER BY c.name, p.phase_order DESC
 `);
 const stmtPoolProgress = db.prepare(`

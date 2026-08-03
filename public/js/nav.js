@@ -11,6 +11,7 @@ function navApp() {
       this._injectManualLink();
       await Promise.all([ this.loadActiveComps(), this._injectUserWidget() ]);
       setInterval(() => this.loadActiveComps(), 20000);
+      window.addEventListener('atlas:active-comps-changed', () => this.loadActiveComps());
     },
 
     _initFavicon() {

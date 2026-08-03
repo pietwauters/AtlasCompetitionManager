@@ -784,6 +784,7 @@ function app() {
     async setStatus(status) {
       await fetch('/api/competitions/'+compId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
       await this.loadComp();
+      window.dispatchEvent(new Event('atlas:active-comps-changed'));
     },
 
     async closeCompetition() {
