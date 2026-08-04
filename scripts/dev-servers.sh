@@ -97,6 +97,33 @@ status_one() {
   fi
 }
 
+# Open the two dev URLs in Chrome once both servers are confirmed running.
+# Tried in order: google-chrome, google-chrome-stable, chromium-browser,
+# chromium, falling back to xdg-open (one call per URL) if none are found.
+open_dev_urls() {
+  local urls=("http://openpiste.local:3001/index.html" "https://openpiste.local:3000/overview")
+  local candidate browser_cmd=""
+  for candidate in google-chrome google-chrome-stable chromium-browser chromium; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      browser_cmd="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$browser_cmd" ]]; then
+    nohup "$browser_cmd" --new-window "${urls[@]}" >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+  elif command -v xdg-open >/dev/null 2>&1; then
+    local u
+    for u in "${urls[@]}"; do
+      nohup xdg-open "$u" >/dev/null 2>&1 &
+      disown 2>/dev/null || true
+    done
+  else
+    echo "No browser launcher found (tried google-chrome/chromium/xdg-open); open manually:" >&2
+    printf '  %s\n' "${urls[@]}" >&2
+  fi
+}
+
 cmd="${1:-start}"
 case "$cmd" in
   start)
@@ -106,6 +133,11 @@ case "$cmd" in
     echo "Atlas:    http://localhost:3001  (https://openpiste.local:3443)"
     echo "mqtt-web: https://localhost:3000"
     echo "Logs:     $RUN_DIR/*.log"
+    if [[ -n "$(pids_for_dir "$ATLAS_DIR")" && -n "$(pids_for_dir "$MQTT_WEB_DIR")" ]]; then
+      open_dev_urls
+    else
+      echo "Skipping browser launch — one or both servers failed to start." >&2
+    fi
     ;;
   stop)
     stop_one "Atlas"    "$ATLAS_DIR"
