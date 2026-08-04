@@ -10,11 +10,12 @@
 <body x-data="app()" x-init="init()">
 <header x-data="navApp()" x-init="initNav()">
   <a href="/index.html"><strong>Atlas</strong></a>
-  <template x-for="comp in activeComps" :key="comp.phase_id">
+  <template x-for="comp in activeComps" :key="comp.id">
     <a :href="phaseLink(comp)" x-text="compLabel(comp)"
        class="nav-comp-link"></a>
   </template>
   <div class="nav-right">
+    <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
     <a href="/opp2.html">Schedule</a>
     <a href="/referee-schedule.html">Referees</a>
@@ -37,13 +38,16 @@
     <div class="card">
       <div class="toolbar">
         <h2 style="margin:0;flex:1">Competitions</h2>
+        <label><input type="checkbox" x-model="hideFinished"> Hide finished</label>
         <button @click="openFieImport()">Import FIE XML</button>
         <button class="primary" @click="openCompForm()">+ New competition</button>
       </div>
       <table class="table-responsive">
-        <thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Age categories</th><th>Date</th><th>Tournament</th><th>Fencers</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Weapon</th><th>Gender</th><th>Age categories</th><th>Date</th><th>Tournament</th><th>Fencers</th>
+          <th title="In preparation / Running are derived live from fencer check-in and phase activity — not a stored flag. Closed/Archived are set by the director.">Status</th>
+        <th></th></tr></thead>
         <tbody>
-          <template x-for="c in competitions" :key="c.id">
+          <template x-for="c in visibleCompetitions" :key="c.id">
             <tr>
               <td data-label="Name"><a class="comp-link" :href="'/competition-detail.html?id='+c.id" x-text="c.name"></a></td>
               <td data-label="Weapon" x-text="c.weapon"></td>
@@ -52,17 +56,18 @@
               <td data-label="Date" x-text="c.date||'—'"></td>
               <td data-label="Tournament" x-text="c.tournament_name||'—'"></td>
               <td data-label="Fencers" x-text="c.competitor_count"></td>
-              <td data-label="Status"><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+              <td data-label="Status"><span class="badge" :class="compStage(c).cls" x-text="compStage(c).label"></span></td>
               <td data-label="">
                 <div class="row-actions">
                   <button @click="editComp(c)">Edit</button>
-                  <button @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
+                  <button x-show="c.status!=='archived'" @click="archiveComp(c)" title="Hide this competition without deleting its data">Archive</button>
+                  <button x-show="c.status==='archived'" @click="restoreComp(c)" title="Unhide this competition">Restore</button>
                   <button class="danger" @click="deleteComp(c)">Delete</button>
                 </div>
               </td>
             </tr>
           </template>
-          <tr x-show="competitions.length===0"><td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No competitions yet.</td></tr>
+          <tr x-show="visibleCompetitions.length===0"><td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No competitions yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -172,7 +177,7 @@
                   <td data-label="Age" x-text="c.age_cats||'—'"></td>
                   <td data-label="Date" x-text="c.date||'—'"></td>
                   <td data-label="Fencers" x-text="c.competitor_count"></td>
-                  <td data-label="Status"><span class="badge" :class="'badge-'+c.status" x-text="c.status"></span></td>
+                  <td data-label="Status"><span class="badge" :class="compStage(c).cls" x-text="compStage(c).label"></span></td>
                   <td data-label="">
                     <button @click="editComp(c);tab='competitions'">Edit</button>
                     <button @click="archiveComp(c)" title="Hide without deleting">Archive</button>
@@ -215,18 +220,32 @@ function app() {
     get tournamentGroups() {
       return this.tournaments.map(t => ({
         ...t,
-        competitions: this.competitions.filter(c => c.tournament_id === t.id),
+        competitions: this.visibleCompetitions.filter(c => c.tournament_id === t.id),
       }));
     },
+    get visibleCompetitions() {
+      if (!this.hideFinished) return this.competitions;
+      return this.competitions.filter(c => c.status !== 'finished' && c.status !== 'archived');
+    },
     notice:{text:'',error:false},
+    hideFinished:true,
     compFormOpen:false, compForm:{id:null,name:'',weapon:'',gender:'',date:'',tournament_id:'',age_category_ids:[],is_team:false},
     tournFormOpen:false, tournForm:{id:null,name:'',city:'',country:'',date_start:'',date_end:'',organizer:'',level:''},
 
     async init() { await Promise.all([this.loadComps(),this.loadTourns(),this.loadAgeCats()]); },
 
     async loadComps() {
-      const list = await fetch('/api/competitions').then(r=>r.json());
+      const list = await fetch('/api/competitions?include_archived=1').then(r=>r.json());
       this.competitions = list.map(c => ({...c, age_cats: c.age_categories?.map(a=>a.code).join(', ')||''}));
+    },
+    // Derived, live display stage — not the raw stored status. "In preparation"
+    // and "Running" both map to status='active'; the nav bar's own "running"
+    // list uses the same fencer-check-in signal (see Competition.running()).
+    compStage(c) {
+      if (c.status === 'archived') return { label: 'Archived',      cls: 'badge-archived' };
+      if (c.status === 'finished') return { label: 'Closed',        cls: 'badge-finished' };
+      if (c.checked_in_count > 0)  return { label: 'Running',       cls: 'badge-active'   };
+      return                              { label: 'In preparation', cls: 'badge-pending'  };
     },
     async loadTourns() { this.tournaments = await fetch('/api/tournaments').then(r=>r.json()); },
     async loadAgeCats() { this.ageCategories = await fetch('/api/age-categories').then(r=>r.json()); },
@@ -283,6 +302,11 @@ function app() {
       const r=await fetch('/api/competitions/'+c.id+'/archive',{method:'POST'});
       if(!r.ok){this.showNotice('Archive failed',true);return;}
       this.showNotice('Archived '+c.name); await this.loadComps();
+    },
+    async restoreComp(c) {
+      const r=await fetch('/api/competitions/'+c.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'active'})});
+      if(!r.ok){this.showNotice('Restore failed',true);return;}
+      this.showNotice('Restored '+c.name); await this.loadComps();
     },
     async deleteComp(c) {
       if(!confirm('Permanently delete "'+c.name+'"?\nThis removes ALL data: competitors, phases, bouts. This cannot be undone.'))return;

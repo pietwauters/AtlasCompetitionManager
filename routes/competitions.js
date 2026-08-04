@@ -11,11 +11,14 @@ const Format      = require('../services/formats');
 const router = express.Router();
 
 router.get('/', (req, res) => {
-  res.json(Competition.findAll({ tournament_id: req.query.tournament_id }));
+  res.json(Competition.findAll({
+    tournament_id: req.query.tournament_id,
+    include_archived: req.query.include_archived === '1',
+  }));
 });
 
 router.get('/active', (req, res) => {
-  res.json(Competition.withLivePhases());
+  res.json(Competition.running());
 });
 
 router.get('/:id', (req, res) => {

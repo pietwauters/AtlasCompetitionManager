@@ -97,7 +97,7 @@ const stmtInsertCompetition = db.prepare(`
   INSERT INTO competitions
     (tournament_id, name, weapon, gender, date, fie_id, seeding_issuer, status)
   VALUES
-    (@tournament_id, @name, @weapon, @gender, @date, @fie_id, @seeding_issuer, 'draft')
+    (@tournament_id, @name, @weapon, @gender, @date, @fie_id, @seeding_issuer, 'active')
 `);
 const stmtFindCompetitorByFieId = db.prepare(
   'SELECT id FROM competitors WHERE competition_id = ? AND fie_id = ?'

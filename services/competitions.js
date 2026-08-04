@@ -1,12 +1,21 @@
 'use strict';
 const db = require('../db');
 
-const stmtLivePhaseRows = db.prepare(`
+// "Running" = status is active AND at least one fencer has checked in — not
+// "has a currently-active phase". A competition stays running across the gap
+// between one phase finishing and the next being created/started; it only
+// stops when the director closes it (status='finished'). The LEFT JOIN (vs.
+// the old inner JOIN) is what lets a running competition with no active phase
+// right now still show up, with phase_id/phase_type/phase_status all NULL —
+// callers (nav.js, index.html) already fall back to a plain competition link
+// in that case.
+const stmtRunningRows = db.prepare(`
   SELECT c.id, c.name, c.weapon, c.gender,
          p.id AS phase_id, p.type AS phase_type, p.phase_order, p.status AS phase_status
   FROM competitions c
-  JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
-  WHERE c.status NOT IN ('archived', 'finished')
+  LEFT JOIN phases p ON p.competition_id = c.id AND p.status = 'active'
+  WHERE c.status = 'active'
+    AND EXISTS (SELECT 1 FROM competitors co WHERE co.competition_id = c.id AND co.checked_in = 1)
   ORDER BY c.name, p.phase_order DESC
 `);
 const stmtPoolProgress = db.prepare(`
@@ -77,7 +86,8 @@ const Competition = {
     // dynamic-sql-ok: WHERE clause built from optional filters, can't be a fixed statement
     const comps = db.prepare(`
       SELECT c.*, t.name AS tournament_name,
-        COUNT(comp.id) AS competitor_count
+        COUNT(comp.id) AS competitor_count,
+        SUM(CASE WHEN comp.checked_in = 1 THEN 1 ELSE 0 END) AS checked_in_count
       FROM competitions c
       LEFT JOIN tournaments t ON t.id = c.tournament_id
       LEFT JOIN competitors comp ON comp.competition_id = c.id
@@ -161,9 +171,10 @@ const Competition = {
     return stmtArchive.run(id);
   },
 
-  // Returns competitions that have an active phase, with progress.
-  withLivePhases() {
-    return stmtLivePhaseRows.all().map(row => {
+  // Returns running competitions (see stmtRunningRows), with progress for
+  // whichever phase is currently active, if any.
+  running() {
+    return stmtRunningRows.all().map(row => {
       let progress = null;
       if (row.phase_type === 'pool') {
         const s = stmtPoolProgress.get(row.phase_id);

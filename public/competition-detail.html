@@ -31,11 +31,12 @@
 <body x-data="app()" x-init="init()">
 <header x-data="navApp()" x-init="initNav()">
   <a href="/index.html"><strong>Atlas</strong></a>
-  <template x-for="comp in activeComps" :key="comp.phase_id">
+  <template x-for="comp in activeComps" :key="comp.id">
     <a :href="phaseLink(comp)" x-text="compLabel(comp)"
        class="nav-comp-link"></a>
   </template>
   <div class="nav-right">
+    <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
     <a href="/opp2.html">Schedule</a>
     <a href="/referee-schedule.html">Referees</a>
