@@ -30,12 +30,14 @@
         <div class="card" id="tournament-detail">
             <span class="loading">Loading…</span>
         </div>
-        <div class="card" id="tournament-referees">
+        <details class="card" open data-key="referees" id="tournament-referees">
+            <summary><h2 style="display:inline;margin:0">Referees</h2></summary>
             <span class="loading">Loading…</span>
-        </div>
-        <div class="card" id="tournament-pool-refs">
+        </details>
+        <details class="card" open data-key="pool-refs" id="tournament-pool-refs">
+            <summary><h2 style="display:inline;margin:0">Combine pool rounds — auto-assign referees</h2></summary>
             <span class="loading">Loading…</span>
-        </div>
+        </details>
     </main>
     <script>
         // Get tournament id from URL
@@ -101,14 +103,16 @@
                 : `<tr><td colspan="5" style="text-align:center;color:#999;padding:1rem">No referees found.</td></tr>`;
 
             document.getElementById('tournament-referees').innerHTML = `
-                <h2 style="margin-top:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
-                    <span>Referees</span>
+                <summary><h2 style="display:inline;margin:0">
+                    Referees
                     <span style="font-weight:400;font-size:.85rem;color:#888">(${roster.length})</span>
-                    <button style="margin-left:auto;font-size:.78rem;padding:.25rem .6rem" ${roster.length ? '' : 'disabled'}
+                </h2></summary>
+                <div style="display:flex;justify-content:flex-end;margin:1rem 0 .75rem">
+                    <button style="font-size:.78rem;padding:.25rem .6rem" ${roster.length ? '' : 'disabled'}
                             onclick="autoRankTournamentReferees()" title="Rank by referee level (t.50.3: best referees per weapon)">
                         ⚡ Auto-rank by level
                     </button>
-                </h2>
+                </div>
                 <table class="table-responsive"><thead><tr><th>Rank</th><th>Name</th><th>Club</th><th>Nationality</th><th>Level</th><th></th></tr></thead>
                 <tbody>${rosterRows}</tbody></table>
 
@@ -226,8 +230,8 @@
                 : `<p class="empty">No pool phases in this tournament's competitions yet.</p>`;
 
             document.getElementById('tournament-pool-refs').innerHTML = `
-                <h2 style="margin-top:0">Combine pool rounds — auto-assign referees</h2>
-                <p style="font-size:.85rem;color:#666;margin:0 0 .75rem">
+                <summary><h2 style="display:inline;margin:0">Combine pool rounds — auto-assign referees</h2></summary>
+                <p style="font-size:.85rem;color:#666;margin:1rem 0 .75rem">
                     Select the pool rounds that run at the same time — across one or more of this
                     tournament's competitions — to solve them together from one shared pool of
                     referees, instead of each competition drawing only from its own roster.
@@ -341,6 +345,7 @@
         window.addEventListener('DOMContentLoaded', loadCombinablePoolPhases);
     </script>
     <script src="/js/nav.js"></script>
+    <script src="/js/collapse-persist.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 

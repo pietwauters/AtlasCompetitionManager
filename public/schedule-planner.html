@@ -49,8 +49,8 @@
     <div>
 
       <!-- ── Plan settings ─────────────────────────────────────────────── -->
-      <div class="card">
-        <h2 style="margin-top:0">Plan settings</h2>
+      <details class="card" open data-key="plan-settings">
+      <summary><h2 style="display:inline;margin:0">Plan settings</h2></summary>
         <div class="form-grid">
           <label>Day start
             <input type="time" x-model="plan.day_start" @change="updatePlanSettings()">
@@ -67,11 +67,11 @@
           let you plan ahead of having them actually registered — the analysis sharpens automatically as
           real strips/referees/competitors are added.
         </p>
-      </div>
+      </details>
 
       <!-- ── Stages per competition ───────────────────────────────────── -->
-      <div class="card">
-        <h2 style="margin-top:0">Stages</h2>
+      <details class="card" open data-key="stages">
+      <summary><h2 style="display:inline;margin:0">Stages</h2></summary>
         <template x-for="comp in competitions" :key="comp.id">
           <div class="sp-comp-block">
             <div class="sp-comp-title">
@@ -115,11 +115,11 @@
           </div>
         </template>
         <p x-show="!competitions.length" style="color:var(--clr-text-muted)">No competitions in this tournament yet.</p>
-      </div>
+      </details>
 
       <!-- ── Solve ─────────────────────────────────────────────────────── -->
-      <div class="card">
-        <h2 style="margin-top:0">Solve</h2>
+      <details class="card" open data-key="solve">
+      <summary><h2 style="display:inline;margin:0">Solve</h2></summary>
         <button class="primary" @click="resolvePlan()" :disabled="solveBusy">
           <span x-text="solveBusy ? 'Solving…' : '⚡ Re-solve schedule'"></span>
         </button>
@@ -158,11 +158,11 @@
             </p>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- ── Gantt ─────────────────────────────────────────────────────── -->
-      <div class="card" x-show="ganttData.hasData">
-        <h2 style="margin-top:0">Estimated piste schedule</h2>
+      <details class="card" open data-key="gantt" x-show="ganttData.hasData">
+      <summary><h2 style="display:inline;margin:0">Estimated piste schedule</h2></summary>
         <div style="overflow-x:auto">
           <div style="min-width:500px;display:flex">
             <div style="width:130px;flex-shrink:0">
@@ -203,12 +203,12 @@
             </template>
           </div>
         </div>
-      </div>
+      </details>
       <p x-show="!ganttData.hasData" style="color:var(--clr-text-muted)">No solved schedule yet — add stages and re-solve.</p>
 
       <!-- ── Referee sufficiency ──────────────────────────────────────── -->
-      <div class="card" x-show="refereeSummaryStages.length">
-        <h2 style="margin-top:0">Referee sufficiency</h2>
+      <details class="card" open data-key="referee-sufficiency" x-show="refereeSummaryStages.length">
+      <summary><h2 style="display:inline;margin:0">Referee sufficiency</h2></summary>
         <template x-for="stage in refereeSummaryStages" :key="stage.id">
           <div>
             <template x-if="stage.computed.referees.status === 'insufficient_data'">
@@ -241,7 +241,7 @@
             </template>
           </div>
         </template>
-      </div>
+      </details>
 
     </div>
   </template>
@@ -269,6 +269,7 @@ function app() {
 }
 </script>
 <script src="/js/nav.js"></script>
+<script src="/js/collapse-persist.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>

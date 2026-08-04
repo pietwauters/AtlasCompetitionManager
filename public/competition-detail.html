@@ -92,9 +92,9 @@
   </div>
 
   <!-- ── Rounds ──────────────────────────────────── -->
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-      <h2 style="margin:0;flex:1">Rounds</h2>
+  <details class="card" open data-key="rounds">
+  <summary><h2 style="display:inline;margin:0">Rounds</h2></summary>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:.75rem;margin:1rem 0 .75rem">
       <!-- Free-form new round (no format, or team comp) -->
       <button class="primary"
               x-show="comp?.status!=='finished' && (!comp?.format_id || comp?.is_team)"
@@ -356,15 +356,15 @@
         </div>
       </template>
     </div>
-  </div>
+  </details>
 
   <!-- ── Teams (team competitions only) ─────────── -->
-  <div class="card" x-show="comp?.is_team">
-    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-      <h2 style="margin:0;flex:1">
-        Teams
-        <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+teams.length+')'"></span>
-      </h2>
+  <details class="card" open data-key="teams" x-show="comp?.is_team">
+  <summary><h2 style="display:inline;margin:0">
+    Teams
+    <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+teams.length+')'"></span>
+  </h2></summary>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:.75rem;margin:1rem 0 .75rem">
       <button class="primary" @click="addingTeam=!addingTeam">+ Add team</button>
     </div>
 
@@ -422,7 +422,7 @@
         </div>
       </div>
     </template>
-  </div>
+  </details>
 
   <!-- ── Presence warning before creating the first round ─────────────────── -->
   <div class="modal-backdrop" x-show="presenceModal.open" @click.self="cancelPresenceModal()">
@@ -447,7 +447,7 @@
 
   <!-- ── Individual competitors (non-team competitions only) ── -->
 
-  <details class="card" open>
+  <details class="card" open data-key="fencers">
   <summary><h2 style="display:inline;margin:0">Fencers</h2></summary>
   <div class="layout-detail" style="margin-top:1rem">
     <!-- Registered competitors -->
@@ -541,7 +541,7 @@
   </details>
 
   <!-- ── Referees ── -->
-  <details class="card" open>
+  <details class="card" open data-key="referees">
   <summary><h2 style="display:inline;margin:0">Referees</h2></summary>
   <div class="layout-detail" style="margin-top:1rem">
     <!-- Assigned referees -->
@@ -1100,6 +1100,7 @@ function app() {
 }
 </script>
 <script src="/js/nav.js"></script>
+<script src="/js/collapse-persist.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>
