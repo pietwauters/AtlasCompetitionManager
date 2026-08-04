@@ -40,6 +40,23 @@
   <div class="notice-bar notice-ok" x-show="notice.text && !notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text && notice.error"  x-text="notice.text"></div>
 
+  <!-- Add club -->
+  <details class="card" open data-key="add-club">
+  <summary><h2 style="display:inline;margin:0">Add club</h2></summary>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-top:1rem">
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Name *
+        <input x-model="newForm.name" placeholder="Club Namur" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px">
+      </label>
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Short name
+        <input x-model="newForm.short_name" placeholder="NAM" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:6rem">
+      </label>
+      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Country
+        <input x-model="newForm.country" placeholder="BEL" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:5rem">
+      </label>
+      <button class="primary" @click="addClub()" :disabled="!newForm.name.trim()">Add club</button>
+    </div>
+  </details>
+
   <!-- Club list -->
   <div class="card">
     <h2>Clubs</h2>
@@ -142,27 +159,11 @@
     </table>
   </div>
 
-  <!-- Add club -->
-  <div class="card">
-    <h3 style="margin-top:0">Add club</h3>
-    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
-      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Name *
-        <input x-model="newForm.name" placeholder="Club Namur" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px">
-      </label>
-      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Short name
-        <input x-model="newForm.short_name" placeholder="NAM" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:6rem">
-      </label>
-      <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Country
-        <input x-model="newForm.country" placeholder="BEL" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:5rem">
-      </label>
-      <button class="primary" @click="addClub()" :disabled="!newForm.name.trim()">Add club</button>
-    </div>
-  </div>
-
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
 <script src="/js/nav.js"></script>
+<script src="/js/collapse-persist.js"></script>
 <script>
 function app() {
   return {

@@ -41,9 +41,105 @@
   <div class="notice-bar notice-ok" x-show="notice.text && !notice.error" x-text="notice.text"></div>
   <div class="notice-bar notice-err" x-show="notice.text && notice.error"  x-text="notice.text"></div>
 
+  <!-- ── Add person (card) ───────────────────────────── -->
+  <!-- Independent of the Add/Edit modal below — its own addForm state and
+       addPersonFromCard() method, so nothing here can interfere with an
+       in-progress edit in the modal (or vice versa). -->
+  <details class="card" open data-key="add-person">
+  <summary><h2 style="display:inline;margin:0">Add person</h2></summary>
+    <div class="form-grid" style="margin-top:1rem">
+      <div class="section-title">Personal details</div>
+
+      <label>First name *
+        <input x-model="addForm.first_name" placeholder="Alice">
+      </label>
+      <label>Last name *
+        <input x-model="addForm.last_name" placeholder="Dupont">
+      </label>
+      <label>Date of birth
+        <input type="date" x-model="addForm.date_of_birth">
+      </label>
+      <label>Gender
+        <select x-model="addForm.gender">
+          <option value="">—</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="X">Other</option>
+        </select>
+      </label>
+      <label>Nationality
+        <select x-model="addForm.nationality">
+          <option value="">—</option>
+          <template x-for="n in nocs" :key="n.code">
+            <option :value="n.code" x-text="n.code + ' — ' + n.country"></option>
+          </template>
+        </select>
+      </label>
+      <label>Club
+        <select x-model="addForm.club_id">
+          <option value="">—</option>
+          <template x-for="c in clubs" :key="c.id">
+            <option :value="c.id" x-text="c.name"></option>
+          </template>
+        </select>
+      </label>
+
+      <div class="section-title">Roles</div>
+      <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer">
+        <input type="checkbox" x-model="addForm.isFencer"> Fencer
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer">
+        <input type="checkbox" x-model="addForm.isReferee"> Referee
+      </label>
+
+      <template x-if="addForm.isFencer">
+        <div class="form-grid full" style="padding:0">
+          <div class="section-title">Fencer profile</div>
+          <label>Licence
+            <input x-model="addForm.fencer.licence" placeholder="BEL-001">
+          </label>
+          <label>Handedness
+            <select x-model="addForm.fencer.handedness">
+              <option value="">—</option>
+              <option value="R">Right</option>
+              <option value="L">Left</option>
+            </select>
+          </label>
+          <label>Weapons (comma-separated)
+            <input x-model="addForm.fencer.weapons_raw" placeholder="foil, epee">
+          </label>
+          <label>Ranking
+            <input type="number" x-model="addForm.fencer.ranking" placeholder="42">
+          </label>
+          <label>Points
+            <input type="number" x-model="addForm.fencer.points" placeholder="0">
+          </label>
+        </div>
+      </template>
+
+      <template x-if="addForm.isReferee">
+        <div class="form-grid full" style="padding:0">
+          <div class="section-title">Referee profile</div>
+          <label>Licence
+            <input x-model="addForm.referee.licence" placeholder="REF-001">
+          </label>
+          <label>Level
+            <input x-model="addForm.referee.level" placeholder="National, International…">
+          </label>
+        </div>
+      </template>
+
+      <div class="form-actions">
+        <button class="primary" @click="addPersonFromCard()"
+                :disabled="!addForm.first_name.trim() || !addForm.last_name.trim()">Add person</button>
+        <button @click="resetAddForm()">Clear</button>
+      </div>
+    </div>
+  </details>
+
   <!-- ── People list ─────────────────────────────────── -->
-  <div class="card">
-    <h2>People</h2>
+  <details class="card" open data-key="people-list">
+  <summary><h2 style="display:inline;margin:0">People</h2></summary>
 
     <div class="toolbar">
       <input type="search" placeholder="Search by name…" x-model="search" style="flex:1;min-width:140px">
@@ -112,7 +208,7 @@
         </tr>
       </tbody>
     </table>
-  </div>
+  </details>
 
   <!-- ── Add / Edit form ────────────────────────────── -->
   <div class="modal-backdrop" x-show="formOpen" @click.self="closeForm()">
@@ -259,6 +355,15 @@ function app() {
       fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
       referee: { licence: '', level: '' },
     },
+    // Independent of `form` above (the Add/Edit modal's state) — see the
+    // "Add person" card comment in the HTML for why these stay separate.
+    addForm: {
+      first_name: '', last_name: '', date_of_birth: '',
+      gender: '', nationality: '', club_id: '',
+      isFencer: false, isReferee: false,
+      fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
+      referee: { licence: '', level: '' },
+    },
 
     async init() {
       await Promise.all([this.load(), this.loadClubs(), this.loadNocs()]);
@@ -374,8 +479,8 @@ function app() {
 
       // On create, embed profiles so they're saved in one go
       if (isNew) {
-        if (this.form.isFencer)  personBody.fencer  = this._fencerPayload();
-        if (this.form.isReferee) personBody.referee = this._refereePayload();
+        if (this.form.isFencer)  personBody.fencer  = this._fencerPayload(this.form.fencer);
+        if (this.form.isReferee) personBody.referee = this._refereePayload(this.form.referee);
       }
 
       const r    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(personBody) });
@@ -387,7 +492,7 @@ function app() {
         if (this.form.isFencer) {
           await fetch('/api/people/' + data.id + '/fencer', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(this._fencerPayload()),
+            body: JSON.stringify(this._fencerPayload(this.form.fencer)),
           });
         } else {
           await fetch('/api/people/' + data.id + '/fencer', { method: 'DELETE' });
@@ -397,7 +502,7 @@ function app() {
         if (this.form.isReferee) {
           await fetch('/api/people/' + data.id + '/referee', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(this._refereePayload()),
+            body: JSON.stringify(this._refereePayload(this.form.referee)),
           });
         } else {
           await fetch('/api/people/' + data.id + '/referee', { method: 'DELETE' });
@@ -410,23 +515,63 @@ function app() {
       await this.loadClubs();
     },
 
-    _fencerPayload() {
+    // profile is either form.fencer or addForm.fencer — kept as an explicit
+    // argument (rather than reading this.form.fencer directly) so both the
+    // modal and the standalone Add-person card can share this without
+    // coupling to each other's state.
+    _fencerPayload(profile) {
       return {
-        licence:    this.form.fencer.licence    || null,
-        handedness: this.form.fencer.handedness || null,
-        weapons:    this.form.fencer.weapons_raw
-                      ? this.form.fencer.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
+        licence:    profile.licence    || null,
+        handedness: profile.handedness || null,
+        weapons:    profile.weapons_raw
+                      ? profile.weapons_raw.split(',').map(w => w.trim()).filter(Boolean)
                       : [],
-        ranking:    this.form.fencer.ranking ? Number(this.form.fencer.ranking) : null,
-        points:     this.form.fencer.points  ? Number(this.form.fencer.points)  : null,
+        ranking:    profile.ranking ? Number(profile.ranking) : null,
+        points:     profile.points  ? Number(profile.points)  : null,
       };
     },
 
-    _refereePayload() {
+    _refereePayload(profile) {
       return {
-        licence: this.form.referee.licence || null,
-        level:   this.form.referee.level   || null,
+        licence: profile.licence || null,
+        level:   profile.level   || null,
       };
+    },
+
+    resetAddForm() {
+      this.addForm = {
+        first_name: '', last_name: '', date_of_birth: '',
+        gender: '', nationality: '', club_id: '',
+        isFencer: false, isReferee: false,
+        fencer:  { licence: '', handedness: '', weapons_raw: '', ranking: '', points: '' },
+        referee: { licence: '', level: '' },
+      };
+    },
+
+    async addPersonFromCard() {
+      if (!this.addForm.first_name.trim() || !this.addForm.last_name.trim()) return;
+      const personBody = {
+        first_name:    this.addForm.first_name,
+        last_name:     this.addForm.last_name,
+        date_of_birth: this.addForm.date_of_birth || null,
+        gender:        this.addForm.gender        || null,
+        nationality:   this.addForm.nationality   || null,
+        club_id:       this.addForm.club_id       || null,
+      };
+      if (this.addForm.isFencer)  personBody.fencer  = this._fencerPayload(this.addForm.fencer);
+      if (this.addForm.isReferee) personBody.referee = this._refereePayload(this.addForm.referee);
+
+      const r = await fetch('/api/people', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(personBody),
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Save failed', true); return; }
+
+      this.showNotice('Added: ' + data.last_name + ', ' + data.first_name);
+      this.resetAddForm();
+      await this.load();
+      await this.loadClubs();
     },
 
     async deletePerson(p) {
@@ -460,6 +605,7 @@ function app() {
 }
 </script>
 <script src="/js/nav.js"></script>
+<script src="/js/collapse-persist.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>
