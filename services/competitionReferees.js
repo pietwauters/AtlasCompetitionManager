@@ -7,6 +7,10 @@ const stmtInsert  = db.prepare('INSERT OR IGNORE INTO competition_referees (comp
 const stmtDelete  = db.prepare('DELETE FROM competition_referees WHERE competition_id = ? AND referee_id = ?');
 const stmtSetRank = db.prepare('UPDATE competition_referees SET rank_order = ? WHERE competition_id = ? AND referee_id = ?');
 
+const stmtCheckIn     = db.prepare('INSERT OR IGNORE INTO referee_checkins (competition_id, referee_id) VALUES (?, ?)');
+const stmtCheckOut    = db.prepare('DELETE FROM referee_checkins WHERE competition_id = ? AND referee_id = ?');
+const stmtCheckOutAll = db.prepare('DELETE FROM referee_checkins WHERE competition_id = ?');
+
 // Effective roster for a competition: referees added directly to it, UNION
 // referees on its tournament's roster (if it belongs to one — tr.tournament_id
 // = NULL never matches, so this degrades correctly for a tournament-less
@@ -19,12 +23,14 @@ const stmtFindEffective = db.prepare(`
          p.nationality, p.club_id, c.name AS club_name,
          MAX(CASE WHEN cr.referee_id IS NOT NULL THEN 1 ELSE 0 END) AS via_competition,
          MAX(CASE WHEN tr.referee_id IS NOT NULL THEN 1 ELSE 0 END) AS via_tournament,
-         COALESCE(MAX(cr.rank_order), MAX(tr.rank_order)) AS rank_order
+         COALESCE(MAX(cr.rank_order), MAX(tr.rank_order)) AS rank_order,
+         MAX(CASE WHEN rc.referee_id IS NOT NULL THEN 1 ELSE 0 END) AS checked_in
   FROM referees r
   JOIN people p ON p.id = r.person_id
   LEFT JOIN clubs c ON c.id = p.club_id
   LEFT JOIN competition_referees cr ON cr.referee_id = r.id AND cr.competition_id = @competition_id
   LEFT JOIN tournament_referees  tr ON tr.referee_id = r.id AND tr.tournament_id = @tournament_id
+  LEFT JOIN referee_checkins     rc ON rc.referee_id = r.id AND rc.competition_id = @competition_id
   WHERE cr.referee_id IS NOT NULL OR tr.referee_id IS NOT NULL
   GROUP BY r.id
   ORDER BY CASE WHEN COALESCE(MAX(cr.rank_order), MAX(tr.rank_order)) IS NULL THEN 1 ELSE 0 END,
@@ -127,6 +133,27 @@ const CompetitionReferee = {
     });
     run();
     return true;
+  },
+
+  checkIn(competitionId, refereeId) {
+    return stmtCheckIn.run(Number(competitionId), Number(refereeId));
+  },
+
+  checkOut(competitionId, refereeId) {
+    return stmtCheckOut.run(Number(competitionId), Number(refereeId));
+  },
+
+  checkInAll(competitionId) {
+    const list = this.findAll(competitionId);
+    const run = db.transaction(() => {
+      for (const r of list) stmtCheckIn.run(Number(competitionId), r.referee_id);
+    });
+    run();
+    return list.length;
+  },
+
+  checkOutAll(competitionId) {
+    return stmtCheckOutAll.run(Number(competitionId));
   },
 };
 

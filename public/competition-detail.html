@@ -55,6 +55,7 @@
       <span class="badge" :class="'badge-'+(comp?.status||'')" x-text="comp?.status"></span>
       <a href="/tournaments.html" style="font-size:.85rem;color:#888">← Back to events</a>
       <a :href="'/checkin.html?id='+compId" style="font-size:.85rem;color:#1a6bab">✓ Check-in</a>
+      <a :href="'/referee-checkin.html?id='+compId" style="font-size:.85rem;color:#1a6bab">✓ Referee check-in</a>
       <a :href="(comp?.is_team?'/team-results.html':'/results.html')+'?id='+compId" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
     </div>
     <div class="comp-meta">
@@ -548,7 +549,8 @@
       <h2 style="margin-top:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
         <span>Referees</span>
         <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+refereeRoster.length+')'"></span>
-        <button style="margin-left:auto;font-size:.78rem;padding:.25rem .6rem" @click="autoRankReferees()"
+        <a :href="'/referee-checkin.html?id='+compId" style="margin-left:auto;font-size:.85rem;color:#1a6bab">✓ Check-in</a>
+        <button style="font-size:.78rem;padding:.25rem .6rem" @click="autoRankReferees()"
                 :disabled="refereeRoster.length===0" title="Rank by referee level (t.50.3: best referees per weapon)">
           ⚡ Auto-rank by level
         </button>

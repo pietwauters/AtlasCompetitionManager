@@ -37,6 +37,26 @@ router.post('/:refereeId/reorder', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/:refereeId/checkin', (req, res) => {
+  CompetitionReferee.checkIn(req.params.compId, req.params.refereeId);
+  res.json({ ok: true });
+});
+
+router.post('/:refereeId/checkout', (req, res) => {
+  CompetitionReferee.checkOut(req.params.compId, req.params.refereeId);
+  res.json({ ok: true });
+});
+
+router.post('/checkin-all', (req, res) => {
+  const checkedIn = CompetitionReferee.checkInAll(req.params.compId);
+  res.json({ checkedIn });
+});
+
+router.post('/checkout-all', (req, res) => {
+  CompetitionReferee.checkOutAll(req.params.compId);
+  res.json({ ok: true });
+});
+
 router.delete('/:refereeId', (req, res) => {
   const result = CompetitionReferee.remove(req.params.compId, req.params.refereeId);
   if (!result.changes) return res.status(404).json({ error: 'Referee not registered on this competition' });

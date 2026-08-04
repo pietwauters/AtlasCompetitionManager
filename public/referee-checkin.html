@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas — Referee check-in</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme-init.js"></script>
+  <style>
+    .summary {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      background: #fff; border-radius: 8px;
+      padding: .75rem 1.25rem; margin-bottom: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .stat { text-align: center; min-width: 4rem; }
+    .stat-n { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-top: .15rem; }
+    .stat-n.present  { color: #1e8449; }
+    .stat-n.unknown  { color: #aaa; }
+
+    .search-bar { position: relative; margin-bottom: .75rem; }
+    .search-bar input {
+      width: 100%; padding: .6rem 1rem .6rem 2.4rem;
+      border: 1px solid #ddd; border-radius: 8px;
+      font-size: 1rem; background: #fff;
+      box-sizing: border-box;
+    }
+    .search-bar::before {
+      content: '🔍'; position: absolute; left: .75rem; top: 50%;
+      transform: translateY(-50%); font-size: .9rem; pointer-events: none;
+    }
+
+    .ref-list { display: flex; flex-direction: column; gap: .4rem; }
+    .ref-row {
+      display: flex; align-items: center; gap: .75rem;
+      background: #fff; border-radius: 8px;
+      padding: .65rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      border-left: 4px solid #ddd;
+      transition: border-color .15s;
+    }
+    .ref-row.present { border-left-color: #1e8449; background: #f0faf4; }
+
+    .ref-info { flex: 1; min-width: 0; }
+    .ref-name { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ref-meta { font-size: .78rem; color: #888; margin-top: .1rem; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+
+    .action-btns { display: flex; gap: .4rem; flex-shrink: 0; }
+    .btn-present {
+      border: none; border-radius: 6px; font-size: .82rem;
+      font-weight: 600; cursor: pointer; padding: .45rem .8rem;
+      transition: opacity .15s;
+      background: #d4edda; color: #155724;
+    }
+    .btn-present.active { background: #1e8449; color: #fff; }
+    .btn-present:hover  { opacity: .85; }
+
+    .club-header {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: #888; margin: 1rem 0 .35rem;
+      padding-left: .25rem;
+    }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+<header x-data="navApp()" x-init="initNav()">
+  <a href="/index.html"><strong>Atlas</strong></a>
+  <template x-for="comp in activeComps" :key="comp.id">
+    <a :href="phaseLink(comp)" x-text="compLabel(comp)"
+       class="nav-comp-link"></a>
+  </template>
+  <div class="nav-right">
+    <a href="/tournaments.html">Events</a>
+    <a href="/strips.html">Strips</a>
+    <a href="/opp2.html">Schedule</a>
+    <a href="/referee-schedule.html">Referees</a>
+    <a href="/people.html">People</a>
+    <a href="/clubs.html">Clubs</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</header>
+<main class="layout-data">
+
+  <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap">
+    <h2 style="margin:0" x-text="(comp?.name || 'Referee check-in') + ' — Referees'"></h2>
+    <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Competition</a>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="summary">
+    <div class="stat">
+      <div class="stat-n" x-text="total"></div>
+      <div class="stat-label">Total</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n present" x-text="presentCount"></div>
+      <div class="stat-label">Present</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n unknown" x-text="unknownCount"></div>
+      <div class="stat-label">Not yet</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <button @click="markAllPresent()" style="font-size:.82rem;padding:.35rem .8rem">✓ All present</button>
+      <button @click="clearAll()" style="font-size:.82rem;padding:.35rem .8rem;background:#fde8e8;color:#922b21;border-color:#f5c6cb">Clear all</button>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="search" x-model="query" placeholder="Search by name or club…" autofocus>
+  </div>
+
+  <!-- Filter tabs -->
+  <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
+    <button :class="filter==='all'?'primary':''"     @click="filter='all'"     style="font-size:.82rem;padding:.3rem .7rem">All</button>
+    <button :class="filter==='unknown'?'primary':''" @click="filter='unknown'" style="font-size:.82rem;padding:.3rem .7rem">Not yet</button>
+    <button :class="filter==='present'?'primary':''" @click="filter='present'" style="font-size:.82rem;padding:.3rem .7rem">Present</button>
+  </div>
+
+  <!-- Referee list (grouped by club) -->
+  <div class="ref-list">
+    <template x-for="group in filteredGroups" :key="group.club">
+      <div>
+        <div class="club-header" x-text="group.club + ' (' + group.items.length + ')'"></div>
+        <template x-for="r in group.items" :key="r.referee_id">
+          <div class="ref-row" :class="r.checked_in===1?'present':''">
+            <div class="ref-info">
+              <div class="ref-name" x-text="r.last_name + ', ' + r.first_name"></div>
+              <div class="ref-meta">
+                <span x-text="[r.level, r.nationality].filter(Boolean).join(' · ')"></span>
+                <span class="badge badge-pending" x-show="r.via==='tournament'"
+                      title="On the roster via the tournament — remove from the tournament page">via tournament</span>
+              </div>
+            </div>
+            <div class="action-btns">
+              <button class="btn-present" :class="r.checked_in===1?'active':''"
+                @click="togglePresent(r)">Present</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <div x-show="filteredGroups.length===0" style="text-align:center;color:#aaa;padding:2rem">
+      No referees match.
+    </div>
+  </div>
+
+</main>
+<script src="/js/nav.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+function app() {
+  return {
+    compId: new URLSearchParams(location.search).get('id'),
+    comp: null,
+    referees: [],
+    query: '',
+    filter: 'all',
+
+    async init() {
+      if (!this.compId) return;
+      const [refList, compList] = await Promise.all([
+        fetch(`/api/competitions/${this.compId}/referees`).then(r => r.json()).catch(() => []),
+        fetch(`/api/competitions`).then(r => r.json()).catch(() => []),
+      ]);
+      this.referees = refList;
+      this.comp = compList.find(c => String(c.id) === String(this.compId)) || null;
+    },
+
+    get total()        { return this.referees.length; },
+    get presentCount()  { return this.referees.filter(r => r.checked_in === 1).length; },
+    get unknownCount()  { return this.referees.filter(r => r.checked_in !== 1).length; },
+
+    get filtered() {
+      let list = this.referees;
+      if (this.filter === 'unknown') list = list.filter(r => r.checked_in !== 1);
+      if (this.filter === 'present') list = list.filter(r => r.checked_in === 1);
+      if (this.query.trim()) {
+        const q = this.query.trim().toLowerCase();
+        list = list.filter(r =>
+          (r.first_name + ' ' + r.last_name).toLowerCase().includes(q) ||
+          (r.last_name + ' ' + r.first_name).toLowerCase().includes(q) ||
+          (r.club_name || '').toLowerCase().includes(q)
+        );
+      }
+      return list;
+    },
+
+    get filteredGroups() {
+      const groups = new Map();
+      for (const r of this.filtered) {
+        const club = r.club_name || '— No club';
+        if (!groups.has(club)) groups.set(club, []);
+        groups.get(club).push(r);
+      }
+      return [...groups.entries()].map(([club, items]) => ({ club, items }))
+        .sort((a, b) => a.club.localeCompare(b.club));
+    },
+
+    async togglePresent(r) {
+      const action = r.checked_in === 1 ? 'checkout' : 'checkin';
+      const res = await fetch(`/api/competitions/${this.compId}/referees/${r.referee_id}/${action}`, { method: 'POST' });
+      if (!res.ok) return;
+      r.checked_in = action === 'checkin' ? 1 : 0;
+    },
+
+    async markAllPresent() {
+      const res = await fetch(`/api/competitions/${this.compId}/referees/checkin-all`, { method: 'POST' });
+      if (!res.ok) return;
+      for (const r of this.referees) r.checked_in = 1;
+    },
+
+    async clearAll() {
+      if (!confirm('Reset all referee check-in statuses to "not yet"?')) return;
+      const res = await fetch(`/api/competitions/${this.compId}/referees/checkout-all`, { method: 'POST' });
+      if (!res.ok) return;
+      for (const r of this.referees) r.checked_in = 0;
+    },
+  };
+}
+</script>
+</body>
+</html>
