@@ -28,8 +28,18 @@ const stmtPendingPool    = db.prepare(`
     AND (po.strip_count <= 1 OR b.strip_id = @strip_id)
 `);
 const stmtPendingTeam    = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=?  AND status!='finished'");
+const stmtConfirmedPool  = db.prepare(`
+  SELECT COUNT(*) AS n FROM bouts b
+  JOIN pools po ON po.id = b.pool_id
+  WHERE b.pool_id = @pool_id AND b.status = 'finished'
+    AND (po.strip_count <= 1 OR b.strip_id = @strip_id)
+`);
+const stmtConfirmedTeam  = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=? AND status='finished'");
 const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
 const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
+const stmtPrevSlotForStrip = db.prepare(
+  'SELECT * FROM pipeline_slots WHERE strip_id = ? AND slot_order < ? ORDER BY slot_order DESC LIMIT 1'
+);
 const stmtRefereeName    = db.prepare(`
   SELECT p.first_name AS ref_first, p.last_name AS ref_last, p.nationality AS ref_nation
   FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?
@@ -114,6 +124,15 @@ const stmtDePendingCount = db.prepare(`
   WHERE b.phase_id=? AND b.de_round=?
     AND o.round_index BETWEEN ? AND ?
     AND b.status != 'finished'
+    AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
+`);
+const stmtDeConfirmedCount = db.prepare(`
+  WITH ordered AS (${DE_BOUT_ORDER})
+  SELECT COUNT(*) AS n FROM bouts b
+  JOIN ordered o ON o.id = b.id
+  WHERE b.phase_id=? AND b.de_round=?
+    AND o.round_index BETWEEN ? AND ?
+    AND b.status = 'finished'
     AND b.left_id IS NOT NULL AND b.right_id IS NOT NULL
 `);
 const stmtDeNext = db.prepare(`
@@ -259,11 +278,15 @@ const PipelineNav = {
     }
   },
 
+  markPending(slotId) {
+    stmtRecoverSlot.run(slotId);
+  },
+
   recoverStaleSlot(stripId) {
     const slots = stmtStaleDoneSlots.all(stripId);
     for (const slot of slots) {
       if (PipelineNav.pendingBoutCount(slot) > 0) {
-        stmtRecoverSlot.run(slot.id);
+        PipelineNav.markPending(slot.id);
         return PipelineSlots.findById(slot.id);
       }
     }
@@ -291,6 +314,39 @@ const PipelineNav = {
     const { deRound, lo, hi, bracket } = deSlotParams(slot);
     if (!deRound) return 0;
     return stmtDePendingCount.get(bracket, slot.phase_id, deRound, lo, hi).n;
+  },
+
+  // Mirrors pendingBoutCount but counts confirmed (finished) bouts instead —
+  // used to guard PREV_SLOT (Section 17): stepping back to a previous slot
+  // is only safe while the current one has zero confirmed results, otherwise
+  // it would silently undo real results.
+  confirmedBoutCount(slot) {
+    if (slot.type === 'pool') {
+      return stmtConfirmedPool.get({ pool_id: slot.pool_id, strip_id: slot.strip_id }).n;
+    }
+    if (slot.type === 'team_match') {
+      if (!slot.team_match_id) return 0;
+      return stmtConfirmedTeam.get(slot.team_match_id).n;
+    }
+    if (slot.bracket === 'placement') {
+      const ids = DeLayout.placementGroupBoutIds(slot.phase_id, slot.tableau, Number(slot.partition));
+      if (!ids.length) return 0;
+      // dynamic-sql-ok: IN(...) placeholder count varies with ids.length
+      return db.prepare(`
+        SELECT COUNT(*) AS n FROM bouts
+        WHERE id IN (${ids.map(() => '?').join(',')})
+          AND status = 'finished' AND left_id IS NOT NULL AND right_id IS NOT NULL
+      `).get(...ids).n;
+    }
+    const { deRound, lo, hi, bracket } = deSlotParams(slot);
+    if (!deRound) return 0;
+    return stmtDeConfirmedCount.get(bracket, slot.phase_id, deRound, lo, hi).n;
+  },
+
+  // The slot immediately before this one in slot_order on the same strip —
+  // the target of a PREV_SLOT request. Null if this is the first slot.
+  prevSlotFor(slot) {
+    return stmtPrevSlotForStrip.get(slot.strip_id, slot.slot_order) || null;
   },
 
   nextBout(slot, afterBoutId = null) {

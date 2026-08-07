@@ -127,12 +127,24 @@ router.post('/pipeline/strip/:stripId/reorder', (req, res) => {
   res.json({ ok: true });
 });
 
-// Move a slot to a different strip (appended at end of new strip's pipeline)
+// Move a slot to a different strip (appended at end of new strip's pipeline).
+// docs/level2.md §17 "Piste transfer" — if the slot is active, the DB move
+// alone isn't enough: the old piste's OPP2 assignment must be cleared and the
+// new piste seeded with the current record/fencers/match/score/clock/uw2f,
+// or a connected apparatus/scoresheet on either piste is left showing stale
+// or missing state.
 router.post('/pipeline/slots/:id/move-strip', (req, res) => {
   const { strip_id } = req.body;
   if (!strip_id) return res.status(400).json({ error: 'strip_id required' });
+  const before = Pipeline.findById(req.params.id);
+  if (!before) return res.status(404).json({ error: 'Slot not found' });
+  const wasActive  = before.status === 'active';
+  const oldStripId = before.strip_id;
+
   const slot = Pipeline.moveToStrip(req.params.id, strip_id);
   if (!slot) return res.status(404).json({ error: 'Slot not found' });
+
+  if (wasActive && oldStripId !== slot.strip_id) OPP2.transferActiveSlot(oldStripId, slot);
   res.json(slot);
 });
 
