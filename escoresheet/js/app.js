@@ -366,6 +366,17 @@ function publishCardReason(side, card, reason, official) {
   mqttClient.publish(`openpiste/${currentPiste}/scoresheet/event`, JSON.stringify(payload), { qos: 1 });
 }
 
+// docs/level2.md §17/§24 — slot-level navigation, distinct from the apparatus's
+// own bout-level NEXT/PREV. The CMS silently ignores these when the guard
+// conditions aren't met (current slot still has unconfirmed bouts, or already
+// has confirmed results) — no error surfaces here, the retained software/record
+// simply won't change if the request was rejected.
+function publishSlotControl(command) {
+  if (!mqttClient || !currentPiste) return;
+  const payload = { protocol: 'OPP2', version: '1.0', seq: ++pubSeq, ts: Date.now(), command };
+  mqttClient.publish(`openpiste/${currentPiste}/scoresheet/control`, JSON.stringify(payload), { qos: 1 });
+}
+
 function publishAnnotationRecord() {
   if (!mqttClient || !currentPiste || !slotId) return;
   const payload = {
@@ -695,6 +706,9 @@ function initLiveUI() {
   });
 
   document.getElementById('change-piste-button').addEventListener('click', stopWatching);
+
+  document.getElementById('next-slot-button').addEventListener('click', () => publishSlotControl('NEXT_SLOT'));
+  document.getElementById('prev-slot-button').addEventListener('click', () => publishSlotControl('PREV_SLOT'));
 
   document.getElementById('bout-list').addEventListener('click', (e) => {
     const header = e.target.closest('.bout-header');
