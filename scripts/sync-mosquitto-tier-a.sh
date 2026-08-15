@@ -51,6 +51,15 @@ PRUNED=$(node -e "
 ")
 echo "  Pruned $PRUNED entr$([ "$PRUNED" = 1 ] && echo y || echo ies) no longer needed on the CRL."
 
+echo "Refreshing CRL Last/Next Update (Atlas-DB only, no sudo)..."
+node -e "require('$DIR/services/provisioning').refreshCrl();"
+# Unconditional, even if nothing was pruned above — the CRL's nextUpdate window
+# only resets on regeneration. Running this script periodically is what's
+# supposed to keep the deployed CRL from ever going stale; if regeneration only
+# happened when there was something new to revoke, a quiet period would let the
+# nextUpdate clock run out anyway. See CRL_VALIDITY_DAYS's comment in
+# services/provisioning.js.
+
 echo "Pushing CRL to $MOSQ_CERTS (needs sudo)..."
 if [[ -f "$TLS_DIR/ca.crl" ]]; then
   sudo install -o root -g mosquitto -m 640 "$TLS_DIR/ca.crl" "$MOSQ_CERTS/ca.crl"
@@ -68,7 +77,7 @@ certificate = $TLS_DIR/ca.crt
 private_key = $TLS_DIR/ca.key
 crlnumber = /dev/stdin
 default_md = sha256
-default_crl_days = 30
+default_crl_days = 180
 EOF
   echo "1000" | openssl ca -config "$TMP_CRL_CONF" -gencrl -out "$TMP_CRL"
   sudo install -o root -g mosquitto -m 640 "$TMP_CRL" "$MOSQ_CERTS/ca.crl"

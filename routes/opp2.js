@@ -1,6 +1,7 @@
 'use strict';
 const express                = require('express');
 const OPP2                   = require('../lib/opp2Client');
+const Provisioning           = require('../services/provisioning');
 const Settings               = require('../services/settings');
 const Pipeline               = require('../services/pipeline');
 const CardReason             = require('../services/cardReasons');
@@ -34,7 +35,7 @@ router.put('/settings', adminOnly, (req, res) => {
 // ── Connection control ───────────────────────────────────────────────────────
 
 router.get('/status', (req, res) => {
-  res.json(OPP2.status());
+  res.json({ ...OPP2.status(), crl: Provisioning.getCrlDeploymentStatus() });
 });
 
 router.get('/piste-events', (req, res) => {

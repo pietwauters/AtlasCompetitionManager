@@ -8,6 +8,20 @@ const db     = require('../db');
 const TICKET_TTL_MINUTES = 5;
 const CERT_DAYS = 400; // deployment-scale per docs/level2.md §30.5, not the CA's own multi-year life
 
+// The CRL's own nextUpdate window. A relying party (Mosquitto/OpenSSL) refuses to
+// trust a CRL once this window has passed, regardless of whether anything on it
+// changed — and this CRL is pushed to the broker by a manual/cron script, not
+// fetched live, so a missed sync doesn't just risk a late-propagating revocation,
+// it eventually rejects every Tier A certificate at once (confirmed the hard way,
+// 2026-08-15: a CRL last synced 2026-07-14/15 went stale ~30 days later and broke
+// mTLS broker-wide, including the CMS's own always-valid certificate). 180 days
+// gives a wide safety margin for a manually-run sync; actual revocation
+// propagation speed is governed entirely by how often sync-mosquitto-tier-a.sh
+// runs, not by this window — see docs/implementation-notes/mosquitto-security.md.
+const CRL_VALIDITY_DAYS = 180;
+// How close to staleness before the CMS surfaces a warning (see getCrlDeploymentStatus).
+const CRL_WARNING_DAYS = 14;
+
 const TLS_DIR = path.join(__dirname, '..', 'data', 'tls');
 const CA_DB_DIR = path.join(TLS_DIR, 'ca-db');
 const INDEX_FILE = path.join(CA_DB_DIR, 'index.txt');
@@ -21,6 +35,14 @@ const CA_KEY = path.join(TLS_DIR, 'ca.key');
 
 const ROLES = ['apparatus', 'scoresheet', 'remote', 'var'];
 const DEVICE_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+// Where scripts/sync-mosquitto-tier-a.sh installs the CRL. Atlas's own process
+// (running unprivileged) can never read this file's contents (root:mosquitto,
+// 640) — but fs.stat only needs execute permission on the parent directory, which
+// is world-readable, so its mtime is visible with no elevated access at all. That
+// mtime is a faithful proxy for the CRL's own "Last Update" field, since the sync
+// script always installs a freshly-copied file (never edits in place).
+const DEPLOYED_CRL_PATH = '/etc/mosquitto/certs/ca.crl';
 
 const stmtInsertTicket = db.prepare(`
   INSERT INTO tier_a_tickets (code, role, device_label, created_by, expires_at)
@@ -85,11 +107,12 @@ function ensureCaDb() {
     fs.writeFileSync(INDEX_ATTR_FILE, 'unique_subject = no\n');
   }
 
-  if (fs.existsSync(INDEX_FILE)) return;
+  // Config is pure and stateless (unlike index.txt/serial/crlnumber, which track
+  // real issuance history) — always rewritten so a constant change like
+  // CRL_VALIDITY_DAYS actually takes effect on an already-provisioned deployment,
+  // rather than silently freezing at whatever value was in place the first time
+  // ensureCaDb() ever ran on this machine.
   fs.mkdirSync(CA_DB_DIR, { recursive: true });
-  fs.writeFileSync(INDEX_FILE, '');
-  fs.writeFileSync(SERIAL_FILE, '1000\n');
-  fs.writeFileSync(CRLNUMBER_FILE, '1000\n');
   fs.writeFileSync(CONF_FILE, `[ca]
 default_ca = tier_a_ca
 
@@ -100,12 +123,17 @@ certificate = ${CA_CERT}
 private_key = ${CA_KEY}
 crlnumber = ${CRLNUMBER_FILE}
 default_md = sha256
-default_crl_days = 30
+default_crl_days = ${CRL_VALIDITY_DAYS}
 policy = policy_any
 
 [policy_any]
 commonName = supplied
 `);
+
+  if (fs.existsSync(INDEX_FILE)) return;
+  fs.writeFileSync(INDEX_FILE, '');
+  fs.writeFileSync(SERIAL_FILE, '1000\n');
+  fs.writeFileSync(CRLNUMBER_FILE, '1000\n');
 }
 
 function nextSerialHex() {
@@ -355,6 +383,42 @@ const Provisioning = {
     deleteMany(prunedSerials);
 
     return { pruned: prunedSerials.length };
+  },
+
+  // Unconditionally regenerates data/tls/ca.crl with a fresh Last/Next Update,
+  // even if nothing was revoked or pruned since the last run. Deliberately
+  // separate from revokeCertificate/pruneExpiredRevocations (which only
+  // regenerate when their own state actually changed) — scripts/sync-mosquitto-
+  // tier-a.sh needs to be able to push a freshly-dated CRL on every routine run,
+  // since "nothing changed" would otherwise mean the deployed CRL's nextUpdate
+  // clock never gets reset and it goes stale on schedule regardless of how
+  // diligently the sync script is run.
+  refreshCrl() {
+    ensureCaDb();
+    execFileSync('openssl', ['ca', '-config', CONF_FILE, '-gencrl', '-out', CRL_FILE], { stdio: 'pipe' });
+  },
+
+  // No-sudo staleness check for the CMS's own warning banner — see
+  // DEPLOYED_CRL_PATH. Returns null if the broker/deployed CRL can't be statted
+  // at all (e.g. Mosquitto not installed on this machine), which the caller
+  // should treat as "unknown," not "stale."
+  getCrlDeploymentStatus() {
+    let stat;
+    try {
+      stat = fs.statSync(DEPLOYED_CRL_PATH);
+    } catch {
+      return null;
+    }
+    const lastSyncedAt = stat.mtime;
+    const staleAt = new Date(lastSyncedAt.getTime() + CRL_VALIDITY_DAYS * 86400000);
+    const daysRemaining = Math.floor((staleAt.getTime() - Date.now()) / 86400000);
+    return {
+      lastSyncedAt: lastSyncedAt.toISOString(),
+      staleAt: staleAt.toISOString(),
+      daysRemaining,
+      isStale: daysRemaining <= 0,
+      isWarning: daysRemaining <= CRL_WARNING_DAYS,
+    };
   },
 };
 

@@ -58,6 +58,22 @@
       ⚠ <code x-text="brokerUrl"></code> means "this device" to a tablet, not this server. Scoresheets on other
       devices will connect via <code x-text="effectiveBrokerUrl"></code> instead.
     </div>
+    <div x-show="status.crl && status.crl.isWarning"
+         :style="status.crl && status.crl.isStale
+                   ? 'font-size:.8rem;color:#922b21;background:#fde8e8;border:1px solid #f5c2c7;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'
+                   : 'font-size:.8rem;color:#856404;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'">
+      <template x-if="status.crl && status.crl.isStale">
+        <span>⚠ The device-certificate revocation list (CRL) on the broker has gone stale — every
+          certificate-based device (Tier A: scoring apparatus, the CMS itself) may now be refused,
+          not just revoked ones. Run <code>./scripts/sync-mosquitto-tier-a.sh</code> now.</span>
+      </template>
+      <template x-if="status.crl && !status.crl.isStale">
+        <span>⚠ The broker's device-certificate revocation list (CRL) becomes stale in
+          <span x-text="status.crl.daysRemaining"></span> day<span x-text="status.crl.daysRemaining===1?'':'s'"></span> —
+          after that, certificate-based devices (Tier A) may all be refused at once. Run
+          <code>./scripts/sync-mosquitto-tier-a.sh</code> to push a fresh one.</span>
+      </template>
+    </div>
   </details>
 
   <details class="card" open data-key="pairing">
