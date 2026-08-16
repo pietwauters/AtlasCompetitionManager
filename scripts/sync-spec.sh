@@ -33,6 +33,10 @@ if [[ "${1:-}" == "--update" ]]; then
   cp "$TMP" "$LOCAL"
   echo "✓ Local docs/level2.md updated to match official spec."
   echo "  Review the changes with: git diff docs/level2.md"
+  echo ""
+  echo "Regenerating docs/level2.pdf..."
+  node scripts/md-to-pdf.js docs/level2.md
+  echo "  Review with: git diff docs/level2.pdf (or just open it)"
 else
   ONLY_REMOTE=$(diff "$TMP" "$LOCAL" | grep -c '^<' || true)
   ONLY_LOCAL=$(diff  "$TMP" "$LOCAL" | grep -c '^>' || true)

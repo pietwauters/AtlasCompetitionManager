@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "screenshots": "node scripts/screenshots.js"
+    "screenshots": "node scripts/screenshots.js",
+    "md-to-pdf": "node scripts/md-to-pdf.js"
   },
   "keywords": [
     "fencing",
