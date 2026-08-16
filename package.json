@@ -25,6 +25,7 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "marked": "^18.0.9",
     "puppeteer": "^24.43.1"
   }
 }
