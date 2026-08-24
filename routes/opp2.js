@@ -42,6 +42,18 @@ router.get('/piste-events', (req, res) => {
   SSE.subscribe('__strips__', res);
 });
 
+// "Refresh CRL now" — admin.html's button next to the CRL-staleness warning.
+// See services/provisioning.js's pushCrlToBroker() for what this actually runs
+// and why it needs a scoped sudoers grant to work outside a manual terminal.
+router.post('/crl/refresh', adminOnly, (req, res) => {
+  try {
+    const result = Provisioning.pushCrlToBroker();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ error: (e.stderr && e.stderr.toString().trim()) || e.message });
+  }
+});
+
 router.post('/connect', adminOnly, async (req, res) => {
   const url = req.body?.broker_url || Settings.get('opp2_broker_url');
   try {

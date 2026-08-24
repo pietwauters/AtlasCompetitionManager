@@ -44,6 +44,13 @@ const DEVICE_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 // script always installs a freshly-copied file (never edits in place).
 const DEPLOYED_CRL_PATH = '/etc/mosquitto/certs/ca.crl';
 
+// The privileged tail of Tier A CRL sync (push, listener-conf rewrite, broker
+// restart) — split into its own script (2026-08-24) precisely so it alone can be
+// granted passwordless sudo, without also elevating pruneExpiredRevocations/
+// refreshCrl below, which must keep running as the same unprivileged user that
+// owns data/tls/. See pushCrlToBroker() and scripts/push-tier-a-crl.sh's header.
+const PUSH_CRL_SCRIPT = path.join(__dirname, '..', 'scripts', 'push-tier-a-crl.sh');
+
 const stmtInsertTicket = db.prepare(`
   INSERT INTO tier_a_tickets (code, role, device_label, created_by, expires_at)
   VALUES (@code, @role, @deviceLabel, @createdBy, datetime('now', @ttl))
@@ -396,6 +403,22 @@ const Provisioning = {
   refreshCrl() {
     ensureCaDb();
     execFileSync('openssl', ['ca', '-config', CONF_FILE, '-gencrl', '-out', CRL_FILE], { stdio: 'pipe' });
+  },
+
+  // The admin.html "Refresh CRL now" button's server-side entry point — the
+  // in-process equivalent of running scripts/sync-mosquitto-tier-a.sh by hand.
+  // Deliberately calls pruneExpiredRevocations/refreshCrl directly (unprivileged,
+  // correct data/tls/ ownership) rather than shelling out to the full CLI script,
+  // then execs *only* the privileged tail via sudo. Requires a one-time sudoers
+  // grant for PUSH_CRL_SCRIPT specifically (see docs/e-scoresheet-standalone-design.md
+  // §3.3.1's "Key files" note / the deploy instructions this ships with) — without
+  // it this throws with sudo's own "a password is required" on stderr, which the
+  // caller should surface as-is rather than a generic 500.
+  pushCrlToBroker() {
+    const { pruned } = this.pruneExpiredRevocations();
+    this.refreshCrl();
+    execFileSync('sudo', [PUSH_CRL_SCRIPT], { stdio: 'pipe' });
+    return { pruned, ranAt: new Date().toISOString() };
   },
 
   // No-sudo staleness check for the CMS's own warning banner — see

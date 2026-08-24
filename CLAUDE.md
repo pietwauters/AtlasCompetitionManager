@@ -461,6 +461,26 @@ limits) another device on the network answering for the broker's mDNS name; only
 catches the passive/lingering case (squatting, an Avahi auto-rename), not an attacker
 active at the exact moment of a real connection attempt.
 
+### Admin.html "Refresh CRL now" button — built 2026-08-24, needs a one-time manual step
+`scripts/push-tier-a-crl.sh` (new) holds just the privileged tail of Tier A CRL sync
+(push to `/etc/mosquitto/certs`, rewrite listener 8883, restart mosquitto) —
+`scripts/sync-mosquitto-tier-a.sh` now delegates to it for that part, unchanged for
+manual/CLI use. Split out specifically so it alone can be granted passwordless sudo:
+running the *whole* old script under `sudo` would also elevate its unprivileged
+`Provisioning.pruneExpiredRevocations`/`refreshCrl` step, leaving `data/tls/ca.crl`
+root-owned and breaking every future non-sudo write by the Atlas process itself
+(confirmed for real in this repo — `data/tls/` is owned by the same user `install.sh`
+runs Atlas as). `services/provisioning.js`'s `pushCrlToBroker()` calls
+prune/refresh in-process (correct ownership), then execs only the new script via
+`sudo`. `POST /api/opp2/crl/refresh` (adminOnly) + a button on admin.html's MQTT
+Broker card, next to the CRL-staleness warning. **Requires a one-time sudoers grant**
+(`<app-user> ALL=(root) NOPASSWD: <path-to>/scripts/push-tier-a-crl.sh`) that the
+operator installs themselves — without it the button surfaces sudo's own "a password
+is required" rather than doing anything. Not yet tested end to end (no passwordless
+sudo in the dev environment this was built in) — the prune/refresh half and the
+clean-ownership property were verified directly; the actual privileged push/restart
+was not.
+
 ### Kiosk waiting-room displays — complete, 2026-07-27
 `public/kiosk-fencers.html` (per-competition fencer schedule) and
 `public/kiosk-officials.html` (cross-competition officiating schedule), full-screen
