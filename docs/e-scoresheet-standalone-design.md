@@ -157,6 +157,48 @@ this step only covers serving the PWA's own app shell over a secure context, whi
 what a real device needs before its service worker will even register. The PWA has no
 OPP2/MQTT client code at all yet, so there's nothing to point at a broker for.
 
+### 3.3.1 mDNS name-squatting/spoofing threat, and its mitigation — 2026-08-24
+
+Raised directly: since `openpiste.local` is first-come-first-served, unauthenticated
+multicast UDP, what stops another device on the venue network from claiming the same
+name? Two distinct cases:
+
+- **Passive squatting/collision.** RFC 6762 conflict resolution means Avahi
+  auto-*renames* the loser (`openpiste-2.local`, ...) rather than erroring loudly —
+  bad for a zero-touch deployment, since the real box could silently end up under a
+  name nobody was told to look for.
+- **Active spoofing.** Anyone on the same broadcast domain can answer `who has
+  openpiste.local?` with their own IP, at any time, not just at boot — mDNS has no
+  source authentication at all.
+
+**Why this mostly degrades to denial-of-service, not silent compromise, for anything
+already using TLS.** DNS/mDNS here is deliberately rendezvous only (§3.3 above) — the
+chain of trust is the CA-signed certificate, not the name resolution. A rogue box
+answering for `openpiste.local` can redirect a connection but can't produce a cert
+Atlas's clients (or Atlas's own Tier A broker connection) will accept, so the attack
+degrades to a connection failure/warning, not a silent MITM — **except** at the CA's
+own trust-bootstrap moment (`GET /ca.crt` over plain HTTP, §4.3), which is
+unavoidably TOFU and has no defense here yet.
+
+**Implemented mitigation (broker side only — not the CMS's own HTTPS identity):**
+`lib/brokerIdentityCheck.js`. Every 2 minutes, checks whether the broker's configured
+hostname still resolves to the same IP Atlas's own OPP2 client is actually connected
+to (`lib/opp2Transport.js`'s `getConnectedRemoteAddress()`, read off the live
+`net`/`tls` socket — for Tier A this is already cert-validated, so it's ground truth,
+not another DNS lookup trusting itself). Broker and CMS are allowed to be different
+devices, so the check deliberately does not compare against this machine's own network
+interfaces. Surfaced in `/api/opp2/status` → `brokerIdentity` and rendered on
+`admin.html`'s MQTT Broker card (always-on "connected to the broker at {ip}" line,
+escalating to a named-IPs warning on mismatch).
+
+**Honest limits, not oversold:** this only catches the *passive* case — squatting, or
+an Avahi auto-rename sitting there until the next check. It does not catch an attacker
+active at the exact moment of a real connection attempt (nothing to compare against
+yet), and it doesn't cover the CA-bootstrap TOFU gap above at all — that's still open
+if it's ever prioritized (candidate fixes discussed: an out-of-band fingerprint,
+rejected here because the Pi is normally headless with no independent display to show
+one on; a QR-embedded cert hash checked client-side; venue network segmentation).
+
 ---
 
 ## 4. Trust bootstrap and pairing

@@ -445,6 +445,22 @@ competition run); officiating roster + decision attribution; referee/official
 double-booking detection with schedule-cascade resolution (2026-07-27). See "Key files"
 below for the OPP2-specific file list.
 
+### Broker mDNS identity drift detection — complete, 2026-08-24
+`lib/brokerIdentityCheck.js` — periodic (every 2 min) check that the broker's
+hostname (`openpiste.local` by default, but whatever `opp2_broker_url` actually uses)
+still resolves to the same IP Atlas's own OPP2 client is actually connected to
+(`lib/opp2Transport.js`'s `getConnectedRemoteAddress()`, read straight off the
+underlying `net`/`tls` socket — for a Tier A mTLS connection this is already
+cert-validated, so it's ground truth). Broker and CMS can be different devices, so
+this deliberately does **not** compare against this machine's own interfaces.
+Surfaced in `/api/opp2/status` → `brokerIdentity` and rendered on `admin.html`'s MQTT
+Broker card: an always-visible "connected to the broker at {ip}" line, escalating to
+a red warning naming both IPs on mismatch. Mitigates (doesn't eliminate — see
+`docs/e-scoresheet-standalone-design.md` §3.3.1 for the full threat model and honest
+limits) another device on the network answering for the broker's mDNS name; only
+catches the passive/lingering case (squatting, an Avahi auto-rename), not an attacker
+active at the exact moment of a real connection attempt.
+
 ### Kiosk waiting-room displays — complete, 2026-07-27
 `public/kiosk-fencers.html` (per-competition fencer schedule) and
 `public/kiosk-officials.html` (cross-competition officiating schedule), full-screen

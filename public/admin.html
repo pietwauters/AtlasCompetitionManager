@@ -53,6 +53,19 @@
               style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
       <button @click="saveSettings()" style="background:#f0f2f5">Save</button>
     </div>
+    <div x-show="status.connected && status.brokerIdentity && status.brokerIdentity.connectedIp"
+         style="font-size:.8rem;color:#555;margin-top:.5rem">
+      Connected to the broker at <code x-text="status.brokerIdentity.connectedIp"></code>.
+    </div>
+    <div x-show="status.brokerIdentity && status.brokerIdentity.mismatch"
+         style="font-size:.8rem;color:#922b21;background:#fde8e8;border:1px solid #f5c2c7;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
+      ⚠ <code x-text="status.brokerIdentity && status.brokerIdentity.hostname"></code> currently resolves to
+      <code x-text="status.brokerIdentity && status.brokerIdentity.resolvedIp"></code>, but this server is
+      actually connected to the broker at <code x-text="status.brokerIdentity && status.brokerIdentity.connectedIp"></code>.
+      Another device on this network may be answering for that name — if
+      <code x-text="status.brokerIdentity && status.brokerIdentity.resolvedIp"></code> isn't a broker you
+      recognize, treat this network as untrusted until this is resolved.
+    </div>
     <div x-show="effectiveBrokerUrl && effectiveBrokerUrl !== brokerUrl"
          style="font-size:.8rem;color:#856404;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
       ⚠ <code x-text="brokerUrl"></code> means "this device" to a tablet, not this server. Scoresheets on other
