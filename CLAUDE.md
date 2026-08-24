@@ -394,6 +394,14 @@ local NTP server, none of which any script had ever actually set up before (the
 reference deployment's broker had always been configured by hand). Verified against a
 real disposable Mosquitto instance.
 
+### Cross-platform deployment & zero-config Pi onboarding — discussion, started 2026-07-16, resumed 2026-08-23
+`docs/cross-platform-deployment-discussion.md` — non-normative brainstorm, nothing
+implemented. Covers macOS/Windows native support (app layer is portable, deployment
+scripts aren't; mDNS on Windows is the real blocker, not just porting effort), why
+Docker-on-desktop doesn't actually solve that blocker, a pre-built Pi image as the
+low-risk packaging option, and a zero-Linux-knowledge WiFi setup flow (ethernet-first
+via the browser, using the same sudo-script pattern as the CRL/hostname scripts).
+
 ### Competition formats (complete)
 `formats/*.json` shape files + `formats/catalog.json` (named/taggable aliases, 22+
 entries) define multi-phase flows with cohorts and exemptions. Covers FIE GP/Worlds/
