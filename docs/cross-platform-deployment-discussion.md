@@ -73,6 +73,81 @@ Two related questions, same thread:
 - mDNS still works natively via avahi on the Pi itself. Windows *clients* still need
   Bonjour as in §2 — this solves server-side packaging, not Windows-side resolution.
 
+### 4.1 Sudoers grants for privileged admin.html buttons — bake at image-build time
+
+Raised 2026-08-24 while wiring up the first real example: admin.html's "Refresh CRL
+now" button (`scripts/push-tier-a-crl.sh`) needs a passwordless-sudo grant for one
+specific script before it can do anything beyond surfacing "a password is required."
+On a hand-installed box, that's a one-time `sudo visudo -f /etc/sudoers.d/...` the
+operator runs themselves. That doesn't fit the zero-Linux-knowledge image at all — so
+how does it work there?
+
+- **`visudo` never runs on the deployed device.** A pre-built image is assembled once
+  (e.g. via `pi-gen`, or chrooting into a base Raspberry Pi OS image) under the image
+  *builder's* root access, offline, non-interactively. Writing
+  `/etc/sudoers.d/atlas-tier-a-crl` with the right content, `chmod 440`, and
+  validating with `visudo -c` (works non-interactively too) is just another file the
+  build script drops in — no different from anything else `install.sh` sets up
+  today. The organiser flashes the image, boots it, and the grant is already there;
+  they never see a terminal.
+- **Forces a fixed user/path instead of `install.sh`'s dynamic one.** Today's grant is
+  hardcoded to whatever `install.sh`'s `APP_USER=${SUDO_USER:-$USER}` resolved to at
+  install time — there's no such interactive moment for a baked image to capture. An
+  image needs a **fixed, known user and install path** (e.g. a dedicated `atlas`
+  account, `/opt/atlas`) decided once at image-build time, not derived per-deployment.
+  Real divergence between the two deployment paths this project now has, not just a
+  detail.
+- **Should be batched, not grown one grant at a time.** This is the natural point to
+  bake in sudoers grants for every privileged script from §7's inventory (hostname,
+  broker provisioning, ACL sync, this CRL push, and whatever ships next) in one pass,
+  rather than remembering to add a line to the image spec every time a new admin.html
+  button ships a new privileged script. Each grant stays scoped to one specific
+  script — same principle as today, just applied at build time instead of by hand.
+- **Real tradeoff, not free.** Baking a passwordless-root-for-one-script grant into a
+  *mass-distributed* image means anyone with local/SSH access to any Pi flashed from
+  it has that same path — still bounded to those specific scripts, never general
+  root, but a bigger blast radius than one hand-typed line on a box built and kept by
+  one person. Worth being honest about if this ever ships for real, not a blocker.
+
+### 4.2 Forcing a real OS password on first use — piggyback on the existing admin-PIN flow
+
+Raised 2026-08-24, directly off §4.1: if the image ships passwordless (or with a
+publicly documented default), how does it stop being that way without a Linux-savvy
+operator doing it by hand?
+
+- **Real precedent, not a new idea.** Raspberry Pi OS itself has done exactly this
+  since 2022 (in response to a CVE about the universal `pi:raspberry` default): a
+  fresh image either needs a password pre-set via Raspberry Pi Imager's
+  customization step, or refuses further use until `piwiz`/`firstrun.sh` forces a
+  real one on first boot. A browser-driven equivalent for the fully-headless case is
+  the same idea, not new territory.
+- **Mechanism**, same shape as everything else in this doc: an OS password change is
+  one root-only line — `echo "user:newpass" | sudo chpasswd`. A small dedicated
+  script, a scoped `sudoers NOPASSWD` grant, baked into the image alongside §4.1's
+  batch rather than invented separately.
+- **The elegant part:** Atlas already has a one-time-PIN-forced-change-on-first-login
+  flow for its own admin account (see "Security" in CLAUDE.md). Rather than a second,
+  separate password prompt, that same first-login moment can *also* rotate the
+  underlying Linux account's password behind the scenes — one prompt for the
+  operator, two credentials secured (the Atlas admin login and the OS login/SSH
+  credential) instead of a passwordless-or-public Linux account sitting there
+  indefinitely.
+- **Must be one-time and state-gated, more so than §4.1's CRL button.** That one only
+  ever restarts a broker; this one changes who can log into the box at all. Only
+  invocable while a "not yet hardened" flag is set, cleared the instant it's used —
+  otherwise a compromised admin web session becomes a standing way to silently
+  rotate the box's OS login credential too, a meaningfully bigger blast radius than
+  anything else built so far.
+- **Open question: same string as the Atlas PIN, or separate?** The admin PIN is
+  presumably short/numeric — fine for a web login gate, weak as an SSH-facing OS
+  password. Leaning toward a second field in the same first-login form ("also set
+  this box's login password") rather than reusing the PIN outright, so the operator
+  isn't stuck with a 4-digit SSH password without realizing it. Not decided.
+- **Stronger complementary move, not yet decided either:** leave SSH itself
+  *disabled* until this first-boot step completes (Raspberry Pi OS's own current
+  default) rather than just racing to change the password before anyone notices —
+  closes the network-reachable window entirely instead of shrinking it.
+
 ## 5. Zero-config WiFi setup from the admin UI — the new idea, 2026-08-23
 
 Goal: an organiser with zero Linux/Pi knowledge plugs the Pi into ethernet + power,
