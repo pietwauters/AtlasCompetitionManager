@@ -10,9 +10,16 @@ const DeLayout = require('./deLayout');
 const PipelineSlots = require('./pipelineSlots');
 const { DE_BOUT_ORDER, deSlotParams } = require('../lib/deSlotMath');
 
+// type != 'virtual' on both of these: a virtual slot is a placeholder with no
+// real bouts/roster behind it (services/pipelineVirtualSlots.js), and must
+// never become "the current thing" this live hot path serves to an
+// apparatus. See CLAUDE.md/the plan doc for the incident this guards
+// against — handlePrevSlot (lib/opp2Client.js) does not gate on a real bout
+// existing before publishing a record, so an unguarded virtual slot reaching
+// here could push a misleading MQTT message to real hardware.
 const stmtActiveSlot  = db.prepare(`
   SELECT * FROM pipeline_slots
-  WHERE strip_id = ? AND status IN ('active', 'pending')
+  WHERE strip_id = ? AND status IN ('active', 'pending') AND type != 'virtual'
   ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, slot_order
   LIMIT 1
 `);
@@ -37,8 +44,10 @@ const stmtConfirmedPool  = db.prepare(`
 const stmtConfirmedTeam  = db.prepare("SELECT COUNT(*) AS n FROM relays WHERE team_match_id=? AND status='finished'");
 const stmtStaleDoneSlots = db.prepare("SELECT * FROM pipeline_slots WHERE strip_id=? AND status='done' ORDER BY slot_order");
 const stmtRecoverSlot    = db.prepare("UPDATE pipeline_slots SET status='pending' WHERE id=?");
+// Same type != 'virtual' guard as stmtActiveSlot above — a separate query,
+// not covered by that one, and the one handlePrevSlot actually calls.
 const stmtPrevSlotForStrip = db.prepare(
-  'SELECT * FROM pipeline_slots WHERE strip_id = ? AND slot_order < ? ORDER BY slot_order DESC LIMIT 1'
+  "SELECT * FROM pipeline_slots WHERE strip_id = ? AND slot_order < ? AND type != 'virtual' ORDER BY slot_order DESC LIMIT 1"
 );
 const stmtRefereeName    = db.prepare(`
   SELECT p.first_name AS ref_first, p.last_name AS ref_last, p.nationality AS ref_nation

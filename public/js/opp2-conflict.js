@@ -212,7 +212,7 @@ function opp2Conflict() {
     // scheduled_start at all (nothing to double-book against).
     _slotWindow(slot) {
       if (!slot.scheduled_start) return null;
-      const end = slot.predicted_end
+      const end = (slot.predicted_end && this.predictedAdjustedEnd(slot))
         || this._computeSlotEnd(slot, slot.scheduled_start)
         || this.addMinutes(slot.scheduled_start, 30);
       return { start: slot.scheduled_start, end };

@@ -79,6 +79,14 @@ router.get('/pipeline', (req, res) => {
   res.json(Pipeline.findAllStrips());
 });
 
+// "Clear the entire schedule" — every strip's queue, system-wide, real and
+// virtual/planned slots alike. adminOnly on top of the router's own
+// director-level gate: this is destructive and irreversible, same
+// extra-caution treatment already given to /connect and /disconnect above.
+router.delete('/pipeline', adminOnly, (req, res) => {
+  res.json(Pipeline.clearAll());
+});
+
 // Slots for a specific strip
 router.get('/pipeline/strip/:stripId', (req, res) => {
   res.json(Pipeline.findByStrip(req.params.stripId));

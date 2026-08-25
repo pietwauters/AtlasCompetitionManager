@@ -166,6 +166,10 @@
                 style="width:100%;font-size:.78rem;background:#fff;color:#922b21;border:1px solid #e5a0a0;padding:.3rem;border-radius:4px;cursor:pointer"
                 x-text="'↩ Undo last bulk assign (' + lastBulkSlotIds.length + ' slots)'">
         </button>
+        <button @click="clearEntireSchedule()"
+                style="width:100%;font-size:.75rem;background:#fff;color:#922b21;border:1px solid #f5c2c7;padding:.3rem;border-radius:4px;cursor:pointer">
+          🗑 Clear entire schedule
+        </button>
       </div>
       <div class="strip-rows">
         <template x-for="strip in sortedStrips" :key="strip.id">
@@ -257,7 +261,7 @@
                         x-text="'×' + slot.strip_count + ' pistes'"></span>
                       <span class="slot-time">
                         <span x-show="slot.scheduled_start" x-text="slot.scheduled_start + ' →'"></span>
-                        <span class="predicted" x-show="slot.predicted_end" x-text="slot.predicted_end"></span>
+                        <span class="predicted" x-show="slot.predicted_end" x-text="predictedAdjustedEnd(slot)"></span>
                         <span class="overlap-warn"
                           x-show="idx > 0 && hasOverlap(selectedStrip.slots[idx-1], slot)"> ⚠</span>
                       </span>
@@ -365,6 +369,7 @@
                   <option value="pool">Pool</option>
                   <option value="de">DE range</option>
                   <option value="team_match">Team match</option>
+                  <option value="virtual">Planned (no phase yet)</option>
                 </select>
               </label>
 
@@ -477,6 +482,28 @@
                 </div>
               </template>
 
+              <!-- Virtual (not-yet-real) stage picker -->
+              <template x-if="addForm.type === 'virtual'">
+                <div class="full">
+                  <label>Competition + stage
+                    <select x-model="addForm.virtual_key">
+                      <option value="">— Select a stage without a phase yet —</option>
+                      <template x-for="s in availableVirtualStages" :key="virtualStageKey(s)">
+                        <option :value="virtualStageKey(s)"
+                          x-text="s.competition_name + ' — ' + s.label"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <div x-show="!availableVirtualStages.length" style="font-size:.78rem;color:#888;margin-top:.25rem">
+                    No competitions have a not-yet-real format stage right now.
+                  </div>
+                  <div style="font-size:.78rem;color:#555;margin-top:.25rem">
+                    A placeholder — it fills in with the real pool/DE data automatically once that
+                    phase is actually created (even if a prior stage hasn't finished yet).
+                  </div>
+                </div>
+              </template>
+
               <!-- Timing -->
               <label>Start time
                 <input type="time" step="300" x-model="addForm.scheduled_start"
@@ -561,6 +588,24 @@
         <button @click="bulkModal.type='de';bulkModal.selectedPisteIds=[]"
                 :style="bulkModal.type==='de' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
                 style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid #ccc">DE rounds</button>
+        <button @click="bulkModal.type='virtual';bulkModal.selectedPisteIds=[]"
+                :style="bulkModal.type==='virtual' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
+                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid #ccc">Planned</button>
+      </div>
+
+      <!-- ── Virtual: not-yet-real stage selector ─────────────────── -->
+      <div x-show="bulkModal.type === 'virtual'" style="margin-bottom:.75rem">
+        <label style="font-size:.83rem;display:flex;flex-direction:column;gap:.2rem">Competition + stage
+          <select x-model="bulkModal.virtualStageKey" @change="bulkModal.selectedPisteIds=[]">
+            <option value="">— Select a stage without a phase yet —</option>
+            <template x-for="s in availableVirtualStages" :key="virtualStageKey(s)">
+              <option :value="virtualStageKey(s)" x-text="s.competition_name + ' — ' + s.label"></option>
+            </template>
+          </select>
+        </label>
+        <div style="font-size:.8rem;color:#555;margin-top:.35rem">
+          One placeholder per selected piste — fills in automatically once the real phase exists.
+        </div>
       </div>
 
       <!-- ── Pools: competition selector ──────────────────────────── -->
@@ -600,6 +645,9 @@
         <div x-show="bulkModal.deStartRound" style="font-size:.8rem;color:#555;margin-bottom:.35rem">
           Select pistes — one slot per bout, pistes rotate in sequence.
         </div>
+        <div x-show="bulkDeEstimatedByeNote"
+             style="margin-bottom:.5rem;padding:.4rem .6rem;background:#eef4fc;border:1px solid #b8cfef;border-radius:5px;font-size:.78rem;color:#1a4971"
+             x-text="bulkDeEstimatedByeNote"></div>
         <div x-show="bulkDePrevPisteIds">
           <button @click="bulkModal.selectedPisteIds = [...bulkDePrevPisteIds]"
                   style="font-size:.79rem;padding:.25rem .55rem;background:#f0f4ff;border:1px solid #b8cfef;border-radius:4px;cursor:pointer"
@@ -658,49 +706,64 @@
         </div>
       </div>
 
+      <!-- ── Not enough pistes — multi-wave warning (pools + DE) ──────
+           Round-robins across the selected pistes instead of silently
+           dropping the excess — see opp2-bulk-assign.js's bulkPreview/
+           bulkDePreview. Shown whenever that takes more than one pass. -->
+      <div x-show="(bulkModal.type === 'pools' || bulkModal.type === 'de') && bulkReadyToSubmit && bulkWaveCount > 1"
+           style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:.83rem;color:#856404">
+        ⚠ Only <span x-text="bulkModal.selectedPisteIds.length"></span> piste(s) selected for
+        <span x-text="bulkModal.type==='pools' ? bulkPreview.length+' pools' : bulkDePreview.length+' bouts'"></span>
+        — this will run across <strong x-text="bulkWaveCount"></strong> rounds, reusing the same pistes
+        sequentially (see the Start column below). Add more pistes if you'd rather run them in parallel.
+      </div>
+
       <!-- ── Pools: preview table ──────────────────────────────────── -->
       <div x-show="bulkModal.type === 'pools' && bulkModal.selectedPisteIds.length > 0 && bulkPreview.length > 0"
            style="margin-bottom:.75rem">
         <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem">
           Assignment preview
-          <span style="font-weight:400;color:#888;font-size:.78rem"
-            x-text="' — ' + bulkPreview.filter(r=>r.piste).length + ' of ' + bulkPreview.length + ' pools assigned'"></span>
+          <span style="font-weight:400;color:#888;font-size:.78rem" x-text="' — ' + bulkPreview.length + ' pools'"></span>
         </div>
         <table class="bulk-table">
-          <thead><tr><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Status</th></tr></thead>
+          <thead><tr><th>Round</th><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Start</th><th>Status</th></tr></thead>
           <tbody>
             <template x-for="row in bulkPreview" :key="row.pool.id">
-              <tr :class="!row.piste ? 'bulk-row-unassigned' : (row.conflict ? 'bulk-row-conflict' : '')">
+              <tr :class="row.conflict ? 'bulk-row-conflict' : ''">
+                <td x-text="row.wave + 1" style="color:#888;width:2rem"></td>
                 <td x-text="row.pool.competition_name + ' — Pool ' + row.pool.pool_number"></td>
                 <td x-text="row.pool.bouts_total + ' bouts'"></td>
                 <td style="color:#888">→</td>
-                <td x-text="row.piste ? (row.piste.name || 'Piste ' + row.piste.strip_number) : '— no piste available'"></td>
+                <td x-text="row.piste.name || 'Piste ' + row.piste.strip_number"></td>
+                <td x-text="row.slotStart || '—'" style="font-size:.78rem;color:#555"></td>
                 <td>
-                  <span x-show="!row.piste" style="color:#922b21;font-size:.78rem">unassigned</span>
-                  <span x-show="row.piste && row.conflict" style="color:#856404;font-size:.78rem">
-                    ⚠ busy (<span x-text="row.piste ? pendingSlotCount(row.piste) : 0"></span> slots)
+                  <span x-show="row.conflict" style="color:#856404;font-size:.78rem">
+                    ⚠ busy (<span x-text="pendingSlotCount(row.piste)"></span> slots)
                   </span>
-                  <span x-show="row.piste && !row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
+                  <span x-show="!row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
                 </td>
               </tr>
             </template>
           </tbody>
         </table>
-        <div x-show="bulkPreview.some(r => !r.piste)" style="font-size:.78rem;color:#922b21;margin-top:.3rem">
-          ⚠ Not enough pistes for all pools — add more pistes or deselect some.
-        </div>
       </div>
 
       <!-- ── DE: preview (flat per-piste list) ───────────────────── -->
       <div x-show="bulkModal.type === 'de' && bulkDePreview.length > 0" style="margin-bottom:.75rem">
         <div style="font-size:.83rem;font-weight:600;margin-bottom:.4rem">Assignment preview</div>
         <table class="bulk-table">
-          <thead><tr><th>#</th><th>Match</th><th></th><th>Piste</th><th>Start</th><th>Status</th></tr></thead>
+          <thead><tr><th>#</th><th>Round</th><th>Match</th><th></th><th>Piste</th><th>Start</th><th>Status</th></tr></thead>
           <tbody>
             <template x-for="pa in bulkDePreview" :key="pa.bout_start">
-              <tr :class="pa.conflict ? 'bulk-row-conflict' : ''">
+              <tr :class="pa.conflict ? 'bulk-row-conflict' : ''"
+                  :style="pa.predictedBye ? 'background:#f5f8fd' : ''">
                 <td x-text="pa.bout_start" style="color:#888;width:2rem"></td>
-                <td x-text="pa.matchLabel" style="font-size:.8rem"></td>
+                <td x-text="pa.wave + 1" style="color:#888;width:2rem"></td>
+                <td style="font-size:.8rem">
+                  <span x-text="pa.matchLabel"></span>
+                  <span x-show="pa.predictedBye" title="Predicted bye — an estimate from the projected headcount, not yet confirmed"
+                        style="margin-left:.4rem;font-size:.72rem;color:#1a4971;background:#dce9fa;border-radius:3px;padding:.05rem .35rem">predicted bye</span>
+                </td>
                 <td style="color:#888">→</td>
                 <td x-text="pa.piste.name || 'Piste ' + pa.piste.strip_number"></td>
                 <td x-text="pa.slotStart || '—'" style="font-size:.78rem;color:#555"></td>
@@ -857,7 +920,7 @@
               <td x-text="slotLabel(s)"></td>
               <td x-text="(s.roles || []).map(r => roleLabel(r)).join(', ')"></td>
               <td x-text="s.scheduled_start || '—'"></td>
-              <td x-text="s.predicted_end || '—'"></td>
+              <td x-text="s.predicted_end ? predictedAdjustedEnd(s) : '—'"></td>
               <td><span class="badge" :class="'badge-' + s.status" x-text="s.status"></span></td>
             </tr>
           </template>

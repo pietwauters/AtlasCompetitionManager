@@ -17,7 +17,7 @@ function opp2RefereeSchedule() {
       );
       if (!scheduled.length) return { hasData: false, rows: [], ticks: [], nowLeft: null };
       const starts = scheduled.map(({ slot: s }) => toMin(s.scheduled_start));
-      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(s.predicted_end));
+      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(this.predictedAdjustedEnd(s)));
       const axisStart = Math.floor(Math.min(...starts) / 30) * 30;
       const axisEnd   = Math.ceil((ends.length ? Math.max(...ends) : Math.max(...starts) + 60) / 30) * 30;
       const total = axisEnd - axisStart;
@@ -31,14 +31,15 @@ function opp2RefereeSchedule() {
             const name = [official.last_name, official.first_name].filter(Boolean).join(', ') || `Referee ${official.referee_id}`;
             refMap.set(official.referee_id, { name, bars: [] });
           }
+          const adjustedEnd = this.predictedAdjustedEnd(slot);
           const s0 = toMin(slot.scheduled_start);
-          const s1 = slot.predicted_end ? toMin(slot.predicted_end) : s0 + 30;
+          const s1 = adjustedEnd ? toMin(adjustedEnd) : s0 + 30;
           const roleSuffix = official.role === 'referee' ? '' : ` (${this.roleLabel(official.role)})`;
           refMap.get(official.referee_id).bars.push({
             id: slot.id + '_' + official.role, left: (s0 - axisStart) / total * 100,
             width: Math.max((s1 - s0) / total * 100, 0.5),
             color: colorOf(slot), label: (strip.name || 'Piste ' + strip.strip_number) + ' — ' + this.slotLabel(slot) + roleSuffix,
-            start: slot.scheduled_start, end: slot.predicted_end,
+            start: slot.scheduled_start, end: adjustedEnd,
           });
         }
       }

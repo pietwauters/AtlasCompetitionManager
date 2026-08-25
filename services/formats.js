@@ -799,20 +799,7 @@ function validateCounts(compId, format) {
       // Check the preceding pool stage produces enough remainder for the prelim DE.
       const prevPool = format.stages.find(s => s.id !== stage.id && s.phaseType === 'pool');
       if (prevPool) {
-        const excluded  = prevPool.participants.excludeTopByInitialSeed || 0;
-        const exemptTop = prevPool.advancement?.exemptTop || 0;
-        const noElim    = prevPool.advancement?.noElimination || false;
-        const inPools   = N - excluded;
-        // If pools eliminate, estimate how many advance using the rule's percentage.
-        let advFromPools = inPools;
-        if (!noElim && prevPool.rule) {
-          try {
-            const poolRule = require('../rules/' + prevPool.rule);
-            const pct = (poolRule.advancement?.value ?? 70) / 100;
-            advFromPools = Math.round(inPools * pct);
-          } catch {}
-        }
-        const inDE = advFromPools - exemptTop;
+        const inDE = _estimateAdvancedCount(compId, format, stage);
         if (inDE < adv.survivorTarget) {
           throw Object.assign(
             new Error(`Format "${format.description}": with ${N} competitors, the preliminary tableau would have only ~${inDE} fencers — not enough to produce ${adv.survivorTarget} survivors.`),
@@ -822,6 +809,44 @@ function validateCounts(compId, format) {
       }
     }
   }
+}
+
+// Estimates how many competitors will enter `stage` (a DE stage) from its
+// immediately-preceding pool stage, before that pool stage has actually
+// closed — used by validateCounts's feasibility check above and by
+// services/dePhases.js's createSkeleton (a DE bracket can now be built ahead
+// of time, from this estimate, with real competitors filled in once the pool
+// stage really finishes — see docs/... the plan for that feature). Anchored
+// to the exact same advancement-% resolution Format.applyPoolClose uses when
+// the pool stage actually closes (useParam -> stored format_params -> the
+// param's own default -> 70), not a cruder rule-file-only read, so this
+// estimate and the real close-time computation can never drift apart.
+function _estimateAdvancedCount(compId, format, stage) {
+  const N        = stmtCountActivePresent.get(compId).n;
+  const prevPool = format.stages.find(s => s.id !== stage.id && s.phaseType === 'pool');
+  if (!prevPool) return N;
+
+  const excluded  = prevPool.participants.excludeTopByInitialSeed || 0;
+  const exemptTop = prevPool.advancement?.exemptTop || 0;
+  const inPools   = Math.max(0, N - excluded);
+  const adv       = prevPool.advancement || {};
+
+  if (adv.noElimination) return Math.max(0, inPools - exemptTop);
+
+  let pct = 0.70;
+  if (adv.useParam) {
+    const comp     = stmtCompetitionFormatParams.get(compId);
+    const stored   = comp?.format_params ? JSON.parse(comp.format_params) : {};
+    const paramDef = (format.params || []).find(p => p.id === adv.useParam);
+    pct = Number(stored[adv.useParam] ?? paramDef?.default ?? 70) / 100;
+  } else if (prevPool.rule) {
+    try {
+      const poolRule = loadRule(prevPool.rule);
+      pct = (poolRule.advancement?.value ?? 70) / 100;
+    } catch { /* fall back to the 70% default above */ }
+  }
+
+  return Math.max(0, Math.round(inPools * pct) - exemptTop);
 }
 
 // ---------------------------------------------------------------------------
@@ -848,6 +873,15 @@ function getFormatPlan(compId, format) {
       phaseId:          ph ? ph.id     : null,
       participantCount: _estimateCount(compId, format, stage, N),
       survivorTarget:   stage.advancement?.survivorTarget || null,
+      // Only meaningful (and only computed) for a DE stage that hasn't been
+      // seeded with real competitors yet — projects how many will advance
+      // out of its preceding pool stage using that stage's real advancement
+      // %, for services/dePhases.js's createSkeleton estimate-prefill AND
+      // (once a skeleton already exists) for surfacing an expected-bye count
+      // in the bulk-assign preview before seedSkeleton runs. null once the
+      // phase is seeded ('active') — the real count is used then.
+      estimatedAdvancedCount: ((!ph || ph.status === 'skeleton') && stage.phaseType === 'de')
+        ? _estimateAdvancedCount(compId, format, stage) : null,
     };
   });
 

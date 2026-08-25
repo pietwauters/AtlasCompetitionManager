@@ -176,6 +176,34 @@
                  x-text="stage.participantCount ? stage.participantCount+' fencers' : ''"></div>
             <div x-show="stage.survivorTarget" style="font-size:.78rem;color:#856404;margin-top:.1rem"
                  x-text="'→ top '+stage.survivorTarget+' advance'"></div>
+
+            <!-- Build a DE bracket now, from an estimate — before this stage's
+                 own prerequisites are even met. See services/dePhases.js's
+                 createSkeleton; real fencers fill in automatically once the
+                 prior stage actually finishes. -->
+            <template x-if="stage.phaseType==='de' && stage.status==='pending'">
+              <div style="margin-top:.4rem;border-top:1px solid #e5e8f0;padding-top:.4rem">
+                <button style="font-size:.75rem;padding:.2rem .5rem;background:#f0f4ff;border:1px solid #b8cfef;border-radius:4px;cursor:pointer"
+                        @click="openSkeletonForm(stage)">
+                  <span x-text="skeletonFormOpenId===stage.id ? 'Cancel' : 'Build bracket now'"></span>
+                </button>
+                <div x-show="skeletonFormOpenId===stage.id" style="margin-top:.4rem">
+                  <label style="font-size:.78rem;display:flex;flex-direction:column;gap:.15rem">
+                    Estimated headcount
+                    <input type="number" min="2" x-model.number="skeletonEstimateN" style="width:80px">
+                  </label>
+                  <div style="font-size:.75rem;color:#666;margin-top:.25rem"
+                       x-text="skeletonEstimateN>=2 ? ('→ tableau '+getTableauSizeClient(skeletonEstimateN)) : ''"></div>
+                  <div x-show="skeletonEstimateN>=2 && isRiskyEstimate(skeletonEstimateN)"
+                       style="font-size:.75rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.3rem .45rem;margin-top:.3rem">
+                    ⚠ Close to a tableau-size boundary — a small real-world deviation could add or
+                    remove a whole round. You'll be asked to confirm before building.
+                  </div>
+                  <button class="success" style="font-size:.78rem;margin-top:.4rem" :disabled="!skeletonEstimateN"
+                          @click="submitCreateSkeleton(stage)">Build</button>
+                </div>
+              </div>
+            </template>
           </div>
         </template>
       </div>
@@ -646,6 +674,7 @@ function app() {
     availableFormats:[], selectedFormat:'', formatParams:{}, fieOnly:true,
     formatPlan:null, formatStageFormOpenId:'',
     formatPoolLoading:false, formatDeInfo:null,
+    skeletonFormOpenId:'', skeletonEstimateN:'',
 
     get eligClubs() {
       return [...new Set(this.eligible.map(f=>f.club_name).filter(Boolean))].sort();
@@ -1065,7 +1094,7 @@ function app() {
       });
       const data = await r.json();
       if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
-      this.showNotice('Round created');
+      this.showNotice('Round created' + this.schedulePlanAppliedSuffix(data.schedule_plan_applied) + this.virtualSlotsAppliedSuffix(data.virtual_slots_applied));
       this.formatStageFormOpenId = ''; this.poolOptions = null; this.chosenSizes = null;
       await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
@@ -1078,8 +1107,73 @@ function app() {
       });
       const data = await r.json();
       if(!r.ok){ this.showNotice(data.error||'Create failed',true); return; }
-      this.showNotice('Tableau created');
+      this.showNotice('Tableau created' + this.schedulePlanAppliedSuffix(data.schedule_plan_applied) + this.virtualSlotsAppliedSuffix(data.virtual_slots_applied));
       this.formatStageFormOpenId = ''; this.formatDeInfo = null;
+      await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
+    },
+    // Appended to a phase-creation toast when routes/phases.js auto-applied a
+    // matching schedule-plan stage (services/schedulePlanReconcile.js) — lets
+    // the director see it happened without a separate manual step.
+    schedulePlanAppliedSuffix(applied) {
+      if (!applied) return '';
+      return ` — ${applied.slotsCreated} strip slot(s) auto-assigned from your schedule plan` +
+        (applied.unassignedStrips ? ` (${applied.unassignedStrips} need manual assignment)` : '') + '.';
+    },
+    // Same idea, for placeholders a director already placed directly in
+    // opp2.html (services/pipelineVirtualSlots.js) — a separate, complementary
+    // mechanism from the schedule-plan one above.
+    virtualSlotsAppliedSuffix(applied) {
+      if (!applied) return '';
+      let s = ` — ${applied.activated} planned strip slot(s) filled in`;
+      if (applied.overflowCreated) s += `, ${applied.overflowCreated} additional strip slot(s) added`;
+      if (applied.deletedCount) s += `, ${applied.deletedCount} planned slot(s) removed (no matching real pool/round)`;
+      return s + '.';
+    },
+
+    // ── DE bracket skeleton (build now, from an estimate; real fencers filled
+    // in automatically once the prior stage finishes — services/dePhases.js) ──
+    // Mirrors lib/deFormation.js's getTableauSize/TABLEAU_RISK_MARGIN — no
+    // shared bundle between server and browser in this codebase (see
+    // opp2-add-slot.js's own rangeToPartition for the same kind of
+    // client-side mirror of server math), so duplicated here deliberately.
+    getTableauSizeClient(n) {
+      if (n <= 2) return 2;
+      let T = 2;
+      while (T < n) T *= 2;
+      return T;
+    },
+    isRiskyEstimate(n) {
+      if (!n || n < 2) return false;
+      const margin = 2;
+      const T = this.getTableauSizeClient(n);
+      return this.getTableauSizeClient(Math.max(2, n - margin)) !== T
+          || this.getTableauSizeClient(n + margin) !== T;
+    },
+    openSkeletonForm(stage) {
+      this.skeletonFormOpenId = (this.skeletonFormOpenId === stage.id) ? '' : stage.id;
+      if (this.skeletonFormOpenId) this.skeletonEstimateN = stage.estimatedAdvancedCount || '';
+    },
+    async submitCreateSkeleton(stage) {
+      const n = Number(this.skeletonEstimateN);
+      if (!n || n < 2) { this.showNotice('Enter an estimated headcount of at least 2', true); return; }
+      if (this.isRiskyEstimate(n) && !confirm(
+        `${n} is close to a tableau-size boundary (${this.getTableauSizeClient(n)}) — a small real-world ` +
+        `deviation could add or remove a whole round, and the bracket would need rebuilding, not just ` +
+        `re-seeding. Build it anyway?`
+      )) return;
+      const r = await fetch('/api/competitions/'+compId+'/phases/create-de-skeleton', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rule_doc: stage.rule, estimated_n: n, format_stage_id: stage.id }),
+      });
+      const data = await r.json();
+      if (!r.ok) { this.showNotice(data.error || 'Create failed', true); return; }
+      this.showNotice(
+        `Bracket skeleton built (tableau ${this.getTableauSizeClient(n)}) for "${stage.label}" — real fencers ` +
+        `fill in automatically once its prior stage finishes.` +
+        this.schedulePlanAppliedSuffix(data.schedule_plan_applied) +
+        this.virtualSlotsAppliedSuffix(data.virtual_slots_applied)
+      );
+      this.skeletonFormOpenId = '';
       await Promise.all([this.loadPhases(), this.loadFormatPlan()]);
     },
     async closeFormatDE(ph) {

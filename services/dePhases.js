@@ -7,7 +7,7 @@
 
 const db                   = require('../db');
 const { loadRule }         = require('../lib/rules');
-const { buildFullBracket } = require('../lib/deFormation');
+const { buildFullBracket, buildBracketShape, buildSeedPositions, getTableauSize } = require('../lib/deFormation');
 const Competitor           = require('./competitors');
 const Format                = require('./formats');
 const Bout                  = require('./bouts');
@@ -54,6 +54,100 @@ const stmtUpdateRouting = db.prepare(`
 `);
 const stmtUpdateSlotLeft  = db.prepare('UPDATE bouts SET left_id = ? WHERE id = ?');
 const stmtUpdateSlotRight = db.prepare('UPDATE bouts SET right_id = ? WHERE id = ?');
+
+// Skeleton (createSkeleton/seedSkeleton) — see the plan doc / CLAUDE.md for
+// why this exists: a DE phase can now be created from just an estimated
+// headcount, real competitors filled in later once the prior stage finishes.
+const stmtInsertDeSkeletonPhase = db.prepare(`
+  INSERT INTO phases (competition_id, phase_order, type, rule_doc, status, format_stage)
+  VALUES (@comp_id, @order, 'de', @rule_doc, 'skeleton', @format_stage)
+`);
+const stmtSetPhaseActive = db.prepare("UPDATE phases SET status = 'active' WHERE id = ?");
+const stmtRound1Count = db.prepare("SELECT COUNT(*) AS n FROM bouts WHERE phase_id = ? AND bracket = 'main' AND de_round = 1");
+const stmtRound1BoutsOrdered = db.prepare(
+  "SELECT id, tableau_position FROM bouts WHERE phase_id = ? AND bracket = 'main' AND de_round = 1 ORDER BY tableau_position"
+);
+const stmtSeedBoutSides = db.prepare('UPDATE bouts SET left_id = ?, right_id = ? WHERE id = ?');
+const stmtFinishBye     = db.prepare("UPDATE bouts SET status = 'finished', winner_id = ?, left_score = ?, right_score = ? WHERE id = ?");
+
+// Pass 1 (insert every node as a bout row) + Pass 2 (wire routing pointers)
+// from createDE's original single-shot flow, factored out so createSkeleton
+// can reuse it without the bye passes (3/4) that follow only when real
+// competitors are already known.
+function _insertBracketNodes(phaseId, nodes) {
+  const dbIds = new Array(nodes.length);
+  for (const n of nodes) {
+    const { lastInsertRowid } = stmtInsertDEBout.run(
+      phaseId,
+      n.leftCompetitorId,
+      n.rightCompetitorId,
+      n.de_round,
+      n.tableau_position,
+      n.bracket,
+      n.status,
+      n.winner_id,
+      n.left_score,
+      n.right_score,
+      n.bout_order,
+      n.place_rank,
+    );
+    dbIds[n.tempId] = lastInsertRowid;
+    n.dbId = lastInsertRowid;
+  }
+
+  // Real (non-bye) round-1 pairs already have both competitors known at
+  // insert time — normalize left/right by handedness now, same as pools.
+  // No-ops safely for a skeleton's still-empty rows (normalizeHandedness
+  // returns immediately when either side is null).
+  for (const n of nodes) {
+    Bout.normalizeHandedness(n.dbId);
+  }
+
+  for (const n of nodes) {
+    const hasRouting = n.winnerNextTempId !== null || n.loserNextTempId !== null;
+    if (!hasRouting) continue;
+    stmtUpdateRouting.run({
+      id:  n.dbId,
+      wnb: n.winnerNextTempId !== null ? dbIds[n.winnerNextTempId] : null,
+      wns: n.winnerNextSide   ?? null,
+      lnb: n.loserNextTempId  !== null ? dbIds[n.loserNextTempId]  : null,
+      lns: n.loserNextSide    ?? null,
+    });
+  }
+
+  return dbIds;
+}
+
+// DB-row/UPDATE-based mirror of buildBracketShape's in-memory seedRound1 +
+// createDE's Pass 3/4 — for a bracket whose rows already exist (built by
+// createSkeleton), being seeded later once real competitors are known.
+// tableau_position -> seed lookup mirrors buildBracketShape's own R1 loop
+// (pos = i/2 + 1, i.e. i = (pos-1)*2) exactly, so this must stay in sync with
+// that function if it ever changes.
+function _seedExistingBracket(phaseId, competitors, T) {
+  const seedSlots = buildSeedPositions(T);
+  const bySeed = {};
+  for (let i = 0; i < competitors.length; i++) bySeed[i + 1] = competitors[i];
+
+  const rows = stmtRound1BoutsOrdered.all(phaseId);
+  for (const row of rows) {
+    const i = (row.tableau_position - 1) * 2;
+    const lComp = bySeed[seedSlots[i]]     || null;
+    const rComp = bySeed[seedSlots[i + 1]] || null;
+
+    stmtSeedBoutSides.run(lComp?.competitor_id ?? null, rComp?.competitor_id ?? null, row.id);
+    Bout.normalizeHandedness(row.id);
+
+    if (!lComp || !rComp) {
+      const winner = lComp ?? rComp;
+      stmtFinishBye.run(winner.competitor_id, lComp ? 1 : 0, rComp ? 1 : 0, row.id);
+      // Same reason as createDE's Pass 4: a bye's winner must be forwarded
+      // and the cascade check run (double-bye-into-same-repechage-slot
+      // starvation), not just left as a locally-finished bout.
+      Bout.routeBoutResult(row.id);
+    }
+  }
+}
 
 // Returns an ordered array of { competitor_id } for DE seeding.
 //
@@ -151,47 +245,8 @@ const DePhases = {
         comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc, format_stage: formatStageId || null,
       });
 
-      // Pass 1 — insert every bout; collect DB ids indexed by tempId.
-      const dbIds = new Array(nodes.length); // dbIds[tempId] = DB row id
-      for (const n of nodes) {
-        const { lastInsertRowid } = stmtInsertDEBout.run(
-          phaseId,
-          n.leftCompetitorId,
-          n.rightCompetitorId,
-          n.de_round,
-          n.tableau_position,
-          n.bracket,
-          n.status,
-          n.winner_id,
-          n.left_score,
-          n.right_score,
-          n.bout_order,
-          n.place_rank,
-        );
-        dbIds[n.tempId] = lastInsertRowid;
-        n.dbId = lastInsertRowid;
-      }
-
-      // Real (non-bye) round-1 pairs already have both competitors known at
-      // insert time — normalize left/right by handedness now, same as pools.
-      // Later rounds get the same treatment as their pairings fill in, via
-      // routeBoutResult's cascade (services/bouts.js).
-      for (const n of nodes) {
-        Bout.normalizeHandedness(n.dbId);
-      }
-
-      // Pass 2 — set routing pointers now that all DB ids are known.
-      for (const n of nodes) {
-        const hasRouting = n.winnerNextTempId !== null || n.loserNextTempId !== null;
-        if (!hasRouting) continue;
-        stmtUpdateRouting.run({
-          id:  n.dbId,
-          wnb: n.winnerNextTempId !== null ? dbIds[n.winnerNextTempId] : null,
-          wns: n.winnerNextSide   ?? null,
-          lnb: n.loserNextTempId  !== null ? dbIds[n.loserNextTempId]  : null,
-          lns: n.loserNextSide    ?? null,
-        });
-      }
+      // Pass 1 + 2 — insert every bout, wire routing pointers.
+      const dbIds = _insertBracketNodes(phaseId, nodes);
 
       // Pass 3 — wire bye winners into their next-round slots immediately,
       // mirroring what routeBoutResult would do when bouts finish at run time.
@@ -215,6 +270,96 @@ const DePhases = {
       }
 
       return phaseId;
+    })();
+
+    return stmtPhaseById.get(phaseId);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Create a DE phase's full bracket now, from an *estimated* headcount,
+  // before the real prior stage has finished — every round's bout rows exist
+  // for real (real phase_id/tableau/de_round/partition, so real
+  // pipeline_slots can be scheduled against every round today), with
+  // left_id/right_id left null until seedSkeleton fills them in later. Always
+  // format-driven (a skeleton only makes sense when the format's shape is
+  // already known) — does NOT call Format.assertNextStage, the whole point
+  // being to build ahead of the dependency finishing.
+  // ---------------------------------------------------------------------------
+  createSkeleton(compId, ruleDoc, estimatedN, formatStageId) {
+    if (!formatStageId) {
+      throw Object.assign(new Error('formatStageId is required to create a DE skeleton.'), { status: 400 });
+    }
+    const n = Number(estimatedN);
+    if (!Number.isInteger(n) || n < 2) {
+      throw Object.assign(new Error('estimatedN must be an integer >= 2.'), { status: 400 });
+    }
+
+    const rule = loadRule(ruleDoc);
+    const T = getTableauSize(n);
+    const { nodes } = buildBracketShape(T, rule);
+
+    const phaseId = db.transaction(() => {
+      const maxOrder = stmtMaxPhaseOrder.get(compId).m;
+      const { lastInsertRowid: phaseId } = stmtInsertDeSkeletonPhase.run({
+        comp_id: Number(compId), order: maxOrder + 1, rule_doc: ruleDoc, format_stage: formatStageId,
+      });
+      _insertBracketNodes(phaseId, nodes);
+      return phaseId;
+    })();
+
+    return stmtPhaseById.get(phaseId);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Fill in a skeleton's round-1 bouts with the real competitors, once the
+  // real prior stage has actually finished. Real gate (Format.assertNextStage)
+  // runs here, deferred from createSkeleton. On a tableau-size mismatch
+  // between the estimate and reality (round count would differ, not just bye
+  // count), throws rather than silently rebuilding — a director-confirmed
+  // rebuild is a separate, deliberate action, not automatic (see the plan
+  // doc's TABLEAU_MISMATCH handling).
+  // ---------------------------------------------------------------------------
+  seedSkeleton(phaseId) {
+    const phase = stmtPhaseById.get(phaseId);
+    if (!phase) throw Object.assign(new Error('Phase not found'), { status: 404 });
+    if (phase.status !== 'skeleton') {
+      throw Object.assign(new Error('Phase is not a pending skeleton.'), { status: 400 });
+    }
+
+    const comp = stmtCompFormatId.get(phase.competition_id);
+    if (!phase.format_stage || !comp?.format_id) {
+      throw Object.assign(new Error('Skeleton phase has no format stage to resolve participants from.'), { status: 400 });
+    }
+    const format = Format.loadFormat(comp.format_id);
+    const stage  = Format.getStage(format, phase.format_stage);
+    Format.assertNextStage(phase.competition_id, format, phase.format_stage);
+    const competitors = Format.resolveParticipants(phase.competition_id, format, stage);
+
+    if (competitors.length < 2) {
+      throw Object.assign(new Error('At least 2 competitors required to seed this bracket.'), { status: 400 });
+    }
+
+    const round1 = stmtRound1Count.get(phaseId).n;
+    if (!round1) {
+      throw Object.assign(new Error('Skeleton has no round-1 bouts to seed.'), { status: 400 });
+    }
+    const builtT = round1 * 2;
+    const realT  = getTableauSize(competitors.length);
+
+    if (realT !== builtT) {
+      throw Object.assign(
+        new Error(
+          `Tableau size mismatch: this bracket was built for ${builtT} (estimate), but ` +
+          `${competitors.length} real competitors need ${realT}. The round count itself is ` +
+          `different — filling in names can't fix this; the bracket needs a deliberate rebuild.`
+        ),
+        { status: 409, code: 'TABLEAU_MISMATCH', estimatedT: builtT, realT }
+      );
+    }
+
+    db.transaction(() => {
+      _seedExistingBracket(phaseId, competitors, realT);
+      stmtSetPhaseActive.run(phaseId);
     })();
 
     return stmtPhaseById.get(phaseId);

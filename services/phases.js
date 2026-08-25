@@ -109,8 +109,10 @@ const Phase = {
   calculateRankings: PoolPhases.calculateRankings,
 
   // DE-specific — see services/dePhases.js for the implementations.
-  getDeOptions: DePhases.getDeOptions,
-  createDE:     DePhases.createDE,
+  getDeOptions:   DePhases.getDeOptions,
+  createDE:       DePhases.createDE,
+  createSkeleton: DePhases.createSkeleton,
+  seedSkeleton:   DePhases.seedSkeleton,
 
   // ---------------------------------------------------------------------------
   // Close phase: save rankings, mark advanced/eliminated, update statuses.

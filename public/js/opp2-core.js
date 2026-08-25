@@ -18,6 +18,7 @@ function opp2Core() {
     availablePools: [],
     availableDePhases: [],
     availableTeamMatches: [],
+    availableVirtualStages: [],
     selectedStripId: null,
     boutStandards: [],
     poolAssignmentMap: {},   // { pool_id: [strip names] }
@@ -70,6 +71,28 @@ function opp2Core() {
       this.poolAssignmentMap = map;
     },
 
+    // "Clear the entire schedule" — every strip's queue, system-wide, real
+    // and planned/virtual slots alike (services/pipelineSlots.js's
+    // clearAll()). Destructive and irreversible — a plain browser confirm()
+    // stating exactly how many slots are about to go, not a silent action.
+    // Does not touch phases/pools/bouts/competitors/results or
+    // schedule-planner.html's own separate plan.
+    async clearEntireSchedule() {
+      const n = this.strips.reduce((sum, s) => sum + (s.slots?.length || 0), 0);
+      if (n === 0) { this.showNotice('Schedule is already empty'); return; }
+      if (!confirm(
+        `Clear the ENTIRE schedule — all ${n} slot${n !== 1 ? 's' : ''} across every strip, ` +
+        `including any "planned" placeholders? This cannot be undone. Phases, pools, bouts, ` +
+        `and competitors are not affected — only the strip schedule itself.`
+      )) return;
+      const r = await fetch('/api/opp2/pipeline', { method: 'DELETE' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); this.showNotice(d.error || 'Clear failed', true); return; }
+      const result = await r.json();
+      this.lastBulkSlotIds = [];
+      await this.loadStrips();
+      this.showNotice(`Schedule cleared — ${result.cleared} slot${result.cleared !== 1 ? 's' : ''} removed.`);
+    },
+
     async loadReferees() {
       this.referees = await fetch('/api/people?role=referee').then(r => r.json()).catch(() => []);
     },
@@ -83,8 +106,16 @@ function opp2Core() {
         fetch('/api/competitions').then(r => r.json()).catch(() => []),
         fetch('/api/team-matches/available').then(r => r.json()).catch(() => []),
       ]);
-      const pools = [], dePhases = [];
+      const pools = [], dePhases = [], virtualStages = [];
       for (const c of comps) {
+        // Fetched up front (not just for virtualStages below) so a skeleton
+        // DE phase's round-1 bulk-assign preview can show an expected-bye
+        // count before seedSkeleton ever runs — see estimatedAdvancedCount
+        // below and services/formats.js's getFormatPlan.
+        const plan = c.format_id
+          ? await fetch(`/api/competitions/${c.id}/format-plan`).then(r => r.json()).catch(() => null)
+          : null;
+
         const phases = await fetch(`/api/competitions/${c.id}/phases`).then(r => r.json()).catch(() => []);
         for (const ph of phases) {
           if (ph.type === 'pool') {
@@ -94,15 +125,39 @@ function opp2Core() {
                            phase_status: ph.status, weapon: c.weapon, gender: c.gender });
             }
           } else if (ph.type === 'de') {
+            const stage = ph.status === 'skeleton'
+              ? plan?.stages.find(s => s.id === ph.format_stage) : null;
             dePhases.push({ ...ph, competition_name: c.name,
               weapon: c.weapon, gender: c.gender,
-              phase_label: `DE Phase ${ph.phase_order} (${ph.status})` });
+              phase_label: `DE Phase ${ph.phase_order} (${ph.status})`,
+              estimated_advanced_count: stage?.estimatedAdvancedCount ?? null });
           }
         }
+
+        // Pool format stages that don't have a real phase yet — a placeholder
+        // to reserve strip time before the phase exists at all. DE stages are
+        // deliberately excluded here: services/dePhases.js's createSkeleton
+        // (competition-detail.html's "Build bracket now") is strictly better
+        // for DE — a real phase with real rounds/matches, fencers filled in
+        // later, not an opaque blob — so DE should always go through that
+        // instead of a virtual placeholder. Pools have no such skeleton
+        // mechanism yet (pool sizing depends on near-final registration, not
+        // just the format), so this is still the only option there.
+        // GET /api/competitions/:id/format-plan already computes phaseId
+        // (null == not yet real) per stage; no new endpoint needed.
+        for (const stage of plan?.stages || []) {
+          if (stage.phaseId != null || stage.phaseType !== 'pool') continue;
+          virtualStages.push({
+            competition_id: c.id, competition_name: c.name,
+            weapon: c.weapon, gender: c.gender,
+            format_stage_id: stage.id, phase_type: stage.phaseType, label: stage.label,
+          });
+        }
       }
-      this.availablePools       = pools;
-      this.availableDePhases    = dePhases;
-      this.availableTeamMatches = teamMatches;
+      this.availablePools         = pools;
+      this.availableDePhases      = dePhases;
+      this.availableTeamMatches   = teamMatches;
+      this.availableVirtualStages = virtualStages;
     },
 
     // ── Computed ─────────────────────────────────────────────────────────────
@@ -152,7 +207,7 @@ function opp2Core() {
       );
       if (!scheduled.length) return { hasData: false, rows: [], ticks: [], nowLeft: null };
       const starts = scheduled.map(({ slot: s }) => toMin(s.scheduled_start));
-      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(s.predicted_end));
+      const ends   = scheduled.filter(({ slot: s }) => s.predicted_end).map(({ slot: s }) => toMin(this.predictedAdjustedEnd(s)));
       const axisStart = Math.floor(Math.min(...starts) / 30) * 30;
       const axisEnd   = Math.ceil((ends.length ? Math.max(...ends) : Math.max(...starts) + 60) / 30) * 30;
       const total = axisEnd - axisStart;
@@ -164,12 +219,13 @@ function opp2Core() {
         .map(strip => ({
           name: strip.name || ('Piste ' + strip.strip_number),
           bars: strip.slots.filter(s => s.scheduled_start).map(s => {
+            const adjustedEnd = this.predictedAdjustedEnd(s);
             const s0 = toMin(s.scheduled_start);
-            const s1 = s.predicted_end ? toMin(s.predicted_end) : s0 + 30;
+            const s1 = adjustedEnd ? toMin(adjustedEnd) : s0 + 30;
             return { id: s.id, left: (s0 - axisStart) / total * 100,
                      width: Math.max((s1 - s0) / total * 100, 0.5),
                      color: colorOf(s), label: this.slotLabel(s),
-                     start: s.scheduled_start, end: s.predicted_end };
+                     start: s.scheduled_start, end: adjustedEnd };
           }),
         }));
       const now = new Date();
@@ -196,7 +252,7 @@ function opp2Core() {
 
     stripTimeRange(strip) {
       const starts = strip.slots.filter(s => s.scheduled_start).map(s => s.scheduled_start);
-      const ends   = strip.slots.filter(s => s.predicted_end).map(s => s.predicted_end);
+      const ends   = strip.slots.filter(s => s.predicted_end).map(s => this.predictedAdjustedEnd(s));
       if (!starts.length) return '';
       const start = starts.reduce((a, b) => a < b ? a : b);
       const end   = ends.length ? ends.reduce((a, b) => a > b ? a : b) : '';
@@ -240,14 +296,36 @@ function opp2Core() {
       if (slot.type === 'de') {
         const name = slot.competition_name || '?';
         const t = slot.tableau || '?';
-        if (!slot.partition || slot.partition === 'full') return `${name} — DE T${t}`;
+        // Which round this is within the tableau — the one thing a bare "DE
+        // T8" label never showed, easy to miss once a bracket has several
+        // rounds pre-scheduled at once (services/dePhases.js's
+        // createSkeleton makes that routine, not an edge case).
+        const roundLabel = slot.bracket === 'repechage' ? `Rep D${slot.de_round ?? '?'}`
+          : slot.bracket === 'placement' ? 'Placement'
+          : slot.de_round ? `R${slot.de_round}` : '';
+        const prefix = `${name} — DE T${t}` + (roundLabel ? ` ${roundLabel}` : '');
         const [lo, hi] = this.boutRangeForPartition(slot.partition, slot.tableau);
-        return lo === hi
-          ? `${name} — DE T${t} bout ${lo}`
-          : `${name} — DE T${t} bouts ${lo}–${hi}`;
+        const boutsInSlot = hi - lo + 1;
+        // fillDeByeInfo (lib/deSlotMath.js) only resolves once round 1 has
+        // been seeded with real competitors — before that de_bye_count/
+        // de_bout_total are undefined, and slotPredictedByeCount above fills
+        // the gap with a clearly-marked estimate instead (same math as
+        // opp2-bulk-assign.js's bulkDePreview shows before this slot even
+        // existed).
+        const resolvedCount = slot.de_bye_count > 0 ? slot.de_bye_count : 0;
+        const predictedCount = resolvedCount ? 0 : this.slotPredictedByeCount(slot);
+        const byeSuffix = resolvedCount
+          ? (resolvedCount === slot.de_bout_total ? ' (bye)' : ` (${resolvedCount} bye)`)
+          : predictedCount
+            ? (predictedCount === boutsInSlot ? ' (predicted bye)' : ` (~${predictedCount} predicted bye)`)
+            : '';
+        if (!slot.partition || slot.partition === 'full') return prefix + byeSuffix;
+        return (lo === hi ? `${prefix} bout ${lo}` : `${prefix} bouts ${lo}–${hi}`) + byeSuffix;
       }
       if (slot.type === 'team_match')
         return `${slot.competition_name || '?'} — ${slot.left_team_name || '?'} vs ${slot.right_team_name || '?'}`;
+      if (slot.type === 'virtual')
+        return `${slot.competition_name || '?'} — ${slot.virtual_label || '?'} (planned)`;
       return slot.type || '—';
     },
 
@@ -311,6 +389,75 @@ function opp2Core() {
         depth++;
       }
       return (lo_ === lo && hi_ === hi) ? code : null;
+    },
+
+    // Mirrors lib/deFormation.js's buildSeedPositions/predictedByePositions —
+    // used by opp2-bulk-assign.js's bulkDePreview to flag *which* round-1 DE
+    // bouts in a skeleton phase are predicted byes from the estimated
+    // headcount, before real seeding resolves them for real (see
+    // lib/deSlotMath.js's fillDeByeInfo for the post-seeding, confirmed
+    // equivalent shown once the phase is no longer a skeleton).
+    buildSeedPositionsClient(T) {
+      let slots = [1, 2], cur = 2;
+      while (cur < T) {
+        cur *= 2;
+        const next = [];
+        for (let i = 0; i < slots.length; i++) {
+          const s = slots[i];
+          if (i % 2 === 0) next.push(s, cur + 1 - s);
+          else             next.push(cur + 1 - s, s);
+        }
+        slots = next;
+      }
+      return slots;
+    },
+
+    predictedByePositions(T, N) {
+      const seedSlots = this.buildSeedPositionsClient(T);
+      const positions = new Set();
+      for (let i = 0; i < T; i += 2) {
+        if (seedSlots[i] > N || seedSlots[i + 1] > N) positions.add(i / 2 + 1);
+      }
+      return positions;
+    },
+
+    // How many of an already-created DE slot's round-1 bouts are predicted
+    // byes, for a skeleton phase that hasn't been seeded yet — the same
+    // prediction opp2-bulk-assign.js shows before such a slot is even
+    // created, kept visible afterward too (on the strip card and the Gantt
+    // bar, both of which render through slotLabel below) so a director
+    // reading the schedule can see a round-1 strip will likely run short.
+    // Returns 0 once the phase is seeded ('active') — from then on the real,
+    // resolved de_bye_count (lib/deSlotMath.js's fillDeByeInfo) takes over.
+    slotPredictedByeCount(slot) {
+      if (slot.type !== 'de' || slot.de_round !== 1 || !slot.tableau) return 0;
+      if (slot.bracket && slot.bracket !== 'main') return 0;
+      const phase = this.availableDePhases.find(p => p.id === slot.phase_id);
+      if (!phase || phase.status !== 'skeleton' || phase.estimated_advanced_count == null) return 0;
+      const predicted = this.predictedByePositions(slot.tableau, phase.estimated_advanced_count);
+      const [lo, hi] = this.boutRangeForPartition(slot.partition, slot.tableau);
+      let count = 0;
+      for (let pos = lo; pos <= hi; pos++) if (predicted.has(pos)) count++;
+      return count;
+    },
+
+    // services/pipelineSlots.js's withPredictedEnd already discounts a
+    // *confirmed* bye (real, post-seeding) from predicted_end server-side.
+    // This covers the pre-seeding case: a still-unseeded skeleton's
+    // *estimated* byes, which the server deliberately leaves out of
+    // predicted_end since they're provisional. Used by ganttData below and
+    // opp2-bulk-assign.js's pisteIsBusy, so a round expected to run short
+    // doesn't visually/functionally block the next round's start time —
+    // falls straight back to the server's own predicted_end whenever no
+    // prediction applies (already-seeded, non-DE, or round-1-bye-free).
+    predictedAdjustedEnd(slot) {
+      if (!slot.predicted_end || !slot.scheduled_start || !slot.effective_minutes_per_bout) return slot.predicted_end;
+      const predictedByeCount = this.slotPredictedByeCount(slot);
+      if (!predictedByeCount) return slot.predicted_end;
+      const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const startMin = toMin(slot.scheduled_start);
+      const adjustedMin = Math.max(startMin, toMin(slot.predicted_end) - predictedByeCount * slot.effective_minutes_per_bout);
+      return `${String(Math.floor(adjustedMin / 60) % 24).padStart(2,'0')}:${String(adjustedMin % 60).padStart(2,'0')}`;
     },
 
     // Returns the unique partition code for the single bout at round_index i (1-based)

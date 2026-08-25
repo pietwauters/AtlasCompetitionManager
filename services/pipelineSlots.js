@@ -5,7 +5,7 @@
 // recombines this with pipelineNav.js/pipelineRosters.js into the same
 // public `Pipeline` API every existing caller already uses.
 const db = require('../db');
-const { isValidPartition, fillDeBoutCount } = require('../lib/deSlotMath');
+const { isValidPartition, fillDeBoutCount, fillDeByeInfo } = require('../lib/deSlotMath');
 
 const stmtSlotById    = db.prepare('SELECT * FROM pipeline_slots WHERE id = ?');
 const stmtRefereeName = db.prepare(`
@@ -45,8 +45,8 @@ const stmtFindByStripQuery = db.prepare(`
     ph.competition_id,
     ph.type       AS phase_type,
     ph.phase_order,
-    co.name       AS competition_name,
-    co.weapon,
+    COALESCE(co.name, co_v.name)     AS competition_name,
+    COALESCE(co.weapon, co_v.weapon) AS weapon,
     po.pool_number, po.strip_count, po.dynamic_reorder,
     tm_slot.left_team_id, tm_left.name AS left_team_name,
     tm_slot.right_team_id, tm_right.name AS right_team_name,
@@ -67,8 +67,9 @@ const stmtFindByStripQuery = db.prepare(`
                    THEN ds.observed_average
                    ELSE ds.minutes_per_bout END
        FROM bout_duration_standards ds
-       WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
-         AND ds.gender = co.gender
+       WHERE ds.weapon = CASE COALESCE(co.weapon, co_v.weapon)
+               WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE COALESCE(co.weapon, co_v.weapon) END
+         AND ds.gender = COALESCE(co.gender, co_v.gender)
          AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
     ) AS effective_minutes_per_bout
   FROM pipeline_slots ps
@@ -77,7 +78,8 @@ const stmtFindByStripQuery = db.prepare(`
   LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
   LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
   LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
-  LEFT JOIN competitions co ON co.id  = ph.competition_id
+  LEFT JOIN competitions co   ON co.id   = ph.competition_id
+  LEFT JOIN competitions co_v ON co_v.id = ps.virtual_competition_id
   LEFT JOIN referees     r  ON r.id   = ps.referee_id
   LEFT JOIN people       rp ON rp.id  = r.person_id
   LEFT JOIN pipeline_slot_officials so_ref2 ON so_ref2.slot_id = ps.id AND so_ref2.role = 'referee2'
@@ -99,7 +101,8 @@ const stmtFindAllForRefereeQuery = db.prepare(`
   SELECT ps.*, st.name AS strip_name, st.strip_number,
     po.pool_number,
     ph.type AS phase_type, ph.phase_order,
-    co.name AS competition_name, co.weapon,
+    COALESCE(co.name, co_v.name)     AS competition_name,
+    COALESCE(co.weapon, co_v.weapon) AS weapon,
     tm_slot.left_team_id, tm_left.name AS left_team_name,
     tm_slot.right_team_id, tm_right.name AS right_team_name,
     GROUP_CONCAT(so.role) AS other_roles,
@@ -115,8 +118,9 @@ const stmtFindAllForRefereeQuery = db.prepare(`
                    THEN ds.observed_average
                    ELSE ds.minutes_per_bout END
        FROM bout_duration_standards ds
-       WHERE ds.weapon = CASE co.weapon WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE co.weapon END
-         AND ds.gender = co.gender
+       WHERE ds.weapon = CASE COALESCE(co.weapon, co_v.weapon)
+               WHEN 'foil' THEN 'F' WHEN 'epee' THEN 'E' WHEN 'sabre' THEN 'S' ELSE COALESCE(co.weapon, co_v.weapon) END
+         AND ds.gender = COALESCE(co.gender, co_v.gender)
          AND ds.phase_type = CASE WHEN ps.type='pool' THEN 'pool' ELSE 'de' END)
     ) AS effective_minutes_per_bout
   FROM pipeline_slots ps
@@ -126,7 +130,8 @@ const stmtFindAllForRefereeQuery = db.prepare(`
   LEFT JOIN teams        tm_left  ON tm_left.id  = tm_slot.left_team_id
   LEFT JOIN teams        tm_right ON tm_right.id = tm_slot.right_team_id
   LEFT JOIN phases       ph ON ph.id  = COALESCE(ps.phase_id, po.phase_id, tm_slot.phase_id)
-  LEFT JOIN competitions co ON co.id  = ph.competition_id
+  LEFT JOIN competitions co   ON co.id   = ph.competition_id
+  LEFT JOIN competitions co_v ON co_v.id = ps.virtual_competition_id
   LEFT JOIN pipeline_slot_officials so ON so.slot_id = ps.id AND so.referee_id = @refId
   WHERE ps.referee_id = @refId OR so.referee_id IS NOT NULL
   GROUP BY ps.id
@@ -169,6 +174,10 @@ const stmtCountSlotsWithTeamMatchOnStrip = db.prepare(
   'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND team_match_id IS NOT NULL'
 );
 const stmtSetStripIdle = db.prepare("UPDATE strips SET status='idle' WHERE id=?");
+const stmtCountAllPipelineSlots  = db.prepare('SELECT COUNT(*) AS n FROM pipeline_slots');
+const stmtDeleteAllPipelineSlots = db.prepare('DELETE FROM pipeline_slots');
+const stmtClearAllPoolStripIds   = db.prepare('UPDATE pools SET strip_id = NULL WHERE strip_id IS NOT NULL');
+const stmtSetAllStripsIdle       = db.prepare("UPDATE strips SET status = 'idle'");
 const stmtMaxSlotOrderForStrip = db.prepare(
   'SELECT COALESCE(MAX(slot_order), 0) AS m FROM pipeline_slots WHERE strip_id = ?'
 );
@@ -176,11 +185,13 @@ const stmtInsertPipelineSlot = db.prepare(`
   INSERT INTO pipeline_slots
     (strip_id, slot_order, type, pool_id, phase_id, team_match_id,
      bracket, tableau, partition, de_round,
-     scheduled_start, minutes_per_bout, referee_id)
+     scheduled_start, minutes_per_bout, referee_id,
+     virtual_competition_id, virtual_format_stage_id, virtual_phase_type, virtual_label)
   VALUES
     (@strip_id, @slot_order, @type, @pool_id, @phase_id, @team_match_id,
      @bracket, @tableau, @partition, @de_round,
-     @scheduled_start, @minutes_per_bout, @referee_id)
+     @scheduled_start, @minutes_per_bout, @referee_id,
+     @virtual_competition_id, @virtual_format_stage_id, @virtual_phase_type, @virtual_label)
 `);
 const stmtSetPoolStripId = db.prepare('UPDATE pools SET strip_id = ? WHERE id = ?');
 const stmtUpdateSlotFields = db.prepare(`
@@ -282,8 +293,17 @@ function withPredictedEnd(slot) {
   if (!slot.scheduled_start || !slot.effective_minutes_per_bout || !slot.bout_count) {
     return { ...slot, predicted_end: null };
   }
+  // A confirmed bye (fillDeByeInfo's de_bye_count, already resolved for a
+  // seeded DE round) takes no fencing time at all — counting it the same as
+  // a real bout inflates every downstream consumer of predicted_end
+  // (the Gantt bar width, and opp2-bulk-assign.js's pisteIsBusy conflict
+  // check for scheduling the next round). Only the *resolved* count is
+  // subtracted here; the pre-seeding *predicted* estimate for a still-
+  // skeleton phase is deliberately handled client-side instead (see
+  // opp2-core.js's predictedAdjustedEnd) — it's provisional, unlike this.
+  const billableBouts = Math.max(0, slot.bout_count - (slot.de_bye_count || 0));
   const [h, m] = slot.scheduled_start.split(':').map(Number);
-  const totalMin = h * 60 + m + slot.bout_count * slot.effective_minutes_per_bout;
+  const totalMin = h * 60 + m + billableBouts * slot.effective_minutes_per_bout;
   const ph = Math.floor(totalMin / 60) % 24;
   const pm = totalMin % 60;
   return { ...slot, predicted_end: `${String(ph).padStart(2,'0')}:${String(pm).padStart(2,'0')}` };
@@ -347,7 +367,7 @@ const PipelineSlots = {
   findByStrip(stripId) {
     const slots = stmtFindByStripQuery.all(stripId);
 
-    return slots.map(s => attachOfficials(withPredictedEnd(fillDeBoutCount(s))));
+    return slots.map(s => attachOfficials(withPredictedEnd(fillDeByeInfo(fillDeBoutCount(s)))));
   },
 
   findAllForReferee(refereeId) {
@@ -357,7 +377,7 @@ const PipelineSlots = {
       const roles = [];
       if (s.referee_id == refereeId) roles.push('referee');
       if (s.other_roles) roles.push(...s.other_roles.split(','));
-      return { ...withPredictedEnd(fillDeBoutCount(s)), roles };
+      return { ...withPredictedEnd(fillDeByeInfo(fillDeBoutCount(s))), roles };
     });
   },
 
@@ -389,6 +409,14 @@ const PipelineSlots = {
     }
     if (data.type === 'de' && data.partition && !isValidPartition(data.partition, data.tableau)) {
       throw new Error(`Invalid partition "${data.partition}" for tableau ${data.tableau}`);
+    }
+    if (data.type === 'virtual') {
+      if (!data.virtual_competition_id || !data.virtual_format_stage_id || !data.virtual_phase_type) {
+        throw new Error('virtual_competition_id, virtual_format_stage_id, and virtual_phase_type are required for a virtual slot');
+      }
+      if (data.pool_id || data.phase_id || data.team_match_id) {
+        throw new Error('A virtual slot cannot also carry a real pool_id/phase_id/team_match_id');
+      }
     }
 
     return db.transaction(() => {
@@ -460,6 +488,10 @@ const PipelineSlots = {
         scheduled_start:  data.scheduled_start  ?? null,
         minutes_per_bout: data.minutes_per_bout ?? null,
         referee_id:       data.referee_id       ?? null,
+        virtual_competition_id:  data.virtual_competition_id  ?? null,
+        virtual_format_stage_id: data.virtual_format_stage_id ?? null,
+        virtual_phase_type:      data.virtual_phase_type      ?? null,
+        virtual_label:           data.virtual_label           ?? null,
       });
 
       if (data.pool_id) {
@@ -478,6 +510,16 @@ const PipelineSlots = {
   updateSlot(id, data) {
     const current = PipelineSlots.findById(id);
     if (!current) return null;
+
+    // Defense in depth, matching addSlot's own guards below: a virtual slot
+    // (services/pipelineVirtualSlots.js) has no real bouts/roster behind it
+    // and must never reach the live OPP2 hot path — activeSlot/prevSlotFor
+    // already exclude it by type, but a stray/buggy PATCH must not be able
+    // to force one live by setting status directly.
+    if (current.type === 'virtual' && data.status && data.status !== 'pending') {
+      throw new Error(`Cannot set status "${data.status}" on a virtual slot — it has no real phase yet.`);
+    }
+
     const m = { ...current, ...data };
 
     // Server-side enforcement of referee/official double-booking (see
@@ -581,6 +623,24 @@ const PipelineSlots = {
         if (remaining === 0) stmtSetStripIdle.run(slot.strip_id);
       }
       return changed;
+    })();
+  },
+
+  // The "clear the entire schedule" nuclear option (public/opp2.html) — every
+  // strip's queue, system-wide, real and virtual (services/pipelineVirtualSlots.js)
+  // alike. Deliberately narrow in scope: only pipeline_slots (cascades to
+  // pipeline_slot_officials via its own ON DELETE CASCADE) plus the two fields
+  // that mirror a slot's existence elsewhere (pools.strip_id, strips.status) —
+  // same fields deleteSlot above already keeps in sync one row at a time.
+  // Never touches phases/pools/bouts/competitors/results or
+  // schedule-planner.html's own separate plan (schedule_plan_slots).
+  clearAll() {
+    return db.transaction(() => {
+      const cleared = stmtCountAllPipelineSlots.get().n;
+      stmtDeleteAllPipelineSlots.run();
+      stmtClearAllPoolStripIds.run();
+      stmtSetAllStripsIdle.run();
+      return { cleared };
     })();
   },
 

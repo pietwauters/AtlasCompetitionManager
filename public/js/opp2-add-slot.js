@@ -19,14 +19,15 @@ function opp2AddSlot() {
       const strip = this.selectedStrip;
       const latest = strip ? strip.slots
         .filter(s => s.predicted_end)
-        .reduce((best, s) => (!best || s.predicted_end > best) ? s.predicted_end : best, null) : null;
+        .map(s => this.predictedAdjustedEnd(s))
+        .reduce((best, end) => (!best || end > best) ? end : best, null) : null;
       let suggested = '';
       if (latest) {
         const [h, m] = latest.split(':').map(Number);
         const t = h * 60 + m + 5;
         suggested = this.round5(`${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
       }
-      this.addForm = { type: 'pool', pool_id: '', phase_id: '', team_match_id: '',
+      this.addForm = { type: 'pool', pool_id: '', phase_id: '', team_match_id: '', virtual_key: '',
                        de_round: '', tableau: null, bout_start: '', bout_end: '',
                        scheduled_start: suggested, minutes_per_bout: '', standardMinutes: null };
       this.wantMulti = false;
@@ -39,6 +40,7 @@ function opp2AddSlot() {
       this.addForm.pool_id = '';
       this.addForm.phase_id = '';
       this.addForm.team_match_id = '';
+      this.addForm.virtual_key = '';
       this.addForm.de_round = '';
       this.addForm.tableau = null;
       this.addForm.bout_start = '';
@@ -68,6 +70,10 @@ function opp2AddSlot() {
       if (!this.addForm.minutes_per_bout) this.addForm.minutes_per_bout = '';
     },
 
+    virtualStageKey(stage) {
+      return `${stage.competition_id}:${stage.format_stage_id}`;
+    },
+
     toggleMultiStrip(stripId) {
       const idx = this.multiStrips.indexOf(stripId);
       if (idx === -1) this.multiStrips.push(stripId);
@@ -83,6 +89,9 @@ function opp2AddSlot() {
       if (this.addForm.type === 'team_match' && !this.addForm.team_match_id) {
         this.showNotice('Select a team match first', true); return;
       }
+      if (this.addForm.type === 'virtual' && !this.addForm.virtual_key) {
+        this.showNotice('Select a competition and stage first', true); return;
+      }
       if (this.addForm.type === 'de') {
         if (!this.addForm.tableau) { this.showNotice('Select a DE phase and round first', true); return; }
         const n = this.addForm.tableau / 2;
@@ -96,13 +105,25 @@ function opp2AddSlot() {
         this.addForm._partition = partition;
       }
 
+      let virtualStage = null;
+      if (this.addForm.type === 'virtual') {
+        virtualStage = this.availableVirtualStages.find(s => this.virtualStageKey(s) === this.addForm.virtual_key);
+        if (!virtualStage) { this.showNotice('Selected stage is no longer available', true); return; }
+      }
+
       const body = {
         type:             this.addForm.type,
         pool_id:          this.addForm.type === 'pool'       ? (this.addForm.pool_id       || null) : null,
         phase_id:         this.addForm.type === 'de'   ? (this.addForm.phase_id      || null) : null,
         tableau:          this.addForm.type === 'de'   ? (this.addForm.tableau        || null) : null,
         partition:        this.addForm.type === 'de'   ? (this.addForm._partition     ?? null) : null,
+        de_round:         this.addForm.type === 'de'   ? (this.addForm.de_round       || null) : null,
+        bracket:          this.addForm.type === 'de'   ? 'main' : null,
         team_match_id:    this.addForm.type === 'team_match' ? (this.addForm.team_match_id || null) : null,
+        virtual_competition_id:  virtualStage ? virtualStage.competition_id  : null,
+        virtual_format_stage_id: virtualStage ? virtualStage.format_stage_id : null,
+        virtual_phase_type:      virtualStage ? virtualStage.phase_type      : null,
+        virtual_label:           virtualStage ? virtualStage.label           : null,
         scheduled_start:  this.addForm.scheduled_start  || null,
         minutes_per_bout: this.addForm.minutes_per_bout || null,
       };
