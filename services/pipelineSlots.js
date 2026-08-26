@@ -174,6 +174,20 @@ const stmtCountSlotsWithTeamMatchOnStrip = db.prepare(
   'SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND team_match_id IS NOT NULL'
 );
 const stmtSetStripIdle = db.prepare("UPDATE strips SET status='idle' WHERE id=?");
+// markPoolPhaseSlotsDone — see the method below for why this exists.
+const stmtPoolPhaseSlotStrips = db.prepare(`
+  SELECT DISTINCT strip_id FROM pipeline_slots
+  WHERE type = 'pool' AND status != 'done'
+    AND pool_id IN (SELECT id FROM pools WHERE phase_id = ?)
+`);
+const stmtMarkPoolPhaseSlotsDone = db.prepare(`
+  UPDATE pipeline_slots SET status = 'done'
+  WHERE type = 'pool' AND status != 'done'
+    AND pool_id IN (SELECT id FROM pools WHERE phase_id = ?)
+`);
+const stmtActiveOrPendingCountForStrip = db.prepare(
+  "SELECT COUNT(*) AS n FROM pipeline_slots WHERE strip_id = ? AND status IN ('pending','active')"
+);
 const stmtCountAllPipelineSlots  = db.prepare('SELECT COUNT(*) AS n FROM pipeline_slots');
 const stmtDeleteAllPipelineSlots = db.prepare('DELETE FROM pipeline_slots');
 const stmtClearAllPoolStripIds   = db.prepare('UPDATE pools SET strip_id = NULL WHERE strip_id IS NOT NULL');
@@ -652,6 +666,25 @@ const PipelineSlots = {
         stmtBatchReorderUpdate.run(base + i, id, Number(stripId));
       });
     })();
+  },
+
+  // Marks every pool-type pipeline_slot for this phase's pools 'done', once
+  // the pool phase itself closes. Only the live OPP2 hot path
+  // (services/pipelineNav.js's markDone, driven by real apparatus/MQTT
+  // events) ever sets a slot to 'done' otherwise — a director who closes a
+  // pool phase without ever touching live hardware (scoring by hand, or
+  // services/phases.js's simulate()) had no way to get that status update
+  // at all, so the Gantt/strip queue kept showing a fully-finished pool as
+  // still "pending" indefinitely. Called from services/phases.js's close()
+  // inside the same transaction. Idle-checks every affected strip the same
+  // way markDone does per-slot, just batched across all of them at once.
+  markPoolPhaseSlotsDone(phaseId) {
+    const affectedStripIds = stmtPoolPhaseSlotStrips.all(phaseId).map(r => r.strip_id);
+    if (!affectedStripIds.length) return;
+    stmtMarkPoolPhaseSlotsDone.run(phaseId);
+    for (const stripId of affectedStripIds) {
+      if (stmtActiveOrPendingCountForStrip.get(stripId).n === 0) stmtSetStripIdle.run(stripId);
+    }
   },
 
   moveToStrip(slotId, newStripId) {

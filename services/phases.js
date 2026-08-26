@@ -17,6 +17,7 @@ const Format         = require('./formats');
 const Bout           = require('./bouts');
 const PoolPhases     = require('./poolPhases');
 const DePhases       = require('./dePhases');
+const Pipeline       = require('./pipelineSlots');
 
 // ---------------------------------------------------------------------------
 // Prepared statements — module-level constants (see CLAUDE.md's hard rule;
@@ -214,6 +215,12 @@ const Phase = {
 
       stmtFinishPhase.run(phaseId);
       stmtFinishPools.run(phaseId);
+      // See services/pipelineSlots.js's markPoolPhaseSlotsDone: a pool
+      // phase can close (by hand, or via simulate()) without ever touching
+      // live OPP2 hardware, which is the only other thing that ever marks a
+      // pipeline_slot 'done' — without this, a fully-finished pool round
+      // stayed "pending" (blue) in the Gantt/strip queue forever.
+      if (phase.type === 'pool') Pipeline.markPoolPhaseSlotsDone(phaseId);
     })();
 
     // Remove any manual tie order stored for this phase — no longer needed.
