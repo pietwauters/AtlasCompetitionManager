@@ -320,6 +320,53 @@ FIE serpentine tableau seeding, all rounds pre-built with byes auto-finished,
 completion bug in heavy-bye draws is fixed and verified). UI: `public/de.html`, with a
 narrow-screen per-round accordion.
 
+### DE bracket pre-scheduling & bye handling (complete, 2026-08-26)
+Lets a director build a DE phase's strip schedule before the prior stage even closes.
+`services/dePhases.js`'s `createSkeleton(compId, ruleDoc, estimatedN, formatStageId)`
+builds a real phase with every round's bout rows from just an estimated headcount
+(`lib/deFormation.js`'s `buildBracketShape`/`seedRound1` split); `seedSkeleton` fills in
+real competitors once the prior stage closes, rejecting a tableau-size mismatch
+(`TABLEAU_MISMATCH`, `estimatedN` too close to a power-of-2 boundary — see
+`isRiskyEstimate`) rather than silently rebuilding over strip assignments already made.
+Auto-triggered on phase close via `services/phases.js`'s `autoSeedSkeletonsIfAny`, called
+from **both** `routes/phases.js` and `routes/phasesById.js`'s close routes — `phase.html`
+closes through the latter, `competition-detail.html`'s format-plan UI through the
+former; the hook must be wired into both or a real close silently never re-seeds.
+
+- **Bye prediction/resolution**: `lib/deFormation.js`'s `predictedByePositions(T, N)`
+  (pure seed-position math) flags likely round-1 byes from the estimate before seeding,
+  shown as "(predicted bye)" in `opp2.html`'s bulk-assign preview and slot labels — a
+  provisional estimate, never used to auto-resolve anything. Once seeded,
+  `lib/deSlotMath.js`'s `fillDeByeInfo` reports the real, confirmed byes ("(bye)").
+- **Piste allocation follows FIE o.87.1/o.93.2** ("one quarter of the table per piste"):
+  `opp2-bulk-assign.js`'s DE bulk-assign splits a round into contiguous chunks, one per
+  selected piste — not round-robin-by-bout-index, which aliases badly with the seed-
+  doubling recursion's own power-of-2 periodicity whenever the piste count is also a
+  power of 2 (found in real use: dumped nearly all byes onto one or two of four pistes).
+- **Duration accounting**: a bye takes no real fencing time — `services/pipelineSlots.js`'s
+  `withPredictedEnd` discounts confirmed byes from `predicted_end` server-side;
+  `opp2-core.js`'s `predictedAdjustedEnd`/`effectiveBoutCount` do the same client-side for
+  still-unseeded predicted byes, feeding the Gantt, conflict detection, and recascade.
+- **"Remove confirmed byes" button** (`opp2-schedule-ops.js`'s `removeConfirmedByes`)
+  bulk-deletes every slot that's wholly a confirmed bye and recascades affected strips.
+  Recascade is **contiguity-based, not phase-based**: `_stripSegments` splits a strip's
+  slots into runs wherever there's a genuine pre-existing gap (raw, undiscounted timing —
+  a bye's own shrunk duration must never be misread as a gap), and only compacts within
+  the run that contained the removed slot. A later block scheduled with zero buffer right
+  after (e.g. DE round 2 immediately following round 1) cascades forward too; anything
+  separated by real slack (a pool block ending well before DE deliberately starts later)
+  is left exactly where it is — the same rule applies to the plain single-slot delete and
+  move-to-strip actions, not just the bulk one.
+- **Virtual slots** (`services/pipelineVirtualSlots.js`, migration 039): a lighter
+  placeholder for pool stages, which have no skeleton mechanism yet — reserves strip time
+  for a format stage with no real phase, auto-filled in once the phase is created.
+- **Clear entire schedule** (`routes/opp2.js` `DELETE /pipeline`, admin-only,
+  confirm-gated): wipes every strip's queue, real and virtual/planned slots alike.
+
+Verified end-to-end in an isolated sandbox (throwaway competition/strips/login) driving
+the real client-side mixins against the live server for the full pools → DE skeleton →
+bulk-assign → simulate/close → remove-byes flow.
+
 ### Handedness-aware strip-side placement (2026-07-08)
 FIE t.22: a left-hander is always placed on the referee's left when paired against a
 right-hander — automatic for every pool/DE bout (`Bout.normalizeHandedness`), plus a
