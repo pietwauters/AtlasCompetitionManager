@@ -116,14 +116,14 @@
   <div class="notice-bar notice-err" x-show="notice.text&& notice.error" x-text="notice.text"></div>
 
   <!-- ── Connection status ──────────────────────────────────────────────────── -->
-  <div class="card" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-      <h2 style="margin:0">Piste Schedule</h2>
+  <details class="card" open data-key="connection-status" style="margin-bottom:1rem">
+  <summary style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <h2 style="display:inline;margin:0">Piste Schedule</h2>
       <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
             x-text="status.connected?'Connected':'Disconnected'"></span>
       <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
-      <a href="/admin.html" style="font-size:.82rem;color:#888;margin-left:auto">⚙ Settings</a>
-    </div>
+      <a href="/admin.html" @click.stop style="font-size:.82rem;color:#888;margin-left:auto">⚙ Settings</a>
+  </summary>
     <template x-if="status.connected && status.pistes.length">
       <div style="margin-top:.75rem">
         <div style="font-size:.82rem;color:#666;margin-bottom:.3rem">Apparatus status</div>
@@ -144,10 +144,12 @@
         </div>
       </div>
     </template>
-  </div>
+  </details>
 
   <!-- ── Two-panel pipeline builder ────────────────────────────────────────── -->
-  <div class="schedule-panel" style="margin-bottom:1rem"
+  <details class="card" open data-key="piste-assignment" style="margin-bottom:1rem">
+  <summary><h2 style="display:inline;margin:0">Piste assignment</h2></summary>
+  <div class="schedule-panel"
        :class="{'drill-list': isNarrow && !selectedStripId, 'drill-detail': isNarrow && selectedStripId}">
 
     <!-- Left: strip list -->
@@ -530,10 +532,11 @@
       </template><!-- /selectedStrip -->
     </div><!-- /pipeline-panel -->
   </div><!-- /schedule-panel -->
+  </details>
 
   <!-- ── Piste schedule (Gantt) ───────────────────────────────────────────── -->
-  <div class="card" x-show="ganttData.hasData">
-    <h2 style="margin-top:0">Piste schedule</h2>
+  <details class="card" open data-key="piste-gantt" x-show="ganttData.hasData">
+  <summary><h2 style="display:inline;margin:0">Piste schedule</h2></summary>
     <div style="overflow-x:auto">
       <div style="min-width:500px;display:flex">
         <div style="width:110px;flex-shrink:0">
@@ -577,7 +580,7 @@
         <span style="margin-left:auto;color:#aaa">Only slots with a scheduled start time are shown.</span>
       </div>
     </div>
-  </div>
+  </details>
 
   <!-- ── Bulk assign modal ────────────────────────────────────────────────── -->
   <div class="modal-backdrop" x-show="bulkModal.open" @click.self="bulkModal.open=false">
@@ -904,9 +907,9 @@
   </div>
 
   <!-- ── Referee schedule ──────────────────────────────────────────────────── -->
-  <div class="card" x-show="referees.length">
+  <details class="card" open data-key="referee-schedule" x-show="referees.length">
+  <summary><h2 style="display:inline;margin:0">Referee schedule</h2></summary>
     <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.5rem">
-      <h2 style="margin:0">Referee schedule</h2>
       <select x-model="selectedReferee" @change="loadRefereeSchedule()">
         <option value="">— Select referee —</option>
         <template x-for="r in referees" :key="r.referee_id">
@@ -932,11 +935,11 @@
       </table>
     </template>
     <div x-show="selectedReferee && !refSchedule.length" style="color:#888;font-size:.9rem">No slots assigned to this referee.</div>
-  </div>
+  </details>
 
   <!-- ── Referee schedule (Gantt) ─────────────────────────────────────────── -->
-  <div class="card" x-show="refGanttData.hasData">
-    <h2 style="margin-top:0">Referee schedule (Gantt)</h2>
+  <details class="card" open data-key="referee-gantt" x-show="refGanttData.hasData">
+  <summary><h2 style="display:inline;margin:0">Referee schedule (Gantt)</h2></summary>
     <div style="overflow-x:auto">
       <div style="min-width:500px;display:flex">
         <div style="width:110px;flex-shrink:0">
@@ -980,7 +983,7 @@
         <span style="margin-left:auto;color:#aaa">Only referee-assigned slots with a scheduled start time are shown.</span>
       </div>
     </div>
-  </div>
+  </details>
 
 </main>
 
@@ -1024,6 +1027,7 @@ function app() {
 }
 </script>
 <script src="/js/nav.js"></script>
+<script src="/js/collapse-persist.js"></script>
 <script src="/js/alpinejs.min.js"></script>
 </body>
 </html>
