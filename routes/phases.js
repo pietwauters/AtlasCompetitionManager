@@ -35,27 +35,11 @@ function applyVirtualSlotsIfAny(phase) {
   }
 }
 
-// Seeds any DE bracket skeleton (services/dePhases.js's createSkeleton) whose
-// dependency this closing phase might have just satisfied. Tries every
-// skeleton-status phase in the same competition rather than computing the
-// dependency graph here — seedSkeleton's own Format.assertNextStage already
-// gates correctly (throws for "not ready yet", same as a genuine
-// TABLEAU_MISMATCH); either way this must never block the close itself.
-function autoSeedSkeletonsIfAny(closedPhaseId) {
-  const closedPhase = Phase.findById(closedPhaseId);
-  if (!closedPhase) return null;
-  const skeletons = Phase.findByCompetition(closedPhase.competition_id)
-    .filter(p => p.status === 'skeleton');
-  const seeded = [];
-  for (const skeleton of skeletons) {
-    try {
-      seeded.push(Phase.seedSkeleton(skeleton.id));
-    } catch (err) {
-      console.error('[de-skeleton] auto-seed skipped for phase', skeleton.id, ':', err.message);
-    }
-  }
-  return seeded.length ? seeded : null;
-}
+// Seeds any DE bracket skeleton whose dependency this closing phase might
+// have just satisfied — see services/phases.js's autoSeedSkeletonsIfAny
+// (shared with routes/phasesById.js's own close route, since phase.html/
+// pool.html close through that one instead of this nested route).
+const autoSeedSkeletonsIfAny = (closedPhaseId) => Phase.autoSeedSkeletonsIfAny(closedPhaseId);
 
 router.get('/', (req, res) => {
   res.json(Phase.findByCompetition(req.params.compId));

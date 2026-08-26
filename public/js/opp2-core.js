@@ -162,6 +162,14 @@ function opp2Core() {
 
     // ── Computed ─────────────────────────────────────────────────────────────
 
+    // Drives the "Remove confirmed byes" button (opp2-schedule-ops.js's
+    // removeConfirmedByes) — same wholly-a-bye test it uses to pick slots.
+    get confirmedByeSlotCount() {
+      return this.strips.reduce((sum, strip) =>
+        sum + strip.slots.filter(s => s.type === 'de' && s.de_bye_count > 0 && s.de_bye_count === s.de_bout_total).length,
+        0);
+    },
+
     get selectedStrip() {
       return this.strips.find(s => s.id === this.selectedStripId) || null;
     },
@@ -482,10 +490,41 @@ function opp2Core() {
     // (_recascadeStrip) — kept here rather than duplicated per CLAUDE.md's
     // "shared statement, one file" precedent from the services/ split work.
 
+    // How many of a slot's bouts actually need fencing time — resolved byes
+    // (confirmed, post-seeding) or, failing that, predicted ones (skeleton,
+    // pre-seeding) don't. Same precedence as slotLabel's byeSuffix above;
+    // pulled out on its own since _computeSlotEnd needs the bare count, not
+    // a formatted label.
+    effectiveBoutCount(slot) {
+      const bouts = slot.bout_count || 1;
+      const byeCount = (slot.de_bye_count > 0 ? slot.de_bye_count : 0) || this.slotPredictedByeCount(slot);
+      return Math.max(0, bouts - byeCount);
+    },
+
+    // The end time a slot's *raw* bout_count implies, ignoring any bye
+    // discount — i.e. what its neighbor's scheduled_start would have to
+    // equal for opp2-schedule-ops.js's _stripSegments to treat them as one
+    // originally-contiguous block. Deliberately different from
+    // _computeSlotEnd: a bulk-assigned DE round lays every slot out at a
+    // fixed per-bout spacing regardless of which ones turn out to be byes
+    // (bout 1 at 12:00, bout 2 at 12:15, ... — never shifted for a
+    // *predicted* bye at creation time), so "was this contiguous" has to be
+    // judged against that raw layout, not the bye-shrunk duration — using
+    // the shrunk one here made a bye's zero-length "end" look like a gap
+    // before the very next (real) bout, splitting one deliberate DE block
+    // into two false segments and stranding survivors at their original
+    // time instead of pulling them up to the segment's real anchor.
+    _rawSlotEnd(slot, start) {
+      const mins  = slot.effective_minutes_per_bout || slot.minutes_per_bout;
+      const bouts = slot.bout_count || 1;
+      if (!start || !mins) return null;
+      return this.addMinutes(start, Math.round(mins * bouts));
+    },
+
     _computeSlotEnd(slot, start) {
-      const mins   = slot.effective_minutes_per_bout || slot.minutes_per_bout;
-      const bouts  = slot.bout_count || 1;
-      if (!start || !mins || !bouts) return null;
+      const mins  = slot.effective_minutes_per_bout || slot.minutes_per_bout;
+      const bouts = this.effectiveBoutCount(slot);
+      if (!start || !mins || bouts == null) return null;
       return this.addMinutes(start, Math.round(mins * bouts));
     },
 

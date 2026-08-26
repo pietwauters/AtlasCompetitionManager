@@ -42,7 +42,12 @@ router.post('/:id/auto-assign-referees', (req, res) => {
 router.post('/:id/close', (req, res) => {
   try {
     const result = Phase.close(req.params.id, req.body?.method ? req.body : null);
-    res.json(result);
+    // Seeds a waiting DE skeleton (services/dePhases.js's createSkeleton) the
+    // instant its dependency finishes — phase.html closes through this route,
+    // not routes/phases.js's nested one, so this hook has to be wired here
+    // too (previously only existed there; closing a pool phase from
+    // phase.html silently never re-seeded a waiting DE skeleton).
+    res.json({ ...result, de_skeletons_seeded: Phase.autoSeedSkeletonsIfAny(req.params.id) });
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 

@@ -223,6 +223,36 @@ const Phase = {
   },
 
   // ---------------------------------------------------------------------------
+  // Seeds any DE bracket skeleton (services/dePhases.js's createSkeleton)
+  // whose dependency this closing phase might have just satisfied. Tries
+  // every skeleton-status phase in the same competition rather than
+  // computing the dependency graph here — seedSkeleton's own
+  // Format.assertNextStage already gates correctly (throws for "not ready
+  // yet", same as a genuine TABLEAU_MISMATCH). Never throws itself — every
+  // per-skeleton failure is caught and logged — so it's safe to call
+  // unconditionally after close() from either close route (routes/phases.js
+  // and routes/phasesById.js both expose one; phase.html/pool.html use the
+  // latter, competition-detail.html the former — this used to live only in
+  // routes/phases.js, so closing via phase.html silently never re-seeded a
+  // waiting DE skeleton until this was hoisted here as the one shared call).
+  // ---------------------------------------------------------------------------
+  autoSeedSkeletonsIfAny(closedPhaseId) {
+    const closedPhase = this.findById(closedPhaseId);
+    if (!closedPhase) return null;
+    const skeletons = this.findByCompetition(closedPhase.competition_id)
+      .filter(p => p.status === 'skeleton');
+    const seeded = [];
+    for (const skeleton of skeletons) {
+      try {
+        seeded.push(this.seedSkeleton(skeleton.id));
+      } catch (err) {
+        console.error('[de-skeleton] auto-seed skipped for phase', skeleton.id, ':', err.message);
+      }
+    }
+    return seeded.length ? seeded : null;
+  },
+
+  // ---------------------------------------------------------------------------
   // Simulate: randomly score all pending bouts in the phase.
   // Pool: scores every pending bout.
   // DE: processes round by round so each winner is placed before the next

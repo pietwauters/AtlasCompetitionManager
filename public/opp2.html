@@ -166,6 +166,10 @@
                 style="width:100%;font-size:.78rem;background:#fff;color:#922b21;border:1px solid #e5a0a0;padding:.3rem;border-radius:4px;cursor:pointer"
                 x-text="'↩ Undo last bulk assign (' + lastBulkSlotIds.length + ' slots)'">
         </button>
+        <button x-show="confirmedByeSlotCount > 0" @click="removeConfirmedByes()"
+                style="width:100%;font-size:.78rem;background:#fff;color:#1a4971;border:1px solid #b8cfef;padding:.3rem;border-radius:4px;cursor:pointer"
+                x-text="'✂ Remove ' + confirmedByeSlotCount + ' confirmed bye' + (confirmedByeSlotCount !== 1 ? 's' : '') + ' (shift up)'">
+        </button>
         <button @click="clearEntireSchedule()"
                 style="width:100%;font-size:.75rem;background:#fff;color:#922b21;border:1px solid #f5c2c7;padding:.3rem;border-radius:4px;cursor:pointer">
           🗑 Clear entire schedule
