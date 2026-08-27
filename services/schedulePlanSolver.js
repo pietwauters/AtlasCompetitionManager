@@ -140,7 +140,11 @@ function findEarliestSlot(eligibleIndices, pisteIntervals, earliestStart, durati
 }
 
 // stages: [{ id, dependsOn: [id,...], order, durationMinutes, pistesAssigned,
-//            phaseType: 'pool'|'de', tableauSize?, competitionId }]
+//            phaseType: 'pool'|'de', tableauSize?, competitionId, restMinutes? }]
+//   restMinutes (optional, default 0): minimum gap added after each
+//   dependency's finish time before this unit may start — a fencer-safety
+//   buffer, not a piste constraint (see services/schedulePlans.js's
+//   _buildSolverInput, which sets this only on DE round-to-round transitions).
 // pistes: [{ poolsAllowed, deAllowed, maxDeTableau, minDeTableau }] — index in this array
 //         is the 0-based piste index used in stageResults[].pistesUsed.
 // options: { dayStart: 'HH:MM', competitionStart?: { [competitionId]: 'HH:MM' } }
@@ -191,9 +195,13 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
     const compFloor = stage.competitionId != null && competitionStartMin[stage.competitionId] != null
       ? competitionStartMin[stage.competitionId]
       : dayStartMin;
+    // restMinutes (services/schedulePlans.js's _buildSolverInput, DE round-
+    // to-round transitions only) is a fencer-safety buffer, not a piste-
+    // availability constraint — it just pushes this unit's earliest start
+    // out from its dependency's finish time, same as compFloor does.
     const earliestStart = Math.max(
       compFloor,
-      ...(stage.dependsOn || []).map(depId => finishOf.get(depId) ?? compFloor)
+      ...(stage.dependsOn || []).map(depId => (finishOf.get(depId) ?? compFloor) + (stage.restMinutes || 0))
     );
 
     const duration = Math.max(0, stage.durationMinutes || 0);

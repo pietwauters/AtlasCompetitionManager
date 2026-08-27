@@ -27,6 +27,7 @@ const stmtUpdatePlan       = db.prepare(`
   UPDATE schedule_plans SET day_start = @day_start, abstract_piste_count = @abstract_piste_count,
     abstract_referee_count = @abstract_referee_count,
     default_max_flights_pool = @default_max_flights_pool, default_max_flights_de = @default_max_flights_de,
+    de_rest_minutes = @de_rest_minutes,
     updated_at = datetime('now')
   WHERE id = @id
 `);
@@ -140,6 +141,8 @@ const SchedulePlans = {
         ? plan.default_max_flights_pool : (patch.default_max_flights_pool || null),
       default_max_flights_de: patch.default_max_flights_de === undefined
         ? plan.default_max_flights_de : (patch.default_max_flights_de || null),
+      de_rest_minutes: patch.de_rest_minutes === undefined
+        ? plan.de_rest_minutes : (Number(patch.de_rest_minutes) || 0),
     });
     return stmtPlanById.get(planId);
   },
@@ -510,11 +513,36 @@ const SchedulePlans = {
 
       if (s.phase_type === 'de' && metrics.roundBoutCounts?.length) {
         let prevUnitId = null;
+        let prevFlights = null;
         metrics.roundBoutCounts.forEach((boutsInRound, i) => {
           const pistesForRound = maxFlights
             ? Math.max(1, Math.ceil(boutsInRound / maxFlights))
             : Math.max(1, Math.min(s.pistes_assigned || 1, boutsInRound));
+          const flights = Math.ceil(boutsInRound / pistesForRound);
           const unitId = `${s.id}:r${i}`;
+
+          // Fencer-safety buffer (2026-08-27/28 discussion) — DE round-to-
+          // round only (i>0); round 0's dependency is nothing or a pool
+          // stage, deliberately excluded. Both rounds process bouts in
+          // tableau-position order via contiguous per-piste chunks (matches
+          // real bout-to-piste assignment elsewhere — o.87.1/o.93.2's "one
+          // quarter of the table per piste"), so every piste-chunk boundary
+          // in the PREVIOUS round (prevFlights) lands at that round's own
+          // true finish time. The current round's tightest bout is only fed
+          // by one of those late-finishing bouts — zero natural gap — when
+          // prevFlights isn't dramatically larger than this round's own
+          // flights count; otherwise the earliest chunk boundary already
+          // falls past this round's own first flight, leaving real natural
+          // slack that reduces (or eliminates) the top-up needed. Only the
+          // shortfall below the configured rest minutes is added, never the
+          // full amount unconditionally.
+          let restMinutes = 0;
+          if (i > 0) {
+            const configured = plan.de_rest_minutes || 0;
+            const minGap = Math.max(0, Math.ceil(Math.ceil(prevFlights / 2) / flights) - 1) * metrics.minutesPerBout;
+            restMinutes = Math.max(0, configured - minGap);
+          }
+
           units.push({
             id: unitId,
             realStageId: s.id,
@@ -532,8 +560,10 @@ const SchedulePlans = {
             targetFlights: maxFlights,
             workUnitCount: boutsInRound,
             roundIndex: i,
+            restMinutes,
           });
           prevUnitId = unitId;
+          prevFlights = flights;
         });
         lastUnitIdByStageId.set(s.id, prevUnitId);
       } else {

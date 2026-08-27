@@ -1,0 +1,13 @@
+-- Fencer-safety check: no fencer should start a bout again within N minutes
+-- of finishing their previous one. The planner has no per-bout/per-fencer
+-- data (only whole-round blocks), but the bracket routing itself is fully
+-- deterministic from tableau size alone, so no fencer identity is needed:
+-- whoever fences last in round N's flights currently has zero rest before
+-- round N+1 starts, since round N+1 begins the instant round N finishes.
+-- A uniform rest buffer between every DE round-to-round transition removes
+-- that worst case structurally. Scoped to DE round-to-round transitions only
+-- (not pools, not pool->DE) per 2026-08-27 discussion. Plan-wide, not
+-- nullable — this is a safety default, not an optional efficiency knob like
+-- max_flights, so it's always active unless a director explicitly sets it
+-- to 0.
+ALTER TABLE schedule_plans ADD COLUMN de_rest_minutes INTEGER NOT NULL DEFAULT 20;

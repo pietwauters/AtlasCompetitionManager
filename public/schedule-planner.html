@@ -69,6 +69,10 @@
             Default max flights — DE
             <input type="number" min="1" x-model="plan.default_max_flights_de" @change="updatePlanSettings()">
           </label>
+          <label title="Minimum rest a fencer gets between finishing one DE round and starting the next, within the same DE stage — the bracket routing is fixed from the start, so the worst case (whoever fenced last in a round) always gets at least this much of a gap before the next round can begin. Does not apply to pools or the pool→DE handoff.">
+            Rest between DE rounds (minutes)
+            <input type="number" min="0" x-model="plan.de_rest_minutes" @change="updatePlanSettings()">
+          </label>
         </div>
         <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:0">
           <span x-text="strips.length"></span> real piste(s) currently configured. Abstract pistes/referees
