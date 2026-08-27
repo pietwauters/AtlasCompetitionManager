@@ -11,7 +11,9 @@ const stmtCreate = db.prepare(`
 `);
 const stmtUpdate = db.prepare(`
   UPDATE strips SET name=@name, strip_number=@strip_number,
-    status=@status, network_state=@network_state
+    status=@status, network_state=@network_state,
+    pools_allowed=@pools_allowed, de_allowed=@de_allowed,
+    max_de_tableau=@max_de_tableau, min_de_tableau=@min_de_tableau
   WHERE id=@id
 `);
 const stmtDelete = db.prepare('DELETE FROM strips WHERE id = ?');
@@ -35,8 +37,14 @@ const Strip = {
     const current = this.findById(id);
     if (!current) return null;
     const m = { ...current, ...fields };
-    stmtUpdate.run({ id: Number(id), name: m.name, strip_number: m.strip_number,
-             status: m.status, network_state: m.network_state });
+    stmtUpdate.run({
+      id: Number(id), name: m.name, strip_number: m.strip_number,
+      status: m.status, network_state: m.network_state,
+      pools_allowed: m.pools_allowed ? 1 : 0,
+      de_allowed: m.de_allowed ? 1 : 0,
+      max_de_tableau: m.max_de_tableau === '' || m.max_de_tableau == null ? null : Number(m.max_de_tableau),
+      min_de_tableau: m.min_de_tableau === '' || m.min_de_tableau == null ? null : Number(m.min_de_tableau),
+    });
     return this.findById(id);
   },
 

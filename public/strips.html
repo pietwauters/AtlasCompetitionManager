@@ -48,7 +48,10 @@
 
     <table class="table-responsive">
       <thead><tr>
-        <th>#</th><th>Name</th><th>Status</th><th>Network</th><th>Current bout</th><th></th>
+        <th>#</th><th>Name</th><th>Status</th><th>Network</th><th>Current bout</th>
+        <th>Pools</th><th>DE</th><th title="Largest DE tableau size (earliest round) this piste may host — blank means no restriction">Max DE round</th>
+        <th title="Smallest DE tableau size (latest round) this piste may host — blank means no restriction">Min DE round</th>
+        <th></th>
       </tr></thead>
       <tbody>
         <template x-for="s in strips" :key="s.id">
@@ -69,13 +72,37 @@
                     style="margin-left:.4rem;cursor:help"
                     :title="s.fencersMismatch ? s.fencersMismatch.detail : ''">⚠ fencer mismatch</span>
             </td>
+            <td data-label="Pools">
+              <input type="checkbox" :checked="!!s.pools_allowed"
+                     @change="updateCapabilities(s, {pools_allowed: $event.target.checked})"
+                     title="Can this piste host pool bouts?">
+            </td>
+            <td data-label="DE">
+              <input type="checkbox" :checked="!!s.de_allowed"
+                     @change="updateCapabilities(s, {de_allowed: $event.target.checked})"
+                     title="Can this piste host DE bouts?">
+            </td>
+            <td data-label="Max DE round">
+              <input type="number" min="2" step="1" style="width:5rem"
+                     :value="s.max_de_tableau ?? ''" :disabled="!s.de_allowed"
+                     placeholder="any"
+                     @change="updateCapabilities(s, {max_de_tableau: $event.target.value || null})"
+                     title="Largest tableau size (earliest round) this piste may host, e.g. 4 for semis+final only. Blank = no restriction.">
+            </td>
+            <td data-label="Min DE round">
+              <input type="number" min="2" step="1" style="width:5rem"
+                     :value="s.min_de_tableau ?? ''" :disabled="!s.de_allowed"
+                     placeholder="any"
+                     @change="updateCapabilities(s, {min_de_tableau: $event.target.value || null})"
+                     title="Smallest tableau size (latest round) this piste may host, e.g. 32 to exclude this piste once a round drops below T32 — for reserving colored/video pistes to the later rounds. Blank = no restriction.">
+            </td>
             <td data-label="">
               <button class="danger" @click="deleteStrip(s)">Delete</button>
             </td>
           </tr>
         </template>
         <tr x-show="strips.length===0">
-          <td colspan="5" style="text-align:center;color:#999;padding:1.5rem">No strips yet. Add one below.</td>
+          <td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No strips yet. Add one below.</td>
         </tr>
       </tbody>
     </table>
@@ -149,6 +176,14 @@ function app() {
       await fetch('/api/strips/'+s.id,{
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({name: name||null})
+      });
+      await this.load();
+    },
+
+    async updateCapabilities(s, fields) {
+      await fetch('/api/strips/'+s.id,{
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(fields)
       });
       await this.load();
     },

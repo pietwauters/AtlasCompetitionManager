@@ -35,6 +35,26 @@ function schedulePlannerGantt() {
       const pisteLabel = sl => sl.strip_id != null ? this.stripName(sl.strip_id) : `Piste (extra) ${sl.abstract_piste_index}`;
       const pisteSort = sl => sl.strip_id != null ? [0, sl.strip_id] : [1, sl.abstract_piste_index];
 
+      // A DE stage's slots span several distinct (start,end) blocks, one per
+      // tableau round, all sharing the same schedule_plan_stage_id — the
+      // slot rows themselves don't carry a round number. But the rounds run
+      // strictly in chronological order (round 2 can't start before round 1
+      // finishes — see _buildSolverInput's dependsOn chain), so sorting each
+      // DE stage's distinct blocks by start time and pairing them 1:1 with
+      // stage.computed.roundBoutCounts (same order, biggest round first)
+      // recovers which round each block is, with no extra persisted state.
+      const roundTableauByStageBlock = new Map(); // stageId -> Map(`${start}|${end}` -> tableauSize)
+      for (const stage of this.stages) {
+        const counts = stage.computed?.roundBoutCounts;
+        if (stage.phase_type !== 'de' || !counts?.length) continue;
+        const blocks = [...new Set(
+          slots.filter(sl => sl.schedule_plan_stage_id === stage.id).map(sl => `${sl.scheduled_start}|${sl.scheduled_end}`)
+        )].sort((a, b) => toMin(a.split('|')[0]) - toMin(b.split('|')[0]));
+        const byBlock = new Map();
+        blocks.forEach((block, i) => { if (counts[i] != null) byBlock.set(block, counts[i] * 2); });
+        roundTableauByStageBlock.set(stage.id, byBlock);
+      }
+
       const rowMap = new Map();
       for (const sl of slots) {
         const key = pisteKey(sl);
@@ -42,12 +62,13 @@ function schedulePlannerGantt() {
         const stage = stageById.get(sl.schedule_plan_stage_id);
         const s0 = toMin(sl.scheduled_start);
         const s1 = toMin(sl.scheduled_end);
+        const tableauSize = roundTableauByStageBlock.get(stage.id)?.get(`${sl.scheduled_start}|${sl.scheduled_end}`);
         rowMap.get(key).bars.push({
           id: sl.id,
           left: (s0 - axisStart) / total * 100,
           width: Math.max((s1 - s0) / total * 100, 0.5),
           color: this.competitionColor(stage.competition_id),
-          label: `${this.competitionName(stage.competition_id)} — ${stage.label}`,
+          label: `${this.competitionName(stage.competition_id)} — ${stage.label}` + (tableauSize ? ` · T${tableauSize}` : ''),
           start: sl.scheduled_start,
           end: sl.scheduled_end,
         });

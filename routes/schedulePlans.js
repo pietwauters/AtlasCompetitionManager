@@ -41,6 +41,17 @@ router.post('/:planId/sync-format/:competitionId', (req, res) => {
   }
 });
 
+// Body: { day_start }. day_start null/'' clears the override (falls back to
+// the plan's own day_start). Lets different competitions in the same plan
+// start at different times (e.g. Sabre starting later than Foil/Epee).
+router.put('/:planId/competition-starts/:competitionId', (req, res) => {
+  try {
+    res.json(SchedulePlans.setCompetitionStart(req.params.planId, req.params.competitionId, req.body?.day_start || null));
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 // Body: { totalPistes }. Non-persisting "what if" query.
 router.post('/:planId/preview-pistes', (req, res) => {
   try {

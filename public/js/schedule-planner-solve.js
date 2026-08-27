@@ -22,6 +22,10 @@ function schedulePlannerSolve() {
             day_start: this.plan.day_start,
             abstract_piste_count: Number(this.plan.abstract_piste_count) || 0,
             abstract_referee_count: Number(this.plan.abstract_referee_count) || 0,
+            default_max_flights_pool: this.plan.default_max_flights_pool === '' || this.plan.default_max_flights_pool == null
+              ? null : Number(this.plan.default_max_flights_pool),
+            default_max_flights_de: this.plan.default_max_flights_de === '' || this.plan.default_max_flights_de == null
+              ? null : Number(this.plan.default_max_flights_de),
           }),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); return r.json(); });
       } catch (e) {
@@ -37,6 +41,7 @@ function schedulePlannerSolve() {
         this.plan = view.plan;
         this.stages = view.stages;
         this.slots = view.slots;
+        this.competitionStarts = view.competitionStarts || {};
         this.notice = 'Schedule re-solved.';
       } catch (e) {
         this.error = e.message;

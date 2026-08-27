@@ -256,6 +256,33 @@ position gets a free pass; there is never a bout between two real competitors
 where one of them has a seed number higher than N. The bye slots fall out
 naturally from `buildSeedPositions`: any position whose seed > N is a bye.
 
+### Schedule planner — piste eligibility (Phase 1 estimation tool)
+The schedule planner (`public/schedule-planner.html`, `services/schedulePlans.js`,
+`services/schedulePlanSolver.js`) is a separate, pre-competition "what-if" layout
+tool — it estimates a rough day plan from projected headcounts, before any real
+phase/pool/bout exists. A piste's eligibility for that plan is governed by four
+`strips` columns (migrations 040/042): `pools_allowed`, `de_allowed`,
+`max_de_tableau`, `min_de_tableau` — edited on `public/strips.html`.
+
+**Tableau size counts down as the competition progresses** — T64 (round of 64)
+happens first, T2 (the final) happens last. `max_de_tableau`/`min_de_tableau`
+therefore don't map onto "early"/"late" the intuitive way:
+
+- **`max_de_tableau`** = largest tableau size a piste may host = the **earliest**
+  round it's allowed to work. E.g. Podium has `max_de_tableau = 4`: eligible only
+  for T4 (semis) and T2 (final), excluded from every bigger/earlier round.
+- **`min_de_tableau`** = smallest tableau size a piste may host = the **latest**
+  round it's allowed to work. E.g. a non-video piste with `min_de_tableau = 32`:
+  eligible only for T64/T32, excluded once a round shrinks to T16 or below.
+
+Either bound left blank (`NULL`) means unrestricted on that side; both can combine
+on one piste (e.g. `max=32, min=8` — usable for T32 through T8 only). To reserve
+the later rounds (T32 down) for a specific subset of pistes (e.g. the ones with
+video), set `min_de_tableau` on the *other, regular* pistes — not on the reserved
+ones, which are left fully unrestricted and become the only eligible pistes by
+elimination once the round shrinks past that point. Enforced in
+`schedulePlanSolver.js`'s `isEligible()`.
+
 ---
 
 ## Known gotchas

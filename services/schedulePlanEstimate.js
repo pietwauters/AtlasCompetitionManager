@@ -16,6 +16,14 @@ const DEFAULT_POOL_RULE = 'pool-standard.json';
 const DEFAULT_DE_RULE   = 'de-standard.json';
 const FALLBACK_MINUTES  = 5;
 
+// competitions.weapon stores the full word ('foil'/'epee'/'sabre');
+// bout_duration_standards keys on the single-letter code instead (same
+// mapping services/pipelineSlots.js's SQL CASE already does elsewhere) —
+// without this, getEffective() never matches a row and every stage silently
+// falls back to FALLBACK_MINUTES regardless of weapon or phase, which is
+// wildly wrong for DE (configured 15-25 min/bout vs a 5 min fallback).
+const WEAPON_CODE = { foil: 'F', epee: 'E', sabre: 'S' };
+
 function combinations2(n) {
   return (n * (n - 1)) / 2;
 }
@@ -117,9 +125,10 @@ function computeStageMetrics(stage, competition) {
     };
   }
   const ruleDoc = stage.rule_doc || defaultRuleDoc(stage.phase_type);
+  const weaponCode = WEAPON_CODE[competition.weapon] || competition.weapon;
   return stage.phase_type === 'pool'
-    ? computePoolStage(N, ruleDoc, competition.weapon, competition.gender)
-    : computeDeStage(N, ruleDoc, competition.weapon, competition.gender);
+    ? computePoolStage(N, ruleDoc, weaponCode, competition.gender)
+    : computeDeStage(N, ruleDoc, weaponCode, competition.gender);
 }
 
 module.exports = {

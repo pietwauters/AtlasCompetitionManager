@@ -31,6 +31,7 @@ function schedulePlannerCore() {
     plan: null,
     stages: [],
     slots: [],
+    competitionStarts: {},
     loading: true,
     error: '',
     notice: '',
@@ -68,6 +69,7 @@ function schedulePlannerCore() {
         this.plan = planView.plan;
         this.stages = planView.stages;
         this.slots = planView.slots;
+        this.competitionStarts = planView.competitionStarts || {};
       } catch (e) {
         this.error = 'Failed to load: ' + e.message;
       }
@@ -78,6 +80,7 @@ function schedulePlannerCore() {
       this.plan = planView.plan;
       this.stages = planView.stages;
       this.slots = planView.slots;
+      this.competitionStarts = planView.competitionStarts || {};
     },
 
     competitionName(compId) {
@@ -111,6 +114,19 @@ function schedulePlannerCore() {
 
     stagesForCompetition(compId) {
       return this.stages.filter(s => s.competition_id == compId).sort((a, b) => a.stage_order - b.stage_order);
+    },
+
+    // The plan-wide default max-flights for a phase type — mirrors
+    // services/schedulePlans.js's _buildSolverInput fallback chain.
+    planDefaultFlights(phaseType) {
+      return phaseType === 'pool' ? this.plan.default_max_flights_pool : this.plan.default_max_flights_de;
+    },
+
+    // Whether a max-flights cap actually applies to this stage right now
+    // (its own override, or the plan's default for its phase type) — drives
+    // both the "Pistes assigned" input's disabled state and its tooltip.
+    effectiveMaxFlights(stage) {
+      return stage.max_flights || this.planDefaultFlights(stage.phase_type) || null;
     },
 
     stripName(stripId) {
@@ -157,6 +173,21 @@ function schedulePlannerCore() {
     async refreshEstimate(stage) {
       await fetch(`/api/schedule-plans/stages/${stage.id}/refresh-estimate`, { method: 'POST' });
       await this.reload();
+    },
+
+    // Per-competition start-time override — e.g. Sabre starting later than
+    // Foil/Epee in the same tournament. value '' clears the override (falls
+    // back to the plan's own day_start).
+    async updateCompetitionStart(compId, value) {
+      try {
+        await fetch(`/api/schedule-plans/${this.plan.id}/competition-starts/${compId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ day_start: value || null }),
+        }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
+        await this.reload();
+      } catch (e) {
+        this.error = e.message;
+      }
     },
 
     async syncFormat(compId) {
