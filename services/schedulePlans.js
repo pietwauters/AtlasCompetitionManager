@@ -106,6 +106,20 @@ const stmtOverrideRow = db.prepare(
   'SELECT * FROM schedule_plan_round_overrides WHERE schedule_plan_stage_id = ? AND tableau_size = ?'
 );
 
+// Competition-exclusive piste reservations — see migration 045.
+const stmtReservationsForPlan = db.prepare(
+  'SELECT * FROM schedule_plan_piste_reservations WHERE schedule_plan_id = ?'
+);
+const stmtUpsertReservation = db.prepare(`
+  INSERT INTO schedule_plan_piste_reservations (schedule_plan_id, strip_id, competition_id, from_tableau_size)
+  VALUES (@schedule_plan_id, @strip_id, @competition_id, @from_tableau_size)
+  ON CONFLICT (schedule_plan_id, strip_id)
+  DO UPDATE SET competition_id = excluded.competition_id, from_tableau_size = excluded.from_tableau_size
+`);
+const stmtDeleteReservation = db.prepare(
+  'DELETE FROM schedule_plan_piste_reservations WHERE schedule_plan_id = ? AND strip_id = ?'
+);
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
@@ -212,6 +226,30 @@ const SchedulePlans = {
       buffer_after_minutes: buffer_after_minutes !== undefined
         ? (buffer_after_minutes === '' || buffer_after_minutes == null ? null : Number(buffer_after_minutes))
         : (current?.buffer_after_minutes ?? null),
+    });
+  },
+
+  // Competition-exclusive piste reservations (2026-08-28 discussion), as
+  // [{ strip_id, competition_id, from_tableau_size }, ...] for the whole
+  // plan — consumed by _buildPisteList, returned as-is via findPlanView.
+  findPisteReservations(planId) {
+    return stmtReservationsForPlan.all(planId);
+  },
+
+  // competitionId: null/'' clears the reservation for this strip (piste goes
+  // back to fully shared). fromTableauSize: null means active from the very
+  // start; otherwise only kicks in once a round's tableau shrinks to that
+  // size or below — set individually per strip, not plan-wide.
+  setPisteReservation(planId, stripId, { competition_id, from_tableau_size }) {
+    if (!competition_id) {
+      stmtDeleteReservation.run(planId, stripId);
+      return;
+    }
+    stmtUpsertReservation.run({
+      schedule_plan_id: planId,
+      strip_id: stripId,
+      competition_id: Number(competition_id),
+      from_tableau_size: from_tableau_size === '' || from_tableau_size == null ? null : Number(from_tableau_size),
     });
   },
 
@@ -393,7 +431,7 @@ const SchedulePlans = {
     if (!plan) throw Object.assign(new Error('Plan not found'), { status: 404 });
     const { solverUnits } = this._buildSolverInput(planId);
     const competitionStart = this.findCompetitionStarts(planId);
-    return Solver.solveForPistes(solverUnits, this._buildPisteList(totalPistes), plan.day_start, competitionStart);
+    return Solver.solveForPistes(solverUnits, this._buildPisteList(totalPistes, planId), plan.day_start, competitionStart);
   },
 
   // Non-persisting "how many pistes to meet this deadline" query.
@@ -403,7 +441,7 @@ const SchedulePlans = {
     const { solverUnits } = this._buildSolverInput(planId);
     const competitionStart = this.findCompetitionStarts(planId);
     return Solver.solveForDeadline(
-      solverUnits, deadlineTime, plan.day_start, competitionStart, n => this._buildPisteList(n)
+      solverUnits, deadlineTime, plan.day_start, competitionStart, n => this._buildPisteList(n, planId)
     );
   },
 
@@ -433,7 +471,7 @@ const SchedulePlans = {
     const competitionStart = this.findCompetitionStarts(planId);
 
     const solved = Solver.simulate(solverUnits, {
-      pistes: this._buildPisteList(totalPistes), dayStart: plan.day_start, competitionStart,
+      pistes: this._buildPisteList(totalPistes, planId), dayStart: plan.day_start, competitionStart,
     });
     const resultByUnitId = new Map(solved.stageResults.map(r => [r.id, r]));
 
@@ -726,23 +764,35 @@ const SchedulePlans = {
   // by previewForPistes/previewForDeadline (arbitrary n, purely
   // hypothetical) and resolve (n = real strips + abstract_piste_count,
   // reusing every real strip's actual capabilities).
-  _buildPisteList(n) {
+  // planId: needed to look up this plan's own competition-exclusive piste
+  // reservations (migration 045) — plan-scoped, not a strips property, so
+  // it can't come from Strip.findAll() alone.
+  _buildPisteList(n, planId) {
     const realStrips = Strip.findAll();
+    const reservationByStripId = new Map(
+      this.findPisteReservations(planId).map(r => [r.strip_id, r])
+    );
     const pistes = [];
     for (let i = 0; i < n; i++) {
       const strip = realStrips[i];
+      const reservation = strip ? reservationByStripId.get(strip.id) : null;
       pistes.push(strip
         ? {
             poolsAllowed: !!strip.pools_allowed, deAllowed: !!strip.de_allowed,
             maxDeTableau: strip.max_de_tableau, minDeTableau: strip.min_de_tableau,
+            reservedForCompetitionId: reservation?.competition_id ?? null,
+            reservedFromTableauSize: reservation?.from_tableau_size ?? null,
           }
-        : { poolsAllowed: true, deAllowed: true, maxDeTableau: null, minDeTableau: null });
+        : {
+            poolsAllowed: true, deAllowed: true, maxDeTableau: null, minDeTableau: null,
+            reservedForCompetitionId: null, reservedFromTableauSize: null,
+          });
     }
     return pistes;
   },
 
   // Full read view: plan + stages (with parsed computed_json) + slots +
-  // per-competition start overrides + per-round overrides.
+  // per-competition start overrides + per-round overrides + piste reservations.
   findPlanView(planId) {
     const plan = stmtPlanById.get(planId);
     if (!plan) return null;
@@ -761,7 +811,12 @@ const SchedulePlans = {
         fixed_start: o.fixed_start, buffer_after_minutes: o.buffer_after_minutes,
       };
     }
-    return { plan, stages, slots, competitionStarts, roundOverrides };
+    // { [stripId]: { competition_id, from_tableau_size } } — see migration 045.
+    const pisteReservations = {};
+    for (const r of this.findPisteReservations(planId)) {
+      pisteReservations[r.strip_id] = { competition_id: r.competition_id, from_tableau_size: r.from_tableau_size };
+    }
+    return { plan, stages, slots, competitionStarts, roundOverrides, pisteReservations };
   },
 };
 

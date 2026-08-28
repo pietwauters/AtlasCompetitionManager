@@ -199,6 +199,49 @@
         <p x-show="!competitions.length" style="color:var(--clr-text-muted)">No competitions in this tournament yet.</p>
       </details>
 
+      <!-- ── Piste reservations ────────────────────────────────────────── -->
+      <details class="card" data-key="piste-reservations">
+      <summary><h2 style="display:inline;margin:0">Piste reservations</h2></summary>
+        <p style="font-size:.82rem;color:var(--clr-text-muted)">
+          Split a shared pool of pistes (e.g. colored/video pistes) between two concurrently-
+          running competitions once their brackets shrink past a point, so neither one starves
+          the other of pistes on the run-in to the semis/final. DE only — pools always want
+          maximum piste availability. Leave "Reserved for" as "— shared —" for a piste that
+          stays open to any eligible competition.
+        </p>
+        <table class="table-responsive">
+          <thead><tr>
+            <th>Piste</th><th>Reserved for</th>
+            <th title="The reservation only applies once a round's tableau shrinks to this size or below — blank means reserved from the very start">From round (T size)</th>
+          </tr></thead>
+          <tbody>
+            <template x-for="s in strips.filter(s => s.de_allowed)" :key="s.id">
+              <tr>
+                <td data-label="Piste" x-text="stripName(s.id)"></td>
+                <td data-label="Reserved for">
+                  <select style="width:100%" :value="reservationFor(s.id).competition_id || ''"
+                          @change="updatePisteReservation(s, {competitionId: $event.target.value || null, fromTableauSize: reservationFor(s.id).from_tableau_size})">
+                    <option value="">— shared —</option>
+                    <template x-for="c in competitions" :key="c.id">
+                      <option :value="c.id" x-text="c.name"></option>
+                    </template>
+                  </select>
+                </td>
+                <td data-label="From round (T size)">
+                  <input type="number" min="2" step="1" style="width:6rem"
+                         :value="reservationFor(s.id).from_tableau_size ?? ''" :disabled="!reservationFor(s.id).competition_id"
+                         placeholder="start"
+                         @change="updatePisteReservation(s, {competitionId: reservationFor(s.id).competition_id, fromTableauSize: $event.target.value || null})">
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <p x-show="!strips.filter(s => s.de_allowed).length" style="font-size:.75rem;color:var(--clr-text-muted)">
+          No DE-eligible strips configured yet.
+        </p>
+      </details>
+
       <!-- ── Solve ─────────────────────────────────────────────────────── -->
       <details class="card" open data-key="solve">
       <summary><h2 style="display:inline;margin:0">Solve</h2></summary>

@@ -33,6 +33,7 @@ function schedulePlannerCore() {
     slots: [],
     competitionStarts: {},
     roundOverrides: {},
+    pisteReservations: {},
     loading: true,
     error: '',
     notice: '',
@@ -72,6 +73,7 @@ function schedulePlannerCore() {
         this.slots = planView.slots;
         this.competitionStarts = planView.competitionStarts || {};
         this.roundOverrides = planView.roundOverrides || {};
+        this.pisteReservations = planView.pisteReservations || {};
       } catch (e) {
         this.error = 'Failed to load: ' + e.message;
       }
@@ -84,6 +86,7 @@ function schedulePlannerCore() {
       this.slots = planView.slots;
       this.competitionStarts = planView.competitionStarts || {};
       this.roundOverrides = planView.roundOverrides || {};
+      this.pisteReservations = planView.pisteReservations || {};
     },
 
     competitionName(compId) {
@@ -216,6 +219,27 @@ function schedulePlannerCore() {
       try {
         await fetch(`/api/schedule-plans/stages/${stage.id}/round-overrides/${tableauSize}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+        }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
+        await this.reload();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    reservationFor(stripId) {
+      return this.pisteReservations[stripId] || {};
+    },
+
+    // Always sends both fields together (competition_id + from_tableau_size)
+    // regardless of which one changed — setPisteReservation treats them as
+    // one coupled record, not independently-preservable fields like the
+    // round overrides above, since a reservation without a competition
+    // doesn't mean anything. competitionId falsy clears the reservation.
+    async updatePisteReservation(strip, { competitionId, fromTableauSize }) {
+      try {
+        await fetch(`/api/schedule-plans/${this.plan.id}/piste-reservations/${strip.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competition_id: competitionId || null, from_tableau_size: fromTableauSize || null }),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
         await this.reload();
       } catch (e) {

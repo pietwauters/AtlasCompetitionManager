@@ -64,6 +64,17 @@ router.put('/stages/:stageId/round-overrides/:tableauSize', (req, res) => {
   }
 });
 
+// Body: { competition_id?, from_tableau_size? }. competition_id falsy/absent
+// clears the reservation for this strip (piste goes back to fully shared).
+router.put('/:planId/piste-reservations/:stripId', (req, res) => {
+  try {
+    SchedulePlans.setPisteReservation(req.params.planId, req.params.stripId, req.body || {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 // Body: { totalPistes }. Non-persisting "what if" query.
 router.post('/:planId/preview-pistes', (req, res) => {
   try {

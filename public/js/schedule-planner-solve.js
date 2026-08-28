@@ -44,6 +44,7 @@ function schedulePlannerSolve() {
         this.slots = view.slots;
         this.competitionStarts = view.competitionStarts || {};
         this.roundOverrides = view.roundOverrides || {};
+        this.pisteReservations = view.pisteReservations || {};
         this.notice = 'Schedule re-solved.';
       } catch (e) {
         this.error = e.message;

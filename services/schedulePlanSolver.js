@@ -52,11 +52,25 @@ function toHHMM(mins) {
 // a piste that must drop OUT once a round shrinks past some point (e.g. a
 // non-video piste that may only run the earlier, larger rounds once video
 // coverage becomes mandatory from T32 down).
+//
+// reservedForCompetitionId/reservedFromTableauSize (2026-08-28 discussion,
+// DE-only — pools always want maximum piste availability, no narrowing
+// there): a shared pool of pistes (e.g. 8 colored/video pistes) can be
+// split between two concurrently-running competitions once their brackets
+// shrink past a point, so neither one starves the other of pistes during
+// the run-in to the semis/final. Above the threshold the reservation simply
+// hasn't kicked in yet — piste behaves exactly as it would unreserved; at or
+// below it, the piste is eligible ONLY for its reserved competition's own
+// units, on top of whatever the min/max bounds already say.
 function isEligible(piste, unit) {
   if (unit.phaseType === 'pool') return !!piste.poolsAllowed;
-  return !!piste.deAllowed
+  const capable = !!piste.deAllowed
     && (piste.maxDeTableau == null || unit.tableauSize <= piste.maxDeTableau)
     && (piste.minDeTableau == null || unit.tableauSize >= piste.minDeTableau);
+  if (!capable) return false;
+  const reservationActive = piste.reservedForCompetitionId != null
+    && (piste.reservedFromTableauSize == null || unit.tableauSize <= piste.reservedFromTableauSize);
+  return !reservationActive || piste.reservedForCompetitionId === unit.competitionId;
 }
 
 // A piste's schedule is a list of real [start, end) busy intervals — not a
@@ -152,7 +166,8 @@ function findEarliestSlot(eligibleIndices, pisteIntervals, earliestStart, durati
 //   when the natural timing is already past fixedStart, the request simply
 //   couldn't be honored (see naturalStart on the result, used by
 //   services/schedulePlans.js's resolve() to build a warning).
-// pistes: [{ poolsAllowed, deAllowed, maxDeTableau, minDeTableau }] — index in this array
+// pistes: [{ poolsAllowed, deAllowed, maxDeTableau, minDeTableau,
+//            reservedForCompetitionId, reservedFromTableauSize }] — index in this array
 //         is the 0-based piste index used in stageResults[].pistesUsed.
 // options: { dayStart: 'HH:MM', competitionStart?: { [competitionId]: 'HH:MM' } }
 // returns: { stageResults: [{id, start, end, naturalStart, pistesUsed: [0-based piste index, ...]}],
