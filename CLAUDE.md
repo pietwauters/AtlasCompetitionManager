@@ -265,15 +265,19 @@ phase/pool/bout exists. A piste's eligibility for that plan is governed by four
 `max_de_tableau`, `min_de_tableau` — edited on `public/strips.html`.
 
 **Tableau size counts down as the competition progresses** — T64 (round of 64)
-happens first, T2 (the final) happens last. `max_de_tableau`/`min_de_tableau`
-therefore don't map onto "early"/"late" the intuitive way:
+happens first, T2 (the final) happens last — so naming these columns after
+"min"/"max" tableau size reads backwards from the competition's own timeline.
+`public/strips.html` labels them by *when in the competition* the piste is OK to
+use instead, which is what a director actually thinks in terms of:
 
-- **`max_de_tableau`** = largest tableau size a piste may host = the **earliest**
-  round it's allowed to work. E.g. Podium has `max_de_tableau = 4`: eligible only
-  for T4 (semis) and T2 (final), excluded from every bigger/earlier round.
-- **`min_de_tableau`** = smallest tableau size a piste may host = the **latest**
-  round it's allowed to work. E.g. a non-video piste with `min_de_tableau = 32`:
-  eligible only for T64/T32, excluded once a round shrinks to T16 or below.
+- **`max_de_tableau`** ("Usable from", on strips.html) = largest tableau size a
+  piste may host = the round it becomes OK to use *from*, onward through every
+  smaller round after it. E.g. Podium has `max_de_tableau = 4`: usable from T4
+  (semis) through T2 (final), excluded from every bigger/earlier round.
+- **`min_de_tableau`** ("Usable until") = smallest tableau size a piste may host =
+  the round it stays OK to use *until*, then drops out. E.g. a non-video piste
+  with `min_de_tableau = 32`: usable from the start through T32, excluded once a
+  round shrinks to T16 or below.
 
 Either bound left blank (`NULL`) means unrestricted on that side; both can combine
 on one piste (e.g. `max=32, min=8` — usable for T32 through T8 only). To reserve

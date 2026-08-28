@@ -52,6 +52,18 @@ router.put('/:planId/competition-starts/:competitionId', (req, res) => {
   }
 });
 
+// Body: { fixed_start?, buffer_after_minutes? } — either field omitted keeps
+// its current value, null clears it. tableauSize is 0 for a pool stage's own
+// single unit, or a real DE tableau size (T4, T8, ...) for one of its rounds.
+router.put('/stages/:stageId/round-overrides/:tableauSize', (req, res) => {
+  try {
+    SchedulePlans.setRoundOverride(req.params.stageId, Number(req.params.tableauSize), req.body || {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 // Body: { totalPistes }. Non-persisting "what if" query.
 router.post('/:planId/preview-pistes', (req, res) => {
   try {

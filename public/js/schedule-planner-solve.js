@@ -43,6 +43,7 @@ function schedulePlannerSolve() {
         this.stages = view.stages;
         this.slots = view.slots;
         this.competitionStarts = view.competitionStarts || {};
+        this.roundOverrides = view.roundOverrides || {};
         this.notice = 'Schedule re-solved.';
       } catch (e) {
         this.error = e.message;

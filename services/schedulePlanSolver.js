@@ -140,16 +140,27 @@ function findEarliestSlot(eligibleIndices, pisteIntervals, earliestStart, durati
 }
 
 // stages: [{ id, dependsOn: [id,...], order, durationMinutes, pistesAssigned,
-//            phaseType: 'pool'|'de', tableauSize?, competitionId, restMinutes? }]
+//            phaseType: 'pool'|'de', tableauSize?, competitionId, restMinutes?, fixedStart? }]
 //   restMinutes (optional, default 0): minimum gap added after each
-//   dependency's finish time before this unit may start — a fencer-safety
-//   buffer, not a piste constraint (see services/schedulePlans.js's
-//   _buildSolverInput, which sets this only on DE round-to-round transitions).
+//   dependency's finish time before this unit may start — a fencer-safety/
+//   logistics buffer, not a piste constraint (see services/schedulePlans.js's
+//   _buildSolverInput for how this combines an auto-calculated DE-round-to-
+//   round value with any director-set explicit buffer — the longer wins).
+//   fixedStart (optional, 'HH:MM'): a hard floor on this unit's own start —
+//   broadcast/VIP timing, a different venue for the final, etc. Never
+//   pushes the unit EARLIER than its natural dependency timing would allow;
+//   when the natural timing is already past fixedStart, the request simply
+//   couldn't be honored (see naturalStart on the result, used by
+//   services/schedulePlans.js's resolve() to build a warning).
 // pistes: [{ poolsAllowed, deAllowed, maxDeTableau, minDeTableau }] — index in this array
 //         is the 0-based piste index used in stageResults[].pistesUsed.
 // options: { dayStart: 'HH:MM', competitionStart?: { [competitionId]: 'HH:MM' } }
-// returns: { stageResults: [{id, start, end, pistesUsed: [0-based piste index, ...]}],
+// returns: { stageResults: [{id, start, end, naturalStart, pistesUsed: [0-based piste index, ...]}],
 //            finishMinutes, finishTime }
+//   naturalStart is the unit's dependency-driven earliest start BEFORE any
+//   fixedStart floor is applied — always present, used to tell "started
+//   right on its natural time" apart from "waited for a fixed start" when
+//   the two happen to coincide with `start`.
 function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} }) {
   if (!Array.isArray(pistes) || pistes.length < 1) {
     throw Object.assign(new Error('At least one piste is required'), { status: 400 });
@@ -195,14 +206,20 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
     const compFloor = stage.competitionId != null && competitionStartMin[stage.competitionId] != null
       ? competitionStartMin[stage.competitionId]
       : dayStartMin;
-    // restMinutes (services/schedulePlans.js's _buildSolverInput, DE round-
-    // to-round transitions only) is a fencer-safety buffer, not a piste-
-    // availability constraint — it just pushes this unit's earliest start
-    // out from its dependency's finish time, same as compFloor does.
-    const earliestStart = Math.max(
+    // restMinutes (services/schedulePlans.js's _buildSolverInput) is a
+    // fencer-safety/logistics buffer, not a piste-availability constraint —
+    // it just pushes this unit's earliest start out from its dependency's
+    // finish time, same as compFloor does.
+    const naturalStart = Math.max(
       compFloor,
       ...(stage.dependsOn || []).map(depId => (finishOf.get(depId) ?? compFloor) + (stage.restMinutes || 0))
     );
+    // A fixedStart is a floor, never pulling the unit earlier than its
+    // natural timing already allows — it can only push it later (or leave
+    // it unchanged when natural timing is already past it, which is exactly
+    // the "couldn't be honored" case resolve() reports as a warning).
+    const fixedStartMin = stage.fixedStart ? toMinutes(stage.fixedStart) : null;
+    const earliestStart = fixedStartMin != null ? Math.max(naturalStart, fixedStartMin) : naturalStart;
 
     const duration = Math.max(0, stage.durationMinutes || 0);
     const slot = findEarliestSlot(eligible, pisteIntervals, earliestStart, duration, K, pisteBreadthScore);
@@ -216,7 +233,7 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
     }
 
     finishOf.set(stage.id, end);
-    results.push({ id: stage.id, start, end, pistesUsed: chosen });
+    results.push({ id: stage.id, start, end, naturalStart, pistesUsed: chosen });
 
     for (const depId of dependents.get(stage.id)) {
       indegree.set(depId, indegree.get(depId) - 1);
@@ -230,7 +247,7 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
 
   const finishMinutes = results.length ? Math.max(...results.map(r => r.end)) : dayStartMin;
   return {
-    stageResults: results.map(r => ({ ...r, start: toHHMM(r.start), end: toHHMM(r.end) })),
+    stageResults: results.map(r => ({ ...r, start: toHHMM(r.start), end: toHHMM(r.end), naturalStart: toHHMM(r.naturalStart) })),
     finishMinutes,
     finishTime: toHHMM(finishMinutes),
   };

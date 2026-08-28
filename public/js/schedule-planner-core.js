@@ -32,6 +32,7 @@ function schedulePlannerCore() {
     stages: [],
     slots: [],
     competitionStarts: {},
+    roundOverrides: {},
     loading: true,
     error: '',
     notice: '',
@@ -70,6 +71,7 @@ function schedulePlannerCore() {
         this.stages = planView.stages;
         this.slots = planView.slots;
         this.competitionStarts = planView.competitionStarts || {};
+        this.roundOverrides = planView.roundOverrides || {};
       } catch (e) {
         this.error = 'Failed to load: ' + e.message;
       }
@@ -81,6 +83,7 @@ function schedulePlannerCore() {
       this.stages = planView.stages;
       this.slots = planView.slots;
       this.competitionStarts = planView.competitionStarts || {};
+      this.roundOverrides = planView.roundOverrides || {};
     },
 
     competitionName(compId) {
@@ -183,6 +186,36 @@ function schedulePlannerCore() {
         await fetch(`/api/schedule-plans/${this.plan.id}/competition-starts/${compId}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ day_start: value || null }),
+        }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
+        await this.reload();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    // The rounds a stage can carry a timing override for — one entry
+    // ("This phase", sentinel tableau_size 0) for a pool stage, or one per
+    // DE round (T64, T32, ...), read off the stage's own last-solved
+    // computed.roundBoutCounts (2026-08-28 discussion) — empty before the
+    // stage has ever been resolved once, since that's the only place this
+    // per-round breakdown is computed.
+    roundsForStage(stage) {
+      if (stage.phase_type !== 'de') return [{ tableauSize: 0, label: 'This phase' }];
+      const counts = stage.computed?.roundBoutCounts;
+      if (!counts?.length) return [];
+      return counts.map(boutsInRound => ({ tableauSize: boutsInRound * 2, label: 'T' + (boutsInRound * 2) }));
+    },
+
+    overrideFor(stage, tableauSize) {
+      return (this.roundOverrides[stage.id] && this.roundOverrides[stage.id][tableauSize]) || {};
+    },
+
+    // patch: { fixed_start? } or { buffer_after_minutes? } — either field
+    // omitted keeps its current value server-side, null clears it.
+    async updateRoundOverride(stage, tableauSize, patch) {
+      try {
+        await fetch(`/api/schedule-plans/stages/${stage.id}/round-overrides/${tableauSize}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
         await this.reload();
       } catch (e) {

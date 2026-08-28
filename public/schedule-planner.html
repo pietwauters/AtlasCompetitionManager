@@ -134,6 +134,49 @@
                     </div>
                   </template>
                 </div>
+
+                <details style="margin:.2rem 0 .4rem">
+                  <summary style="font-size:.78rem;cursor:pointer;color:var(--clr-text-muted)">Timing overrides</summary>
+                  <table style="width:100%;font-size:.78rem;margin-top:.3rem" x-show="roundsForStage(stage).length">
+                    <thead><tr>
+                      <th style="text-align:left">Round</th>
+                      <th title="Hard floor on this round's own start — broadcast, VIP guests, a different venue for the final, etc. Blank uses the normal dependency-driven timing.">Fixed start</th>
+                      <th title="Extra buffer required after THIS round finishes, before whatever depends on it may start — room changes, results verification, ceremony setup. Combines with any automatic fencer-rest buffer by taking whichever is longer, never shorter.">Buffer after (min)</th>
+                    </tr></thead>
+                    <tbody>
+                      <template x-for="rnd in roundsForStage(stage)" :key="rnd.tableauSize">
+                        <tr>
+                          <td x-text="rnd.label"></td>
+                          <td><input type="time" :value="overrideFor(stage, rnd.tableauSize).fixed_start || ''"
+                                     @change="updateRoundOverride(stage, rnd.tableauSize, {fixed_start: $event.target.value || null})"></td>
+                          <td><input type="number" min="0" style="width:5rem"
+                                     :value="overrideFor(stage, rnd.tableauSize).buffer_after_minutes ?? ''"
+                                     @change="updateRoundOverride(stage, rnd.tableauSize, {buffer_after_minutes: $event.target.value === '' ? null : Number($event.target.value)})"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <p x-show="!roundsForStage(stage).length" style="font-size:.75rem;color:var(--clr-text-muted);margin:.3rem 0 0">
+                    Resolve once to see this stage's rounds here.
+                  </p>
+                </details>
+
+                <div x-show="stage.computed?.fixedStartNotices?.length" style="font-size:.78rem;margin:.2rem 0 .4rem">
+                  <template x-for="(n, i) in (stage.computed?.fixedStartNotices || [])" :key="i">
+                    <div :style="n.severity==='warning'
+                          ? 'color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-bottom:.2rem'
+                          : 'color:var(--clr-text-muted)'">
+                      <span x-text="n.round ? ('Round of ' + n.tableauSize) : 'This phase'"></span>:
+                      <template x-if="n.severity==='warning'">
+                        <span>⚠ requested <strong x-text="n.requested"></strong>, can't start before <strong x-text="n.actual"></strong>
+                          (<span x-text="n.missedByMinutes"></span> min late)</span>
+                      </template>
+                      <template x-if="n.severity==='info'">
+                        <span>ready <span x-text="n.idleMinutes"></span> min before its fixed start of <span x-text="n.requested"></span></span>
+                      </template>
+                    </div>
+                  </template>
+                </div>
               </div>
             </template>
 

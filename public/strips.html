@@ -49,8 +49,8 @@
     <table class="table-responsive">
       <thead><tr>
         <th>#</th><th>Name</th><th>Status</th><th>Network</th><th>Current bout</th>
-        <th>Pools</th><th>DE</th><th title="Largest DE tableau size (earliest round) this piste may host — blank means no restriction">Max DE round</th>
-        <th title="Smallest DE tableau size (latest round) this piste may host — blank means no restriction">Min DE round</th>
+        <th>Pools</th><th>DE</th><th title="Round this piste becomes OK to use from onward, e.g. T4 for semis+final only — blank means usable from the very first DE round">Usable from</th>
+        <th title="Round this piste stays OK to use until, e.g. T32 to exclude it once a round drops below that — blank means usable all the way to the final">Usable until</th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -82,19 +82,19 @@
                      @change="updateCapabilities(s, {de_allowed: $event.target.checked})"
                      title="Can this piste host DE bouts?">
             </td>
-            <td data-label="Max DE round">
+            <td data-label="Usable from">
               <input type="number" min="2" step="1" style="width:5rem"
                      :value="s.max_de_tableau ?? ''" :disabled="!s.de_allowed"
-                     placeholder="any"
+                     placeholder="start"
                      @change="updateCapabilities(s, {max_de_tableau: $event.target.value || null})"
-                     title="Largest tableau size (earliest round) this piste may host, e.g. 4 for semis+final only. Blank = no restriction.">
+                     title="OK to use this piste starting from round T{value} onward (and every smaller round after it), e.g. 4 for semis+final only. Blank = usable from the very first DE round.">
             </td>
-            <td data-label="Min DE round">
+            <td data-label="Usable until">
               <input type="number" min="2" step="1" style="width:5rem"
                      :value="s.min_de_tableau ?? ''" :disabled="!s.de_allowed"
-                     placeholder="any"
+                     placeholder="end"
                      @change="updateCapabilities(s, {min_de_tableau: $event.target.value || null})"
-                     title="Smallest tableau size (latest round) this piste may host, e.g. 32 to exclude this piste once a round drops below T32 — for reserving colored/video pistes to the later rounds. Blank = no restriction.">
+                     title="OK to use this piste up until round T{value}, then excluded once a round drops below that, e.g. 32 — for reserving colored/video pistes to the later rounds. Blank = usable all the way to the final.">
             </td>
             <td data-label="">
               <button class="danger" @click="deleteStrip(s)">Delete</button>
