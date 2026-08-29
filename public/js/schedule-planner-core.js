@@ -41,13 +41,18 @@ function schedulePlannerCore() {
 
     newStage: { competition_id: '', phase_type: 'pool', label: '', estimated_n: '', pistes_assigned: 1 },
 
-    // Slot editor (manual override, double-click a Gantt bar) — see
-    // schedule-planner-solve.js for the save/load. Provisional by design:
-    // this edits the CURRENT resolved schedule_plan_slots row directly, so
-    // it lasts only until the plan is next re-solved, same as any other
-    // hand-adjustment to the auto-solved layout.
+    // Slot editor (manual override, double-click a Gantt bar). Provisional
+    // by design: this edits the CURRENT resolved schedule_plan_slots row
+    // directly, so it lasts only until the plan is next re-solved, same as
+    // any other hand-adjustment to the auto-solved layout. Editing start
+    // time preserves the slot's original duration (moves the whole window,
+    // doesn't resize it) and applies only to THIS ONE piste's row — a
+    // multi-piste round's other pistes keep their own times, so shifting
+    // just one piste out of sync with its round-mates is possible (e.g. one
+    // piste running behind) rather than forced to move together.
     editingSlot: null,
     editingStripId: '',
+    editingStart: '',
     editingSlotLabel: '',
 
     async init() {
@@ -256,12 +261,27 @@ function schedulePlannerCore() {
       }
     },
 
+    // Same elapsed-minutes convention as schedulePlanSolver.js's own
+    // toMinutes/toHHMM — no wraparound, so a plan already running past
+    // 24:00 keeps working, though the native <input type="time"> itself
+    // can't represent times past 23:59 (a pre-existing limit of every other
+    // time input on this page too, e.g. Day start — not new here).
+    _timeToMinutes(hhmm) {
+      const [h, m] = String(hhmm).split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    },
+    _minutesToTime(mins) {
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    },
+
     openSlotEditor(slotId) {
       const slot = this.slots.find(s => s.id === slotId);
       if (!slot) return;
       const stage = this.stages.find(st => st.id === slot.schedule_plan_stage_id);
       this.editingSlot = slot;
       this.editingStripId = slot.strip_id ?? '';
+      this.editingStart = slot.scheduled_start;
       this.editingSlotLabel = stage ? (this.competitionName(stage.competition_id) + ' — ' + stage.label) : '';
     },
 
@@ -269,12 +289,21 @@ function schedulePlannerCore() {
       this.editingSlot = null;
     },
 
+    // Editing start time moves the whole window, never resizes it — the
+    // slot's original duration is preserved and just re-anchored to the new
+    // start.
+    get editingEnd() {
+      if (!this.editingSlot) return '';
+      const duration = this._timeToMinutes(this.editingSlot.scheduled_end) - this._timeToMinutes(this.editingSlot.scheduled_start);
+      return this._minutesToTime(this._timeToMinutes(this.editingStart) + duration);
+    },
+
     // Advisory only — a slot save is never blocked by this, it's just shown
     // in the dialog so a director isn't double-booking a piste blind.
     get slotEditorConflict() {
       if (!this.editingSlot || this.editingStripId === '') return '';
       const targetStripId = Number(this.editingStripId);
-      const { scheduled_start: start, scheduled_end: end, id: ownId } = this.editingSlot;
+      const start = this.editingStart, end = this.editingEnd, ownId = this.editingSlot.id;
       const overlap = this.slots.find(s =>
         s.id !== ownId && s.strip_id === targetStripId && s.scheduled_start < end && start < s.scheduled_end
       );
@@ -289,7 +318,11 @@ function schedulePlannerCore() {
       try {
         await fetch(`/api/schedule-plans/slots/${this.editingSlot.id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ strip_id: this.editingStripId === '' ? null : Number(this.editingStripId) }),
+          body: JSON.stringify({
+            strip_id: this.editingStripId === '' ? null : Number(this.editingStripId),
+            scheduled_start: this.editingStart,
+            scheduled_end: this.editingEnd,
+          }),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
         this.editingSlot = null;
         await this.reload();
