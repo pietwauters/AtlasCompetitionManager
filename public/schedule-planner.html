@@ -9,7 +9,7 @@
 <style>
   .sp-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .6rem; font-size: .78rem; }
   .sp-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: .3rem; }
-  .sp-stage-row { display: grid; grid-template-columns: 1fr 6rem 6rem 6rem 8rem auto; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid var(--clr-border); }
+  .sp-stage-row { display: grid; grid-template-columns: 1fr 6rem 6rem 6rem 6rem 8rem auto; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid var(--clr-border); }
   .sp-stage-row input[type=number], .sp-stage-row input[type=text] { width: 100%; padding: .25rem .4rem; border: 1px solid var(--clr-btn-border); border-radius: 4px; background: var(--clr-surface); color: var(--clr-text); }
   .sp-comp-block { margin-bottom: 1.25rem; }
   .sp-comp-title { font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
@@ -73,6 +73,10 @@
             Rest between DE rounds (minutes)
             <input type="number" min="0" x-model="plan.de_rest_minutes" @change="updatePlanSettings()">
           </label>
+          <label title="Hard cap on how many pistes a DE round may use at once, regardless of how many are physically free — once piste availability isn't the bottleneck, qualified referees usually are. Overridable per stage. Blank = no cap.">
+            Default max pistes — DE
+            <input type="number" min="1" x-model="plan.default_max_pistes_de" @change="updatePlanSettings()">
+          </label>
         </div>
         <p style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:0">
           <span x-text="strips.length"></span> real piste(s) currently configured. Abstract pistes/referees
@@ -118,6 +122,11 @@
                          :placeholder="planDefaultFlights(stage.phase_type) || 'none'"
                          title="Max flights for this stage — blank inherits the plan's default for this phase type (shown as placeholder), 'none' if there isn't one either"
                          @change="updateStage(stage, {max_flights: stage.max_flights === '' ? null : Number(stage.max_flights)})">
+                  <input type="number" min="1" x-model="stage.max_pistes"
+                         :disabled="stage.phase_type !== 'de'"
+                         :placeholder="stage.phase_type === 'de' ? (plan.default_max_pistes_de || 'none') : ''"
+                         :title="stage.phase_type === 'de' ? 'Hard cap on simultaneous pistes for this DE stage — blank inherits the plan default (shown as placeholder), \'none\' if there isn\'t one either. Referee availability is the usual reason to set this.' : 'DE only'"
+                         @change="updateStage(stage, {max_pistes: stage.max_pistes === '' ? null : Number(stage.max_pistes)})">
                   <span style="font-size:.78rem;color:var(--clr-text-muted)"
                         x-text="stage.computed ? (stage.computed.totalBoutMinutes + ' bout-min') : ''"></span>
                   <span style="display:flex;gap:.3rem">
@@ -184,6 +193,7 @@
               <input type="text" placeholder="Label" x-model="newStage.label">
               <input type="number" min="0" placeholder="Est. N" x-model="newStage.estimated_n">
               <input type="number" min="1" placeholder="Pistes" x-model="newStage.pistes_assigned">
+              <span></span>
               <span></span>
               <select x-model="newStage.phase_type" style="width:100%">
                 <option value="pool">Pool</option>
@@ -312,9 +322,10 @@
               <template x-for="row in ganttData.rows" :key="row.key">
                 <div style="height:34px;position:relative;border-bottom:1px solid var(--clr-border)">
                   <template x-for="bar in row.bars" :key="bar.id">
-                    <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
+                    <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1;cursor:pointer"
                          :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
-                         :title="bar.label + ' (' + bar.start + ' → ' + bar.end + ')'">
+                         :title="bar.label + ' (' + bar.start + ' → ' + bar.end + ') — double-click to reassign piste'"
+                         @dblclick="openSlotEditor(bar.id)">
                       <span x-text="bar.label"></span>
                     </div>
                   </template>
@@ -330,6 +341,30 @@
         </div>
       </details>
       <p x-show="!ganttData.hasData" style="color:var(--clr-text-muted)">No solved schedule yet — add stages and re-solve.</p>
+
+      <!-- ── Slot editor (manual override, double-click a Gantt bar) ─────── -->
+      <div class="modal-backdrop" x-show="editingSlot" @click.self="closeSlotEditor()">
+        <div class="modal-box" x-show="editingSlot">
+          <h3 style="margin-top:0" x-text="editingSlotLabel"></h3>
+          <p style="font-size:.85rem;color:var(--clr-text-muted)"
+             x-text="editingSlot ? (editingSlot.scheduled_start + ' → ' + editingSlot.scheduled_end) : ''"></p>
+          <label>Piste
+            <select x-model="editingStripId" style="width:100%">
+              <template x-for="s in strips" :key="s.id">
+                <option :value="s.id" x-text="stripName(s.id)"></option>
+              </template>
+            </select>
+          </label>
+          <p x-show="slotEditorConflict" style="font-size:.82rem;color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-top:.5rem">
+            ⚠ <span x-text="slotEditorConflict"></span> is already scheduled on this piste at an overlapping time —
+            saving anyway will double-book it.
+          </p>
+          <div style="display:flex;gap:.5rem;margin-top:1rem;justify-content:flex-end">
+            <button class="secondary" @click="closeSlotEditor()">Cancel</button>
+            <button class="primary" @click="saveSlotEdit()">Save</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ── Referee sufficiency ──────────────────────────────────────── -->
       <details class="card" open data-key="referee-sufficiency" x-show="refereeSummaryStages.length">

@@ -41,6 +41,15 @@ function schedulePlannerCore() {
 
     newStage: { competition_id: '', phase_type: 'pool', label: '', estimated_n: '', pistes_assigned: 1 },
 
+    // Slot editor (manual override, double-click a Gantt bar) — see
+    // schedule-planner-solve.js for the save/load. Provisional by design:
+    // this edits the CURRENT resolved schedule_plan_slots row directly, so
+    // it lasts only until the plan is next re-solved, same as any other
+    // hand-adjustment to the auto-solved layout.
+    editingSlot: null,
+    editingStripId: '',
+    editingSlotLabel: '',
+
     async init() {
       const params = new URLSearchParams(location.search);
       this.tournamentId = params.get('tournament_id');
@@ -241,6 +250,48 @@ function schedulePlannerCore() {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ competition_id: competitionId || null, from_tableau_size: fromTableauSize || null }),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
+        await this.reload();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    openSlotEditor(slotId) {
+      const slot = this.slots.find(s => s.id === slotId);
+      if (!slot) return;
+      const stage = this.stages.find(st => st.id === slot.schedule_plan_stage_id);
+      this.editingSlot = slot;
+      this.editingStripId = slot.strip_id ?? '';
+      this.editingSlotLabel = stage ? (this.competitionName(stage.competition_id) + ' — ' + stage.label) : '';
+    },
+
+    closeSlotEditor() {
+      this.editingSlot = null;
+    },
+
+    // Advisory only — a slot save is never blocked by this, it's just shown
+    // in the dialog so a director isn't double-booking a piste blind.
+    get slotEditorConflict() {
+      if (!this.editingSlot || this.editingStripId === '') return '';
+      const targetStripId = Number(this.editingStripId);
+      const { scheduled_start: start, scheduled_end: end, id: ownId } = this.editingSlot;
+      const overlap = this.slots.find(s =>
+        s.id !== ownId && s.strip_id === targetStripId && s.scheduled_start < end && start < s.scheduled_end
+      );
+      if (!overlap) return '';
+      const stage = this.stages.find(st => st.id === overlap.schedule_plan_stage_id);
+      return stage ? (this.competitionName(stage.competition_id) + ' — ' + stage.label) : 'Another stage';
+    },
+
+    // Provisional by design (see services/schedulePlans.js's updateSlot) —
+    // lasts only until the plan is next re-solved.
+    async saveSlotEdit() {
+      try {
+        await fetch(`/api/schedule-plans/slots/${this.editingSlot.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strip_id: this.editingStripId === '' ? null : Number(this.editingStripId) }),
+        }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); });
+        this.editingSlot = null;
         await this.reload();
       } catch (e) {
         this.error = e.message;

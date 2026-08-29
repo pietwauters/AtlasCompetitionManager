@@ -1,15 +1,22 @@
 'use strict';
 
 // Greedy list-scheduling solver for the tournament schedule planner. Treats
-// each stage as one resource block: it needs `pistesAssigned` pistes,
-// simultaneously, for `durationMinutes`, no earlier than every stage it
-// `dependsOn` has finished and no earlier than its competition's own start
-// floor (see competitionStart below). This is a standard parallel-identical-
-// machines / variable-job-width list-scheduling heuristic, not a claim of
-// optimality. It gives a reasonable starting layout; the director adjusts
-// individual schedule_plan_slots by hand afterward, and any manual edit
-// lasts until the plan is next re-solved (see the plan doc's "one evolving
-// plan, re-solved as inputs change" model).
+// each stage as one resource block: it needs somewhere between
+// `pistesAssigned` (a floor) and `maxPistesAssigned` (a ceiling, no benefit
+// beyond it) pistes, simultaneously, for however long that many pistes take
+// to get through `workMinutes` of total work — no earlier than every stage
+// it `dependsOn` has finished and no earlier than its competition's own
+// start floor (see competitionStart below). The piste count within that
+// range is decided at solve time (see findBestSlot) based on what's
+// actually free, not fixed in advance — a flights-capped round opportunis-
+// tically grabs idle extra pistes to finish sooner rather than always
+// settling for the flights-minimum even when nothing else needs them
+// (2026-08-28). This is a standard parallel-identical-machines / variable-
+// job-width list-scheduling heuristic, not a claim of optimality. It gives
+// a reasonable starting layout; the director adjusts individual
+// schedule_plan_slots by hand afterward, and any manual edit lasts until
+// the plan is next re-solved (see docs/schedule-planner-algorithm.md's
+// "one evolving plan, re-solved as inputs change" model).
 //
 // Deliberately does not reason about individual pools/DE rounds within a
 // stage (that finer-grained placement is what the real pipeline already
@@ -94,67 +101,195 @@ function isFreeDuring(intervals, start, end) {
 // realistic tournament (2 up to 256).
 const DE_TABLEAU_SIZES = [2, 4, 8, 16, 32, 64, 128, 256];
 
-// A static "how many different kinds of work could this piste ever do"
-// score, independent of any specific plan — used only to break ties in
-// findEarliestSlot below when a unit has more than one eligible-and-free
-// piste to pick from. A piste with no min/max restriction (e.g. a video
-// piste with no round-size limit) can serve every DE round of every
-// competition; a piste restricted to a narrow tableau-size band (e.g.
-// min_de_tableau=32, only the big early rounds) can only ever serve a few.
-// Preferring to consume the narrow piste first — even when both are
-// eligible and idle — protects the broad piste for whichever later, more
-// specialized unit turns out to have no other option (2026-08-27: without
-// this, an unrestricted Women's Sabre T64 round would grab a colored/video
-// piste just because it happened to be idle longest, needlessly delaying a
-// Men's Foil T32 round that could ONLY use that piste, even though plenty
-// of ordinary pistes were free and just as usable for the Sabre round).
-function pisteBreadth(piste) {
+// "How many different kinds of work could this piste still do for THIS
+// competition" — used only to break ties in findBestSlot below when a unit
+// has more than one eligible-and-free piste to pick from. A piste with no
+// min/max restriction (e.g. a video piste with no round-size limit) can
+// serve every DE round of every competition; a piste restricted to a narrow
+// tableau-size band (e.g. min_de_tableau=32, only the big early rounds) can
+// only ever serve a few. Preferring to consume the narrow piste first —
+// even when both are eligible and idle — protects the broad piste for
+// whichever later, more specialized unit turns out to have no other option
+// (2026-08-27: without this, an unrestricted Women's Sabre T64 round would
+// grab a colored/video piste just because it happened to be idle longest,
+// needlessly delaying a Men's Foil T32 round that could ONLY use that
+// piste, even though plenty of ordinary pistes were free and just as usable
+// for the Sabre round).
+//
+// Takes the ASKING unit's own competitionId (2026-08-29) because a piste
+// reservation (isEligible above) narrows a piste's usable range differently
+// per competition — a piste reserved to competition X from some tableau
+// size down is, from X's own perspective, unrestricted by that reservation
+// (it's reserved *for* them), but from any OTHER competition's perspective
+// it's just as narrow as a piste that's permanently restricted to that same
+// range. Without this, a piste on track to become reserved away still LOOKS
+// broadly useful on paper, and the tie-break would protect it as if it were
+// — the opposite of the intent — instead of spending it now while it's
+// still shared.
+function pisteBreadth(piste, competitionId) {
   let score = piste.poolsAllowed ? 1 : 0;
   if (piste.deAllowed) {
+    const reservedForOther = piste.reservedForCompetitionId != null && piste.reservedForCompetitionId !== competitionId;
     score += DE_TABLEAU_SIZES.filter(t =>
       (piste.maxDeTableau == null || t <= piste.maxDeTableau) &&
-      (piste.minDeTableau == null || t >= piste.minDeTableau)
+      (piste.minDeTableau == null || t >= piste.minDeTableau) &&
+      (!reservedForOther || piste.reservedFromTableauSize == null || t > piste.reservedFromTableauSize)
     ).length;
   }
   return score;
 }
 
-// Earliest common start >= earliestStart at which at least K of the given
-// pistes are simultaneously free for `duration` minutes. Candidate starts
-// are earliestStart itself plus every existing interval's end among the
-// eligible pistes (availability can only change at those points) — a
-// standard sweep, not a search over every minute.
-function findEarliestSlot(eligibleIndices, pisteIntervals, earliestStart, duration, K, pisteBreadthScore) {
+function lastIntervalEnd(intervals) {
+  return intervals.length ? intervals[intervals.length - 1][1] : -Infinity;
+}
+
+// Longest run of consecutive integers in a sorted array — used below to
+// judge how "intact" a leftover cluster of pistes still is after a pick.
+function largestContiguousRun(sortedValues) {
+  if (!sortedValues.length) return 0;
+  let best = 1, cur = 1;
+  for (let i = 1; i < sortedValues.length; i++) {
+    cur = sortedValues[i] === sortedValues[i - 1] + 1 ? cur + 1 : 1;
+    if (cur > best) best = cur;
+  }
+  return best;
+}
+
+// Among a tied group of piste indices (same breadth, same idle time — the
+// two dimensions that actually reflect scheduling value), pick `need` of
+// them (2026-08-29). Restricted to a *consecutive* run within the sorted
+// group — a scattered pick is never better than some compact one for
+// either goal below, so there's no need to consider non-consecutive
+// combinations.
+//
+// The goal isn't just "my own pick is compact" — the solver has no
+// lookahead (see docs/schedule-planner-algorithm.md), so it can't know
+// whether some other unit will want more pistes from this same tied pool
+// later. What it CAN do without lookahead is avoid making that hypothetical
+// future pick harder than it has to be: prefer whichever consecutive window
+// leaves the LARGEST contiguous run among what's left over — taking from
+// either end of a single contiguous group always does this (the remainder
+// stays one intact run), but taking from the middle of one, or from a
+// smaller cluster when a same-span pick from a bigger one would fully
+// consume it, fragments the leftovers into disconnected pieces that are
+// individually less useful to whoever claims them next. Span only breaks a
+// further tie among equally-good remainders (prefer the tightest pick
+// itself), and start position is the final, fully deterministic fallback.
+function closestPistes(group, need) {
+  const sortedByIndex = [...group].sort((a, b) => a - b);
+  let best = null;
+  for (let start = 0; start + need <= sortedByIndex.length; start++) {
+    const chosen = sortedByIndex.slice(start, start + need);
+    const span = chosen[chosen.length - 1] - chosen[0];
+    const remainder = sortedByIndex.slice(0, start).concat(sortedByIndex.slice(start + need));
+    const remainderBestRun = largestContiguousRun(remainder);
+    if (!best
+        || remainderBestRun > best.remainderBestRun
+        || (remainderBestRun === best.remainderBestRun && span < best.span)) {
+      best = { start, span, remainderBestRun };
+    }
+  }
+  return sortedByIndex.slice(best.start, best.start + need);
+}
+
+// Among `free` pistes (all known to fit the chosen window), pick `k`:
+// narrowest-eligibility first (see pisteBreadth), then whoever has been idle
+// longest (their last interval ends earliest). Everything left tied on both
+// (most often several pistes never yet used, all at -Infinity) is
+// interchangeable from the solver's own perspective — WHICH of them get
+// chosen is then free to optimize for physical proximity instead of just
+// raw piste order (see closestPistes).
+function pickPistes(free, k, pisteIntervals, pisteBreadthScore) {
+  const sorted = [...free].sort((a, b) =>
+    pisteBreadthScore[a] - pisteBreadthScore[b]
+    || lastIntervalEnd(pisteIntervals[a]) - lastIntervalEnd(pisteIntervals[b])
+  );
+
+  const chosen = [];
+  let i = 0;
+  while (chosen.length < k && i < sorted.length) {
+    let j = i + 1;
+    while (
+      j < sorted.length
+      && pisteBreadthScore[sorted[j]] === pisteBreadthScore[sorted[i]]
+      && lastIntervalEnd(pisteIntervals[sorted[j]]) === lastIntervalEnd(pisteIntervals[sorted[i]])
+    ) j++;
+    const group = sorted.slice(i, j);
+    const need = k - chosen.length;
+    chosen.push(...(group.length <= need ? group : closestPistes(group, need)));
+    i = j;
+  }
+  return chosen;
+}
+
+// Finds the best (start, pisteCount) for a unit whose piste count is a
+// *range* [minK, maxK], not a fixed number (2026-08-28: a flights-capped
+// round previously always used exactly the flights-minimum piste count even
+// when far more sat idle, making it run needlessly long — "never use more
+// than needed" was true, but "never use more even when nothing else needs
+// them" wasn't the intent). workMinutes is the round's total bout-minutes;
+// duration for a candidate k is ceil(workMinutes / k) — more pistes, shorter
+// duration, same total work. In FIXED mode (director-set pistes_assigned,
+// not flights-derived) minK === maxK, so this degenerates to exactly
+// today's single-K behavior.
+//
+// For a FIXED start time, a larger k always yields a shorter (or equal)
+// duration than a smaller k, and a shorter window is only ever as-hard-or-
+// easier to fit into existing gaps than a longer one — so at each candidate
+// start, trying k from maxK down to minK and stopping at the first feasible
+// one already finds that start's best (smallest-end) option; no need to
+// keep checking smaller k there. Across candidate starts, the search keeps
+// the overall earliest-finishing (start, k) pair — an earlier start with
+// fewer pistes can lose to a later start that lands enough extra pistes to
+// finish sooner, so both are genuinely compared rather than just taking the
+// first start that works at all.
+function findBestSlot(eligibleIndices, pisteIntervals, earliestStart, workMinutes, minK, maxK, pisteBreadthScore) {
   const candidates = new Set([earliestStart]);
   for (const idx of eligibleIndices) {
     for (const [, e] of pisteIntervals[idx]) {
       if (e >= earliestStart) candidates.add(e);
     }
   }
-  const sorted = [...candidates].sort((a, b) => a - b);
-  for (const start of sorted) {
-    const free = eligibleIndices.filter(idx => isFreeDuring(pisteIntervals[idx], start, start + duration));
-    if (free.length >= K) {
-      // Narrowest-eligibility pistes first (see pisteBreadth), then whoever
-      // has been idle longest (their last interval ends earliest) — keeps
-      // behavior close to the old "least-recently-used" tie-break among
-      // pistes of equal breadth, e.g. spreading load across several
-      // identical unrestricted pistes rather than always picking the same one.
-      free.sort((a, b) => {
-        const breadthDiff = pisteBreadthScore[a] - pisteBreadthScore[b];
-        if (breadthDiff !== 0) return breadthDiff;
-        const lastA = pisteIntervals[a].length ? pisteIntervals[a][pisteIntervals[a].length - 1][1] : -Infinity;
-        const lastB = pisteIntervals[b].length ? pisteIntervals[b][pisteIntervals[b].length - 1][1] : -Infinity;
-        return lastA - lastB || a - b;
-      });
-      return { start, chosen: free.slice(0, K) };
+  const sortedStarts = [...candidates].sort((a, b) => a - b);
+
+  let best = null; // { start, end, k, chosen }
+  for (const start of sortedStarts) {
+    if (best && start >= best.end) break; // no later start can beat an already-found finish
+    for (let k = maxK; k >= minK; k--) {
+      const duration = Math.ceil(workMinutes / k);
+      const end = start + duration;
+      // duration is non-increasing in k, so as k counts down from maxK,
+      // `end` only grows — once it's no better than the current best,
+      // every smaller k at this start is guaranteed no better either.
+      if (best && end >= best.end) break;
+      const free = eligibleIndices.filter(idx => isFreeDuring(pisteIntervals[idx], start, end));
+      if (free.length >= k) {
+        best = { start, end, k, chosen: pickPistes(free, k, pisteIntervals, pisteBreadthScore) };
+        break; // largest feasible k at this start is its best — smaller k here can't improve on it
+      }
     }
   }
-  return null; // unreachable when eligibleIndices.length >= K
+  return best; // unreachable null when eligibleIndices.length >= minK
 }
 
-// stages: [{ id, dependsOn: [id,...], order, durationMinutes, pistesAssigned,
-//            phaseType: 'pool'|'de', tableauSize?, competitionId, restMinutes?, fixedStart? }]
+// stages: [{ id, dependsOn: [id,...], order, workMinutes, pistesAssigned,
+//            maxPistesAssigned?, phaseType: 'pool'|'de', tableauSize?,
+//            competitionId, restMinutes?, fixedStart? }]
+//   workMinutes: total bout-minutes of work this unit represents — actual
+//   duration is derived at solve time as ceil(workMinutes / pistesUsed),
+//   not fixed in advance (2026-08-28: a flights-capped round previously
+//   always ran its full multi-flight duration even when far more pistes
+//   sat idle — see findBestSlot).
+//   pistesAssigned: the MINIMUM piste count (the flights-cap floor, or the
+//   director's own fixed number when no flights cap applies — in which
+//   case maxPistesAssigned should equal it too, disabling the opportunistic
+//   widening below).
+//   maxPistesAssigned (optional, defaults to pistesAssigned): the piste
+//   count beyond which more pistes give no benefit (one-flight-worth — see
+//   services/schedulePlans.js's _buildSolverInput). The solver uses as many
+//   pistes within [pistesAssigned, maxPistesAssigned] as are actually free
+//   without unnecessarily delaying the start, shortening the round's
+//   duration accordingly rather than always settling for the flights-floor.
 //   restMinutes (optional, default 0): minimum gap added after each
 //   dependency's finish time before this unit may start — a fencer-safety/
 //   logistics buffer, not a piste constraint (see services/schedulePlans.js's
@@ -201,7 +336,6 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
   let ready = stages.filter(s => indegree.get(s.id) === 0);
   const finishOf = new Map();
   const pisteIntervals = pistes.map(() => []); // per piste: [[start,end], ...] sorted by start
-  const pisteBreadthScore = pistes.map(pisteBreadth);
   const results = [];
 
   while (ready.length) {
@@ -216,7 +350,17 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
         { status: 400 }
       );
     }
-    const K = Math.max(1, Math.min(stage.pistesAssigned || 1, eligible.length));
+    // Recomputed per unit, not once up front — a piste's effective breadth
+    // now depends on which competition is asking (see pisteBreadth).
+    const pisteBreadthScore = pistes.map(p => pisteBreadth(p, stage.competitionId));
+    // minPistes is the flights-cap floor (or the director's own fixed
+    // pistes_assigned — see _buildSolverInput, where minK===maxK in that
+    // case); maxPistes is the "no benefit beyond this" ceiling (one-flight-
+    // worth). Both clamp down to however many pistes are actually eligible —
+    // same graceful-degrade behavior as before, surfaced as a flights
+    // warning by services/schedulePlans.js's resolve() when it bites.
+    const minK = Math.max(1, Math.min(stage.pistesAssigned || 1, eligible.length));
+    const maxK = Math.max(minK, Math.min(stage.maxPistesAssigned || minK, eligible.length));
 
     const compFloor = stage.competitionId != null && competitionStartMin[stage.competitionId] != null
       ? competitionStartMin[stage.competitionId]
@@ -236,10 +380,9 @@ function simulate(stages, { pistes, dayStart = '08:00', competitionStart = {} })
     const fixedStartMin = stage.fixedStart ? toMinutes(stage.fixedStart) : null;
     const earliestStart = fixedStartMin != null ? Math.max(naturalStart, fixedStartMin) : naturalStart;
 
-    const duration = Math.max(0, stage.durationMinutes || 0);
-    const slot = findEarliestSlot(eligible, pisteIntervals, earliestStart, duration, K, pisteBreadthScore);
-    const { start, chosen } = slot;
-    const end = start + duration;
+    const workMinutes = Math.max(0, stage.workMinutes || 0);
+    const slot = findBestSlot(eligible, pisteIntervals, earliestStart, workMinutes, minK, maxK, pisteBreadthScore);
+    const { start, end, chosen } = slot;
     for (const idx of chosen) {
       const intervals = pisteIntervals[idx];
       let i = intervals.length;

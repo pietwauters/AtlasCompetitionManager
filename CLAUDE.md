@@ -260,9 +260,13 @@ naturally from `buildSeedPositions`: any position whose seed > N is a bye.
 The schedule planner (`public/schedule-planner.html`, `services/schedulePlans.js`,
 `services/schedulePlanSolver.js`) is a separate, pre-competition "what-if" layout
 tool — it estimates a rough day plan from projected headcounts, before any real
-phase/pool/bout exists. A piste's eligibility for that plan is governed by four
-`strips` columns (migrations 040/042): `pools_allowed`, `de_allowed`,
-`max_de_tableau`, `min_de_tableau` — edited on `public/strips.html`.
+phase/pool/bout exists. Full solver reference: `docs/schedule-planner-algorithm.md`
+(piste count ranges/opportunistic widening, the fencer-rest minGap formula,
+competition piste reservations, the referee-driven piste cap, warnings). This
+section covers just the piste-eligibility naming, which is easy to get backwards.
+A piste's eligibility for that plan is governed by four `strips` columns
+(migrations 040/042): `pools_allowed`, `de_allowed`, `max_de_tableau`,
+`min_de_tableau` — edited on `public/strips.html`.
 
 **Tableau size counts down as the competition progresses** — T64 (round of 64)
 happens first, T2 (the final) happens last — so naming these columns after
@@ -688,6 +692,8 @@ every commit.
 | `scripts/sync-spec.sh` | Diff/update `docs/level2.md` against the canonical upstream spec |
 | `scripts/check-architecture.sh` | Mechanical architecture/code-quality checks — run before committing any change under `services/`, `routes/`, `lib/`, `public/*.html`, or `public/js/*.js`. See `docs/architecture-kpis.md` |
 | `docs/architecture-kpis.md` | Full architecture/code-quality KPI reference — mechanical (scripted) + judgment-based (periodic review) |
+| `docs/schedule-planner-algorithm.md` | Full reference for the schedule-planner solver — piste eligibility, the min/max opportunistic-widening range, the fencer-rest minGap formula, referee cap, warnings |
+| `services/schedulePlanSolver.js` | The schedule planner's greedy list-scheduling solver — see the doc above |
 
 ---
 

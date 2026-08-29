@@ -27,6 +27,8 @@ function schedulePlannerSolve() {
             default_max_flights_de: this.plan.default_max_flights_de === '' || this.plan.default_max_flights_de == null
               ? null : Number(this.plan.default_max_flights_de),
             de_rest_minutes: Number(this.plan.de_rest_minutes) || 0,
+            default_max_pistes_de: this.plan.default_max_pistes_de === '' || this.plan.default_max_pistes_de == null
+              ? null : Number(this.plan.default_max_pistes_de),
           }),
         }).then(r => { if (!r.ok) return r.json().then(b => { throw new Error(b.error); }); return r.json(); });
       } catch (e) {

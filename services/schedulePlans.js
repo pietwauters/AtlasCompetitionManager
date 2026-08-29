@@ -3,19 +3,30 @@
 // Tournament schedule planner — Phase 1 (estimation/what-if tool). Orchestrates
 // the pure per-stage math (schedulePlanEstimate.js), the greedy piste solver
 // (schedulePlanSolver.js), and the referee-shortfall analysis
-// (schedulePlanReferees.js) into one persisted plan per tournament. See the
-// project's schedule-planner design doc for the full model — deliberately
+// (schedulePlanReferees.js) into one persisted plan per tournament. See
+// docs/schedule-planner-algorithm.md for the full model — deliberately
 // decoupled from pipeline_slots/phases/pools; nothing here writes to the live
 // scheduling tables.
+//
+// This file itself covers plan/stage CRUD, format sync, and per-competition
+// start overrides — it merges in two split-out files (2026-08-28, once this
+// file crossed the project's god-file threshold): schedulePlanOverrides.js
+// (round overrides + piste reservations, pure CRUD, low expected growth) and
+// schedulePlanResolve.js (the solve orchestration itself — _buildSolverInput/
+// resolve/preview — the piece expected to keep growing as more referee-
+// related constraints get added). The merge is a plain Object.assign onto one
+// object, not each file exporting its own separately-called object, so every
+// method still sees the same `this` regardless of which file defined it —
+// avoids the this-binding hazard a similar split (services/phases.js) hit
+// once; services/pipeline.js's split avoided it the same way.
 
 const db = require('../db');
-const Strip = require('./strips');
 const Competition = require('./competitions');
 const Competitor = require('./competitors');
 const Format = require('./formats');
 const { computeStageMetrics, defaultRuleDoc, projectAdvancement } = require('./schedulePlanEstimate');
-const Solver = require('./schedulePlanSolver');
-const { computeShortfalls } = require('./schedulePlanReferees');
+const Overrides = require('./schedulePlanOverrides');
+const Resolve = require('./schedulePlanResolve');
 
 // ---------------------------------------------------------------------------
 // Prepared statements — module-level constants (CLAUDE.md hard rule).
@@ -27,7 +38,7 @@ const stmtUpdatePlan       = db.prepare(`
   UPDATE schedule_plans SET day_start = @day_start, abstract_piste_count = @abstract_piste_count,
     abstract_referee_count = @abstract_referee_count,
     default_max_flights_pool = @default_max_flights_pool, default_max_flights_de = @default_max_flights_de,
-    de_rest_minutes = @de_rest_minutes,
+    de_rest_minutes = @de_rest_minutes, default_max_pistes_de = @default_max_pistes_de,
     updated_at = datetime('now')
   WHERE id = @id
 `);
@@ -56,23 +67,23 @@ const stmtUpdateStageFromFormat = db.prepare(
 const stmtUpdateStage = db.prepare(`
   UPDATE schedule_plan_stages SET label = @label, estimated_n = @estimated_n,
     pistes_assigned = @pistes_assigned, depends_on = @depends_on, rule_doc = @rule_doc,
-    max_flights = @max_flights
+    max_flights = @max_flights, max_pistes = @max_pistes
   WHERE id = @id
 `);
-const stmtSetDependsOn    = db.prepare('UPDATE schedule_plan_stages SET depends_on = ? WHERE id = ?');
-const stmtSetComputedJson = db.prepare('UPDATE schedule_plan_stages SET computed_json = ? WHERE id = ?');
-const stmtDeleteStage     = db.prepare('DELETE FROM schedule_plan_stages WHERE id = ?');
+const stmtSetDependsOn = db.prepare('UPDATE schedule_plan_stages SET depends_on = ? WHERE id = ?');
+const stmtDeleteStage  = db.prepare('DELETE FROM schedule_plan_stages WHERE id = ?');
 
-const stmtDeleteSlotsForStage = db.prepare('DELETE FROM schedule_plan_slots WHERE schedule_plan_stage_id = ?');
-const stmtInsertSlot = db.prepare(`
-  INSERT INTO schedule_plan_slots
-    (schedule_plan_stage_id, strip_id, abstract_piste_index, scheduled_start, scheduled_end)
-  VALUES (@stage_id, @strip_id, @abstract_piste_index, @start, @end)
-`);
 const stmtSlotsForPlan = db.prepare(`
   SELECT sl.* FROM schedule_plan_slots sl
   JOIN schedule_plan_stages st ON st.id = sl.schedule_plan_stage_id
   WHERE st.schedule_plan_id = ?
+`);
+const stmtSlotById = db.prepare('SELECT * FROM schedule_plan_slots WHERE id = ?');
+const stmtUpdateSlot = db.prepare(`
+  UPDATE schedule_plan_slots SET
+    strip_id = @strip_id, abstract_piste_index = @abstract_piste_index,
+    scheduled_start = @scheduled_start, scheduled_end = @scheduled_end
+  WHERE id = @id
 `);
 
 // Per-competition start-time overrides — see setCompetitionStart below.
@@ -86,38 +97,6 @@ const stmtUpsertCompetitionStart = db.prepare(`
 `);
 const stmtDeleteCompetitionStart = db.prepare(
   'DELETE FROM schedule_plan_competition_starts WHERE schedule_plan_id = ? AND competition_id = ?'
-);
-
-// Per-round scheduling overrides (fixed start / explicit buffer-after) — see
-// migration 044. tableau_size = 0 is the sentinel for a stage's own single
-// unit (a pool phase); a real DE round uses its actual tableau size (T4, ...).
-const stmtOverridesForPlan = db.prepare(`
-  SELECT o.* FROM schedule_plan_round_overrides o
-  JOIN schedule_plan_stages st ON st.id = o.schedule_plan_stage_id
-  WHERE st.schedule_plan_id = ?
-`);
-const stmtUpsertOverride = db.prepare(`
-  INSERT INTO schedule_plan_round_overrides (schedule_plan_stage_id, tableau_size, fixed_start, buffer_after_minutes)
-  VALUES (@schedule_plan_stage_id, @tableau_size, @fixed_start, @buffer_after_minutes)
-  ON CONFLICT (schedule_plan_stage_id, tableau_size)
-  DO UPDATE SET fixed_start = excluded.fixed_start, buffer_after_minutes = excluded.buffer_after_minutes
-`);
-const stmtOverrideRow = db.prepare(
-  'SELECT * FROM schedule_plan_round_overrides WHERE schedule_plan_stage_id = ? AND tableau_size = ?'
-);
-
-// Competition-exclusive piste reservations — see migration 045.
-const stmtReservationsForPlan = db.prepare(
-  'SELECT * FROM schedule_plan_piste_reservations WHERE schedule_plan_id = ?'
-);
-const stmtUpsertReservation = db.prepare(`
-  INSERT INTO schedule_plan_piste_reservations (schedule_plan_id, strip_id, competition_id, from_tableau_size)
-  VALUES (@schedule_plan_id, @strip_id, @competition_id, @from_tableau_size)
-  ON CONFLICT (schedule_plan_id, strip_id)
-  DO UPDATE SET competition_id = excluded.competition_id, from_tableau_size = excluded.from_tableau_size
-`);
-const stmtDeleteReservation = db.prepare(
-  'DELETE FROM schedule_plan_piste_reservations WHERE schedule_plan_id = ? AND strip_id = ?'
 );
 
 // ---------------------------------------------------------------------------
@@ -151,7 +130,7 @@ function estimatedNForDeStage(competitionId, poolDependency) {
   return defaultEstimatedN(competitionId);
 }
 
-const SchedulePlans = {
+const SchedulePlanCore = {
   getOrCreate(tournamentId) {
     let plan = stmtPlanByTournament.get(tournamentId);
     if (!plan) {
@@ -175,6 +154,8 @@ const SchedulePlans = {
         ? plan.default_max_flights_de : (patch.default_max_flights_de || null),
       de_rest_minutes: patch.de_rest_minutes === undefined
         ? plan.de_rest_minutes : (Number(patch.de_rest_minutes) || 0),
+      default_max_pistes_de: patch.default_max_pistes_de === undefined
+        ? plan.default_max_pistes_de : (patch.default_max_pistes_de || null),
     });
     return stmtPlanById.get(planId);
   },
@@ -202,55 +183,6 @@ const SchedulePlans = {
       stmtUpsertCompetitionStart.run({ plan_id: planId, competition_id: competitionId, day_start: dayStart });
     }
     return this.findCompetitionStarts(planId);
-  },
-
-  // Per-round overrides (fixed start / explicit buffer-after — see migration
-  // 044), as [{ schedule_plan_stage_id, tableau_size, fixed_start,
-  // buffer_after_minutes }, ...] for the whole plan — consumed by
-  // _buildSolverInput and returned as-is to the UI via findPlanView, grouped
-  // by stage there for convenience.
-  findRoundOverrides(planId) {
-    return stmtOverridesForPlan.all(planId);
-  },
-
-  // tableauSize: 0 for a pool stage's own single unit, or a real DE tableau
-  // size (T4, T8, ...). fixedStart/bufferAfterMinutes: null clears that
-  // field; the other field (if already set) is preserved via the upsert's
-  // own current-row read.
-  setRoundOverride(stageId, tableauSize, { fixed_start, buffer_after_minutes }) {
-    const current = stmtOverrideRow.get(stageId, tableauSize);
-    stmtUpsertOverride.run({
-      schedule_plan_stage_id: stageId,
-      tableau_size: tableauSize,
-      fixed_start: fixed_start !== undefined ? (fixed_start || null) : (current?.fixed_start ?? null),
-      buffer_after_minutes: buffer_after_minutes !== undefined
-        ? (buffer_after_minutes === '' || buffer_after_minutes == null ? null : Number(buffer_after_minutes))
-        : (current?.buffer_after_minutes ?? null),
-    });
-  },
-
-  // Competition-exclusive piste reservations (2026-08-28 discussion), as
-  // [{ strip_id, competition_id, from_tableau_size }, ...] for the whole
-  // plan — consumed by _buildPisteList, returned as-is via findPlanView.
-  findPisteReservations(planId) {
-    return stmtReservationsForPlan.all(planId);
-  },
-
-  // competitionId: null/'' clears the reservation for this strip (piste goes
-  // back to fully shared). fromTableauSize: null means active from the very
-  // start; otherwise only kicks in once a round's tableau shrinks to that
-  // size or below — set individually per strip, not plan-wide.
-  setPisteReservation(planId, stripId, { competition_id, from_tableau_size }) {
-    if (!competition_id) {
-      stmtDeleteReservation.run(planId, stripId);
-      return;
-    }
-    stmtUpsertReservation.run({
-      schedule_plan_id: planId,
-      strip_id: stripId,
-      competition_id: Number(competition_id),
-      from_tableau_size: from_tableau_size === '' || from_tableau_size == null ? null : Number(from_tableau_size),
-    });
   },
 
   addStage(planId, data) {
@@ -321,6 +253,7 @@ const SchedulePlans = {
       depends_on: patch.depends_on !== undefined ? JSON.stringify(patch.depends_on) : stage.depends_on,
       rule_doc: patch.rule_doc ?? stage.rule_doc,
       max_flights: patch.max_flights === undefined ? stage.max_flights : (patch.max_flights || null),
+      max_pistes: patch.max_pistes === undefined ? stage.max_pistes : (patch.max_pistes || null),
     });
     return stmtStageById.get(stageId);
   },
@@ -329,16 +262,16 @@ const SchedulePlans = {
     stmtDeleteStage.run(stageId);
   },
 
-  // Director action: reset estimated_n. Never automatic (see the design
-  // doc) — a deliberate what-if override on a stage's N is never silently
-  // clobbered; this only runs when the director explicitly asks for it. For
-  // a pool stage (or a stand-alone DE stage), that's the competition's
-  // current real registered-competitor count. For a DE stage that depends
-  // on a pool stage, it's a projection of what actually advances out of
-  // that pool stage's *current* estimated_n (see estimatedNForDeStage) —
-  // refresh the pool stage first if you also want that number updated from
-  // registrations; this only re-derives the DE stage's own number from
-  // whatever the pool stage currently says.
+  // Director action: reset estimated_n. Never automatic (see
+  // docs/schedule-planner-algorithm.md) — a deliberate what-if override on a
+  // stage's N is never silently clobbered; this only runs when the director
+  // explicitly asks for it. For a pool stage (or a stand-alone DE stage),
+  // that's the competition's current real registered-competitor count. For a
+  // DE stage that depends on a pool stage, it's a projection of what
+  // actually advances out of that pool stage's *current* estimated_n (see
+  // estimatedNForDeStage) — refresh the pool stage first if you also want
+  // that number updated from registrations; this only re-derives the DE
+  // stage's own number from whatever the pool stage currently says.
   refreshEstimateFromRegistrations(stageId) {
     const stage = stmtStageById.get(stageId);
     if (!stage) throw Object.assign(new Error('Stage not found'), { status: 404 });
@@ -348,7 +281,7 @@ const SchedulePlans = {
     stmtUpdateStage.run({
       id: stageId, label: stage.label, estimated_n: estimatedN,
       pistes_assigned: stage.pistes_assigned, depends_on: stage.depends_on, rule_doc: stage.rule_doc,
-      max_flights: stage.max_flights,
+      max_flights: stage.max_flights, max_pistes: stage.max_pistes,
     });
     return stmtStageById.get(stageId);
   },
@@ -420,375 +353,39 @@ const SchedulePlans = {
     return this.findStages(planId).filter(s => s.competition_id === competitionId);
   },
 
-  // ---------------------------------------------------------------------------
-  // Solve
-  // ---------------------------------------------------------------------------
-
-  // Non-persisting "what if I had this many pistes" query — pure abstract
-  // piste numbering, no schedule_plan_slots written.
-  previewForPistes(planId, totalPistes) {
-    const plan = stmtPlanById.get(planId);
-    if (!plan) throw Object.assign(new Error('Plan not found'), { status: 404 });
-    const { solverUnits } = this._buildSolverInput(planId);
-    const competitionStart = this.findCompetitionStarts(planId);
-    return Solver.solveForPistes(solverUnits, this._buildPisteList(totalPistes, planId), plan.day_start, competitionStart);
-  },
-
-  // Non-persisting "how many pistes to meet this deadline" query.
-  previewForDeadline(planId, deadlineTime) {
-    const plan = stmtPlanById.get(planId);
-    if (!plan) throw Object.assign(new Error('Plan not found'), { status: 404 });
-    const { solverUnits } = this._buildSolverInput(planId);
-    const competitionStart = this.findCompetitionStarts(planId);
-    return Solver.solveForDeadline(
-      solverUnits, deadlineTime, plan.day_start, competitionStart, n => this._buildPisteList(n, planId)
-    );
-  },
-
-  // The persisting "make this the plan's current layout" action — uses the
-  // plan's own configured piste pool (real strips + abstract_piste_count),
-  // writes schedule_plan_slots, and layers the referee-shortfall analysis
-  // on top. This is the "auto-solve first, then adjustable" starting point
-  // the director then hand-edits; re-running always re-derives every slot
-  // from the stages' current inputs (see the design doc's "one evolving
-  // plan, re-solved as inputs change" model).
-  //
-  // A DE stage produces multiple slot rows at DIFFERENT times (one cluster
-  // per tableau round — see _buildSolverInput), not one shared window like a
-  // pool stage — the schema already supports this (schedule_plan_slots has
-  // no constraint tying every slot of a stage to the same start/end), so no
-  // migration was needed to fix "all pistes finish the tableau at once".
-  resolve(planId) {
-    const plan = stmtPlanById.get(planId);
-    if (!plan) throw Object.assign(new Error('Plan not found'), { status: 404 });
-
-    const { stages, solverUnits, competitionById } = this._buildSolverInput(planId);
-    const realStrips  = Strip.findAll();
-    const totalPistes = realStrips.length + plan.abstract_piste_count;
-    if (totalPistes < 1) {
-      throw Object.assign(new Error('No pistes available — add strips or set an abstract piste count.'), { status: 400 });
+  // Director's manual override of a single solved slot (2026-08-29) — e.g.
+  // swapping which piste a round landed on, via the double-click dialog on
+  // schedule-planner.html's Gantt. Provisional by design, same as any other
+  // hand-adjustment to the auto-solved layout: schedule_plan_slots is
+  // wholesale replaced on every resolve() call, so this edit naturally lasts
+  // only until the plan is next re-solved. Accepts any of strip_id/
+  // abstract_piste_index/scheduled_start/scheduled_end — only the v1 dialog
+  // sends strip_id today, but a future dialog field (e.g. editing time)
+  // needs no backend change, just a new field in the same PATCH body.
+  // strip_id and abstract_piste_index are mutually exclusive (schema CHECK
+  // constraint) — setting one always clears the other; whichever field the
+  // caller doesn't mention keeps its current value.
+  updateSlot(slotId, patch) {
+    const slot = stmtSlotById.get(slotId);
+    if (!slot) throw Object.assign(new Error('Slot not found'), { status: 404 });
+    let strip_id = slot.strip_id;
+    let abstract_piste_index = slot.abstract_piste_index;
+    if (patch.strip_id !== undefined) {
+      strip_id = patch.strip_id || null;
+      abstract_piste_index = strip_id ? null : abstract_piste_index;
     }
-    const competitionStart = this.findCompetitionStarts(planId);
-
-    const solved = Solver.simulate(solverUnits, {
-      pistes: this._buildPisteList(totalPistes, planId), dayStart: plan.day_start, competitionStart,
+    if (patch.abstract_piste_index !== undefined) {
+      abstract_piste_index = patch.abstract_piste_index || null;
+      strip_id = abstract_piste_index ? null : strip_id;
+    }
+    stmtUpdateSlot.run({
+      id: slotId,
+      strip_id,
+      abstract_piste_index,
+      scheduled_start: patch.scheduled_start ?? slot.scheduled_start,
+      scheduled_end: patch.scheduled_end ?? slot.scheduled_end,
     });
-    const resultByUnitId = new Map(solved.stageResults.map(r => [r.id, r]));
-
-    // Group unit results back by the real stage they belong to (a pool
-    // stage always has exactly one unit; a DE stage has one per round).
-    const resultsByStageId = new Map();
-    for (const u of solverUnits) {
-      const r = resultByUnitId.get(u.id);
-      if (!resultsByStageId.has(u.realStageId)) resultsByStageId.set(u.realStageId, []);
-      resultsByStageId.get(u.realStageId).push(r);
-    }
-
-    // Referee-shortfall clustering only ever looks at pool stages (see
-    // schedulePlanReferees.js), which always resolve to a single unit, so a
-    // stage's overall [firstStart, lastEnd] window is exactly that unit's window.
-    const stageWindows = stages.map(s => {
-      const rs = resultsByStageId.get(s.id) || [];
-      return { id: s.id, start: rs[0]?.start, end: rs[rs.length - 1]?.end };
-    });
-    const shortfalls = computeShortfalls(stages, stageWindows, plan.abstract_referee_count);
-
-    // Flights warning: a unit in max-flights mode (_buildSolverInput) got
-    // fewer pistes than its flights target wanted — the only way that
-    // happens is the solver's own eligibility clamp (services/
-    // schedulePlanSolver.js) finding fewer eligible pistes than requested,
-    // since the request itself was already the *minimum* needed to hit the
-    // target. Surfaced per real stage (a DE stage's rounds are merged into
-    // one list) the same way referee shortfalls already are.
-    const flightsWarningsByStageId = new Map();
-    for (const u of solverUnits) {
-      if (!u.targetFlights) continue;
-      const r = resultByUnitId.get(u.id);
-      const pistesGot = r?.pistesUsed?.length || 0;
-      if (pistesGot >= u.pistesAssigned) continue; // target was met
-      const actualFlights = Math.ceil(u.workUnitCount / Math.max(1, pistesGot));
-      if (!flightsWarningsByStageId.has(u.realStageId)) flightsWarningsByStageId.set(u.realStageId, []);
-      flightsWarningsByStageId.get(u.realStageId).push({
-        round: u.roundIndex != null ? u.roundIndex + 1 : null,
-        tableauSize: u.tableauSize || null,
-        targetFlights: u.targetFlights,
-        actualFlights,
-        pistesWanted: u.pistesAssigned,
-        pistesGot,
-      });
-    }
-
-    // Fixed-start notices: two kinds, different severity. A unit with a
-    // fixed_start override (services/schedulePlanSolver.js applies it as a
-    // floor, never pulling the start earlier) either got pushed past it —
-    // a real "missed" warning, comparing the FINAL actual start (which can
-    // be later than the fixed time for either a dependency-timing reason or
-    // a piste-availability one, both real causes) — or has natural slack
-    // before it, an "idle" info note only (often intentional, e.g. the
-    // final running in a different room/venue — not something to flag as
-    // wrong, per the 2026-08-28 discussion).
-    const fixedStartNoticesByStageId = new Map();
-    for (const u of solverUnits) {
-      if (!u.fixedStart) continue;
-      const r = resultByUnitId.get(u.id);
-      if (!r) continue;
-      const requestedMin = Solver.toMinutes(u.fixedStart);
-      const actualMin = Solver.toMinutes(r.start);
-      const naturalMin = Solver.toMinutes(r.naturalStart);
-      const notice = actualMin > requestedMin
-        ? { severity: 'warning', requested: u.fixedStart, actual: r.start, missedByMinutes: actualMin - requestedMin }
-        : naturalMin < requestedMin
-          ? { severity: 'info', requested: u.fixedStart, idleMinutes: requestedMin - naturalMin }
-          : null;
-      if (!notice) continue;
-      notice.round = u.roundIndex != null ? u.roundIndex + 1 : null;
-      notice.tableauSize = u.tableauSize || null;
-      if (!fixedStartNoticesByStageId.has(u.realStageId)) fixedStartNoticesByStageId.set(u.realStageId, []);
-      fixedStartNoticesByStageId.get(u.realStageId).push(notice);
-    }
-
-    const writeAll = db.transaction(() => {
-      for (const stage of stages) {
-        stmtDeleteSlotsForStage.run(stage.id);
-        const results = resultsByStageId.get(stage.id) || [];
-        for (const r of results) {
-          for (const pisteIdx of r.pistesUsed) {
-            const isReal = pisteIdx < realStrips.length;
-            stmtInsertSlot.run({
-              stage_id: stage.id,
-              strip_id: isReal ? realStrips[pisteIdx].id : null,
-              abstract_piste_index: isReal ? null : (pisteIdx - realStrips.length + 1),
-              start: r.start,
-              end: r.end,
-            });
-          }
-        }
-        const metrics = computeStageMetrics(stage, competitionById.get(stage.competition_id));
-        const window = stageWindows.find(w => w.id === stage.id);
-        stmtSetComputedJson.run(
-          JSON.stringify({
-            ...metrics, start: window?.start, end: window?.end,
-            referees: shortfalls.get(stage.id) || null,
-            flightsWarnings: flightsWarningsByStageId.get(stage.id) || null,
-            fixedStartNotices: fixedStartNoticesByStageId.get(stage.id) || null,
-          }),
-          stage.id
-        );
-      }
-    });
-    writeAll();
-
-    return this.findPlanView(planId);
-  },
-
-  // Builds the solver-unit list services/schedulePlanSolver.js consumes.
-  // A pool stage is exactly one unit. A DE stage explodes into one unit per
-  // tableau round (schedulePlanEstimate.js's roundBoutCounts), chained
-  // sequentially (round 2 can't start until round 1's winners exist).
-  //
-  // Each unit's piste count comes from one of two modes (see the 2026-08-27
-  // "flights" design note):
-  //   - max-flights mode (stage.max_flights, or failing that the plan's own
-  //     default_max_flights_pool/_de for that phase type): the piste count
-  //     is *derived* — "never use more pistes than needed to stay within N
-  //     flights" — ceil(poolCount / maxFlights) for a pool stage, or
-  //     ceil(boutsInRound / maxFlights) per DE round. This is what makes a
-  //     stage only ever claim the minimum it needs, leaving room for other
-  //     competitions' stages to run concurrently on the rest.
-  //   - fixed mode (today's behavior, when neither is set): the director's
-  //     own pistes_assigned number is used directly, clamped to a round's
-  //     own bout count for DE so a final never "uses" more pistes than
-  //     there are bouts.
-  // Either way each unit carries targetFlights/workUnitCount so resolve()
-  // can tell, after solving, whether piste *eligibility* forced fewer
-  // pistes than the flights target wanted — see the flights-warning code
-  // there.
-  // Every unit is tagged with realStageId so results can be grouped back by
-  // the real schedule_plan_stages row after solving.
-  _buildSolverInput(planId) {
-    const plan = stmtPlanById.get(planId);
-    const stages = this.findStages(planId);
-    const competitionById = new Map();
-    for (const s of stages) {
-      if (!competitionById.has(s.competition_id)) competitionById.set(s.competition_id, Competition.findById(s.competition_id));
-    }
-    const stagesById = new Map(stages.map(s => [s.id, s]));
-
-    // Per-round overrides (fixed start / explicit buffer-after — 2026-08-28
-    // discussion), keyed the same way they're stored: `${stageId}:${tableauSize}`,
-    // 0 meaning "the stage's own single unit" (a pool phase). A stage's
-    // OUTPUT point for buffer-after purposes is its pool unit (0) or its
-    // DE final (tableau_size 2, always the last round regardless of bracket
-    // size) — used below when a unit's dependency is a WHOLE OTHER STAGE
-    // (round 0 of a DE stage, or a pool unit) rather than the previous
-    // round within its own stage.
-    const overridesMap = new Map(
-      this.findRoundOverrides(planId).map(o => [`${o.schedule_plan_stage_id}:${o.tableau_size}`, o])
-    );
-    const stageOutputKey = depStage => (depStage.phase_type === 'pool' ? 0 : 2);
-    const explicitBufferFromStageDeps = depIds => {
-      const bufs = (depIds || []).map(depId => {
-        const depStage = stagesById.get(depId);
-        return depStage ? (overridesMap.get(`${depId}:${stageOutputKey(depStage)}`)?.buffer_after_minutes || 0) : 0;
-      });
-      return bufs.length ? Math.max(...bufs) : 0;
-    };
-
-    const units = [];
-    const lastUnitIdByStageId = new Map();
-
-    for (const s of stages) {
-      const metrics = computeStageMetrics(s, competitionById.get(s.competition_id));
-      const maxFlights = s.max_flights
-        || (s.phase_type === 'pool' ? plan.default_max_flights_pool : plan.default_max_flights_de)
-        || null;
-
-      if (s.phase_type === 'de' && metrics.roundBoutCounts?.length) {
-        let prevUnitId = null;
-        let prevFlights = null;
-        let prevTableauSize = null;
-        metrics.roundBoutCounts.forEach((boutsInRound, i) => {
-          const pistesForRound = maxFlights
-            ? Math.max(1, Math.ceil(boutsInRound / maxFlights))
-            : Math.max(1, Math.min(s.pistes_assigned || 1, boutsInRound));
-          const flights = Math.ceil(boutsInRound / pistesForRound);
-          const tableauSize = boutsInRound * 2;
-          const unitId = `${s.id}:r${i}`;
-
-          // Fencer-safety buffer (2026-08-27/28 discussion) — DE round-to-
-          // round only (i>0); round 0's dependency is nothing or a pool
-          // stage, handled via explicitBufferFromStageDeps below instead.
-          // Both rounds process bouts in tableau-position order via
-          // contiguous per-piste chunks (matches real bout-to-piste
-          // assignment elsewhere — o.87.1/o.93.2's "one quarter of the
-          // table per piste"), so every piste-chunk boundary in the
-          // PREVIOUS round (prevFlights) lands at that round's own true
-          // finish time. The current round's tightest bout is only fed by
-          // one of those late-finishing bouts — zero natural gap — when
-          // prevFlights isn't dramatically larger than this round's own
-          // flights count; otherwise the earliest chunk boundary already
-          // falls past this round's own first flight, leaving real natural
-          // slack that reduces (or eliminates) the auto-calculated top-up.
-          // A director's own explicit buffer-after (on the PREVIOUS round's
-          // override) can only push this higher, never lower than the
-          // auto-calculated safety minimum — "take the longer" per the
-          // 2026-08-28 discussion.
-          let restMinutes = 0;
-          if (i > 0) {
-            const configured = plan.de_rest_minutes || 0;
-            const minGap = Math.max(0, Math.ceil(Math.ceil(prevFlights / 2) / flights) - 1) * metrics.minutesPerBout;
-            const autoCalc = Math.max(0, configured - minGap);
-            const explicitBuffer = overridesMap.get(`${s.id}:${prevTableauSize}`)?.buffer_after_minutes || 0;
-            restMinutes = Math.max(autoCalc, explicitBuffer);
-          }
-          const fixedStart = overridesMap.get(`${s.id}:${tableauSize}`)?.fixed_start || null;
-
-          units.push({
-            id: unitId,
-            realStageId: s.id,
-            competitionId: s.competition_id,
-            dependsOn: i === 0 ? null : [prevUnitId], // i===0 filled in below, once every stage's last unit is known
-            order: s.stage_order,
-            durationMinutes: Math.ceil(boutsInRound * metrics.minutesPerBout / pistesForRound),
-            pistesAssigned: pistesForRound,
-            phaseType: 'de',
-            // Tableau size for this round — boutsInRound is half the round's
-            // own tableau (round of 32 = 16 bouts, etc; see
-            // schedulePlanEstimate.js's deRoundBoutCounts) — used against a
-            // piste's max_de_tableau (services/strips.js) and as the
-            // override key above.
-            tableauSize,
-            targetFlights: maxFlights,
-            workUnitCount: boutsInRound,
-            roundIndex: i,
-            restMinutes,
-            fixedStart,
-          });
-          prevUnitId = unitId;
-          prevFlights = flights;
-          prevTableauSize = tableauSize;
-        });
-        lastUnitIdByStageId.set(s.id, prevUnitId);
-      } else {
-        const poolCount = metrics.poolCount || 1;
-        const pistesAssigned = maxFlights
-          ? Math.max(1, Math.ceil(poolCount / maxFlights))
-          : s.pistes_assigned;
-        const unitId = `${s.id}:main`;
-        units.push({
-          id: unitId,
-          realStageId: s.id,
-          competitionId: s.competition_id,
-          dependsOn: null, // filled in below
-          order: s.stage_order,
-          durationMinutes: metrics.totalBoutMinutes
-            ? Math.ceil(metrics.totalBoutMinutes / Math.max(1, pistesAssigned))
-            : 0,
-          pistesAssigned,
-          phaseType: s.phase_type,
-          targetFlights: s.phase_type === 'pool' ? maxFlights : null,
-          workUnitCount: s.phase_type === 'pool' ? poolCount : null,
-          // restMinutes filled in below (depends on s.depends_on, resolved
-          // once for every dependsOn===null unit alongside dependsOn itself).
-          fixedStart: overridesMap.get(`${s.id}:0`)?.fixed_start || null,
-        });
-        lastUnitIdByStageId.set(s.id, unitId);
-      }
-    }
-
-    // A stage's first unit inherits the real stage's own depends_on list,
-    // translated from real stage ids to those stages' LAST unit id — so a
-    // stage depending on a DE stage waits for its final round, not round 1.
-    // Its restMinutes (round 0 of a DE stage, or a pool unit — anything
-    // whose dependency is a WHOLE OTHER STAGE rather than the previous
-    // round within its own stage) comes purely from any explicit buffer-
-    // after configured on that dependency's own output — there's no
-    // auto-calculated fencer-rest component for a pool->DE handoff or a
-    // pool->pool chain, only what the director explicitly asks for.
-    for (const s of stages) {
-      const firstUnit = units.find(u => u.realStageId === s.id && u.dependsOn === null);
-      firstUnit.dependsOn = s.depends_on.map(depId => lastUnitIdByStageId.get(depId)).filter(Boolean);
-      firstUnit.restMinutes = Math.max(firstUnit.restMinutes || 0, explicitBufferFromStageDeps(s.depends_on));
-    }
-
-    return { stages, solverUnits: units, competitionById };
-  },
-
-  // Builds a piste-capability list of exactly `n` entries for
-  // services/schedulePlanSolver.js: as many real strips' own capabilities as
-  // fit (services/strips.js's pools_allowed/de_allowed/max_de_tableau/min_de_tableau,
-  // ordered by strip_number same as everywhere else pistes get numbered),
-  // padded with fully-open abstract pistes for the rest — an abstract piste
-  // is a hypothetical "if we had one more" placeholder, never a specific
-  // physical piste, so it has no capability restriction of its own. Shared
-  // by previewForPistes/previewForDeadline (arbitrary n, purely
-  // hypothetical) and resolve (n = real strips + abstract_piste_count,
-  // reusing every real strip's actual capabilities).
-  // planId: needed to look up this plan's own competition-exclusive piste
-  // reservations (migration 045) — plan-scoped, not a strips property, so
-  // it can't come from Strip.findAll() alone.
-  _buildPisteList(n, planId) {
-    const realStrips = Strip.findAll();
-    const reservationByStripId = new Map(
-      this.findPisteReservations(planId).map(r => [r.strip_id, r])
-    );
-    const pistes = [];
-    for (let i = 0; i < n; i++) {
-      const strip = realStrips[i];
-      const reservation = strip ? reservationByStripId.get(strip.id) : null;
-      pistes.push(strip
-        ? {
-            poolsAllowed: !!strip.pools_allowed, deAllowed: !!strip.de_allowed,
-            maxDeTableau: strip.max_de_tableau, minDeTableau: strip.min_de_tableau,
-            reservedForCompetitionId: reservation?.competition_id ?? null,
-            reservedFromTableauSize: reservation?.from_tableau_size ?? null,
-          }
-        : {
-            poolsAllowed: true, deAllowed: true, maxDeTableau: null, minDeTableau: null,
-            reservedForCompetitionId: null, reservedFromTableauSize: null,
-          });
-    }
-    return pistes;
+    return stmtSlotById.get(slotId);
   },
 
   // Full read view: plan + stages (with parsed computed_json) + slots +
@@ -819,5 +416,7 @@ const SchedulePlans = {
     return { plan, stages, slots, competitionStarts, roundOverrides, pisteReservations };
   },
 };
+
+const SchedulePlans = Object.assign({}, SchedulePlanCore, Overrides, Resolve);
 
 module.exports = SchedulePlans;

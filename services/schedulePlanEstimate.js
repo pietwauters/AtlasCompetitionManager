@@ -74,7 +74,7 @@ function deRoundBoutCounts(tableau, thirdPlaceBout) {
 
 // Given an estimated N, projects the DE tableau size, its round-by-round
 // bout counts (see deRoundBoutCounts), and total bout count/duration.
-// Known Phase-1 simplification (see the schedule-planner plan doc): assumes
+// Known Phase-1 simplification (see docs/schedule-planner-algorithm.md): assumes
 // straight single-elimination round structure — repechage/all-places-fenced
 // rule docs need a richer round/bracket structure for full accuracy. This
 // only affects estimate precision, not the tool's shape, so it's a

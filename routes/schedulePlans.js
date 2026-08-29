@@ -125,4 +125,16 @@ router.post('/stages/:stageId/refresh-estimate', (req, res) => {
   }
 });
 
+// Body: { strip_id? }. Director's manual override of a single solved slot
+// (e.g. swapping which piste a round landed on) — provisional, lasts until
+// the plan is next re-solved. Same body shape as SchedulePlans.updateSlot,
+// so a future dialog field (e.g. editing time) needs no route change.
+router.put('/slots/:slotId', (req, res) => {
+  try {
+    res.json(SchedulePlans.updateSlot(req.params.slotId, req.body || {}));
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
 module.exports = router;

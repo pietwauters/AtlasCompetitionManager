@@ -98,7 +98,7 @@ function simulatedPoolsForStage(stage, competition) {
 // abstractRefereeCount: schedule_plans.abstract_referee_count — generic,
 // no-conflict-info referees padding out whatever's really registered, per
 // the "treat known/registered referees as real, pad the rest as abstract"
-// design (see the schedule-planner plan doc).
+// design (see docs/schedule-planner-algorithm.md).
 //
 // Returns a Map<stage.id, {
 //   status: 'ok' | 'insufficient_data',
