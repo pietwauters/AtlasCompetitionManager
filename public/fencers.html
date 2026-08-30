@@ -37,7 +37,7 @@
         }
 
         button.sm {
-            background: #888;
+            background: var(--clr-th-bg);
             color: #fff;
             border: none;
             border-radius: 4px;
@@ -47,7 +47,7 @@
         }
 
         button.sm.danger {
-            background: #c0392b;
+            background: var(--clr-danger);
         }
 
         button.sm:hover {
@@ -55,7 +55,7 @@
         }
 
         #form-error {
-            color: #c0392b;
+            color: var(--clr-danger);
             font-size: 0.83rem;
             margin-top: 0.45rem;
             min-height: 1.1rem;
@@ -63,19 +63,19 @@
 
         /* CSV upload */
         .csv-area {
-            border: 2px dashed #ccc;
+            border: 2px dashed var(--clr-btn-border);
             border-radius: 6px;
             padding: 1rem;
             text-align: center;
-            color: #888;
+            color: var(--clr-text-muted);
             cursor: pointer;
             transition: border-color .2s;
         }
 
         .csv-area:hover,
         .csv-area.drag {
-            border-color: #1a6bab;
-            color: #1a6bab;
+            border-color: var(--clr-brand);
+            color: var(--clr-brand);
         }
 
         .csv-area input[type="file"] {
@@ -142,18 +142,18 @@
             <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
                 <strong>Import from CSV</strong>
                 <a id="export-link" href="#"
-                    style="font-size:.83rem;padding:.25rem .7rem;background:#eaf0fb;color:#1a6bab;border-radius:5px;text-decoration:none">
+                    style="font-size:.83rem;padding:.25rem .7rem;background:var(--clr-info-bg);color:var(--clr-brand);border-radius:5px;text-decoration:none">
                     Export CSV
                 </a>
             </div>
-            <p style="font-size:.83rem;color:#666;margin:.5rem 0 1rem">
+            <p style="font-size:.83rem;color:var(--clr-text-muted);margin:.5rem 0 1rem">
                 <strong>CSV columns (any order):</strong><br>
                 <code>first_name</code>, <code>last_name</code>, <code>date_of_birth</code>, <code>gender</code>,
                 <code>club</code>, <code>nationality</code>, <code>initial_seed</code>,
                 <code>national_ranking</code><br>
-                <span style="color:#888">Optionally: <code>name</code> (full name), <code>weapons</code>,
+                <span style="color:var(--clr-text-muted)">Optionally: <code>name</code> (full name), <code>weapons</code>,
                     <code>licence</code>, <code>handedness</code>, <code>status</code></span><br>
-                <span style="color:#888">First row must be a header. At least <code>first_name</code> or
+                <span style="color:var(--clr-text-muted)">First row must be a header. At least <code>first_name</code> or
                     <code>name</code> is required.<br>
                     Nationality must be a 3-letter NOC code (e.g. <code>BEL</code>). Club will be created if not
                     found.<br>
@@ -188,7 +188,7 @@
                     style="width:100%;display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Name *
                     <input x-model="name"
-                        style="width:100%;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem"
+                        style="width:100%;padding:.42rem .65rem;border:1px solid var(--clr-btn-border);border-radius:5px;font-size:.93rem"
                         required>
                 </label>
             </div>
@@ -196,20 +196,20 @@
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Club
                     <input x-model="club"
-                        style="width:160px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                        style="width:160px;padding:.42rem .65rem;border:1px solid var(--clr-btn-border);border-radius:5px;font-size:.93rem">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     NAT
                     <input x-model="nationality" maxlength="3"
-                        style="width:70px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem;text-transform:uppercase">
+                        style="width:70px;padding:.42rem .65rem;border:1px solid var(--clr-btn-border);border-radius:5px;font-size:.93rem;text-transform:uppercase">
                 </label>
                 <label style="display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;font-weight:bold">
                     Seed
                     <input x-model="initial_seed" type="number" min="1"
-                        style="width:65px;padding:.42rem .65rem;border:1px solid #ccc;border-radius:5px;font-size:.93rem">
+                        style="width:65px;padding:.42rem .65rem;border:1px solid var(--clr-btn-border);border-radius:5px;font-size:.93rem">
                 </label>
             </div>
-            <div x-text="error" style="color:#c0392b;font-size:.83rem;min-height:1.1rem"></div>
+            <div x-text="error" style="color:var(--clr-danger);font-size:.83rem;min-height:1.1rem"></div>
             <div class="modal-footer">
                 <button class="secondary" @click="close()">Cancel</button>
                 <button class="primary" @click="save()" :disabled="loading">
@@ -303,7 +303,7 @@
         </tr></thead>
         <tbody>${rows_html}</tbody>
       </table>
-      <p style="font-size:.82rem;color:#888;margin-top:.75rem">${rows.length} fencer(s)</p>`;
+      <p style="font-size:.82rem;color:var(--clr-text-muted);margin-top:.75rem">${rows.length} fencer(s)</p>`;
         }
 
         async function deleteFencer(id) {
@@ -387,7 +387,7 @@
         function setStatus(msg, isError = false) {
             const el = document.getElementById('csv-status');
             el.textContent = msg;
-            el.style.color = isError ? '#c0392b' : '#1e8449';
+            el.style.color = isError ? 'var(--clr-danger)' : 'var(--clr-success)';
         }
 
         function esc(s) {

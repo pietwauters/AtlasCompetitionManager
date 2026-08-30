@@ -87,7 +87,7 @@
                         <td data-label="Level">${esc(r.level || '—')}</td>
                         <td data-label="Actions"><button class="danger" onclick="removeTournamentReferee(${r.referee_id})">✕</button></td>
                     </tr>`).join('')
-                : `<tr><td colspan="6" style="text-align:center;color:#999;padding:1rem">No referees yet. Add from the list below.</td></tr>`;
+                : `<tr><td colspan="6" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No referees yet. Add from the list below.</td></tr>`;
 
             const eligibleRows = eligible.length
                 ? eligible.map(r => `
@@ -100,12 +100,12 @@
                         <td>${esc(r.nationality || '—')}</td>
                         <td>${esc(r.level || '—')}</td>
                     </tr>`).join('')
-                : `<tr><td colspan="5" style="text-align:center;color:#999;padding:1rem">No referees found.</td></tr>`;
+                : `<tr><td colspan="5" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No referees found.</td></tr>`;
 
             document.getElementById('tournament-referees').innerHTML = `
                 <summary><h2 style="display:inline;margin:0">
                     Referees
-                    <span style="font-weight:400;font-size:.85rem;color:#888">(${roster.length})</span>
+                    <span style="font-weight:400;font-size:.85rem;color:var(--clr-text-muted)">(${roster.length})</span>
                 </h2></summary>
                 <div style="display:flex;justify-content:flex-end;margin:1rem 0 .75rem">
                     <button style="font-size:.78rem;padding:.25rem .6rem" ${roster.length ? '' : 'disabled'}
@@ -222,16 +222,16 @@
         function renderCombinablePoolPhases() {
             const rows = combinablePhases.length
                 ? combinablePhases.map(p => `
-                    <label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;border:1px solid #ddd;border-radius:5px;margin-bottom:.4rem;cursor:pointer">
+                    <label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;border:1px solid var(--clr-border);border-radius:5px;margin-bottom:.4rem;cursor:pointer">
                         <input type="checkbox" ${selectedPhaseIds.includes(p.phase_id) ? 'checked' : ''} onchange="togglePhaseSelect(${p.phase_id}, this.checked)">
                         <span>${esc(poolPhaseLabel(p))}</span>
-                        <span style="margin-left:auto;font-size:.8rem;color:#888">${p.pools_with_referee}/${p.pool_count} pool(s) have a referee</span>
+                        <span style="margin-left:auto;font-size:.8rem;color:var(--clr-text-muted)">${p.pools_with_referee}/${p.pool_count} pool(s) have a referee</span>
                     </label>`).join('')
                 : `<p class="empty">No pool phases in this tournament's competitions yet.</p>`;
 
             document.getElementById('tournament-pool-refs').innerHTML = `
                 <summary><h2 style="display:inline;margin:0">Combine pool rounds — auto-assign referees</h2></summary>
-                <p style="font-size:.85rem;color:#666;margin:1rem 0 .75rem">
+                <p style="font-size:.85rem;color:var(--clr-text-muted);margin:1rem 0 .75rem">
                     Select the pool rounds that run at the same time — across one or more of this
                     tournament's competitions — to solve them together from one shared pool of
                     referees, instead of each competition drawing only from its own roster.
@@ -286,28 +286,28 @@
 
             let html = `<div style="font-size:.9rem;margin-bottom:.5rem">${data.assigned.length} pool(s) assigned.`;
             const withConflict = data.assigned.filter(a => a.conflicts > 0).length;
-            if (withConflict) html += ` <span style="color:#856404">${withConflict} had an unavoidable nationality/club conflict.</span>`;
+            if (withConflict) html += ` <span style="color:var(--clr-warn-text)">${withConflict} had an unavoidable nationality/club conflict.</span>`;
             html += `</div>`;
 
             if (data.shortfalls && data.shortfalls.length) {
                 html += `<div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Why some pools couldn't get a clean referee</div>`;
                 html += data.shortfalls.map(s => `
-                    <div style="font-size:.85rem;padding:.5rem .6rem;background:#fde8e8;border:1px solid #f1a9a9;border-radius:5px;margin-bottom:.4rem">
+                    <div style="font-size:.85rem;padding:.5rem .6rem;background:var(--clr-danger-bg);border:1px solid var(--clr-danger-border);border-radius:5px;margin-bottom:.4rem">
                         <div>${s.pools.map(p => poolLabel(p.pool_id)).join(', ')} could only draw from
                         <strong>${s.compatible_referee_ids.length}</strong> referee(s) satisfying
                         ${s.threshold === 0 ? 'a fully clean assignment' : ('at most ' + s.threshold + ' violated criterion/criteria')}.</div>
                         ${s.pools.map(p => `
-                            <div style="font-size:.8rem;color:#555;margin:.15rem 0 0 .5rem">
+                            <div style="font-size:.8rem;color:var(--clr-text-muted);margin:.15rem 0 0 .5rem">
                                 ${esc(poolLabel(p.pool_id))}: ${esc(poolBlockingDetail(p))}
                             </div>`).join('')}
-                        <div style="color:#922b21;margin-top:.35rem">Short by <strong>${s.shortfall}</strong> — add ${s.shortfall} more
+                        <div style="color:var(--clr-danger-text);margin-top:.35rem">Short by <strong>${s.shortfall}</strong> — add ${s.shortfall} more
                         referee(s) avoiding ${esc(blockingSummary(s))} to resolve this
                         (${s.compatible_referee_ids.map(refereeNameById).join(', ') || 'none currently qualify'} already do).</div>
                     </div>`).join('');
             }
 
             if (data.unassigned && data.unassigned.length) {
-                html += `<div style="font-size:.85rem;color:#922b21">
+                html += `<div style="font-size:.85rem;color:var(--clr-danger-text)">
                     ${data.unassigned.length} pool(s) got no referee at all: ${data.unassigned.map(poolLabel).join(', ')}.
                     Not enough referees registered across the selected competitions.</div>`;
             }
@@ -325,7 +325,7 @@
                 <span>${esc(t.name)}</span>
                 <a href="/schedule-planner.html?tournament_id=${id}" style="font-size:.78rem;font-weight:400">📅 Schedule planner</a>
             </h2>`;
-            html += `<div style='margin-bottom:1rem;color:#555;'>${esc(t.city)}, ${esc(t.country)} | ${t.date_start || ''}${t.date_end ? ' – ' + t.date_end : ''} | Level: ${esc(t.level || '')}</div>`;
+            html += `<div style='margin-bottom:1rem;color:var(--clr-text-muted);'>${esc(t.city)}, ${esc(t.country)} | ${t.date_start || ''}${t.date_end ? ' – ' + t.date_end : ''} | Level: ${esc(t.level || '')}</div>`;
             if (!t.competitions || !t.competitions.length) {
                 html += `<p class='empty'>No competitions linked to this tournament.</p>`;
             } else {

@@ -10,9 +10,9 @@
 <style>
   .place{font-weight:700;font-size:1.05rem;min-width:3rem;display:inline-block}
   .place-1{color:#c9a000}
-  .place-2{color:#777}
+  .place-2{color:var(--clr-text-muted)}
   .place-3{color:#b87333}
-  .members{font-size:.82rem;color:#555;margin-top:.2rem}
+  .members{font-size:.82rem;color:var(--clr-text-muted);margin-top:.2rem}
   .badge-reserve{padding:.05rem .35rem;margin-left:.25rem}
 </style>
 </head>
@@ -32,14 +32,14 @@
   <div class="card">
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <h2 style="margin:0" x-text="(comp?.name||'Competition')+' — Final Results'"></h2>
-      <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Back to competition</a>
+      <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to competition</a>
     </div>
-    <div style="margin-top:.3rem;font-size:.85rem;color:#666"
+    <div style="margin-top:.3rem;font-size:.85rem;color:var(--clr-text-muted)"
          x-text="({foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||'') + ' · ' + ({M:'Men',F:'Women',X:'Mixed'}[comp?.gender]||'') + ' · Teams'">
     </div>
   </div>
 
-  <div class="card" x-show="results.length===0" style="color:#999">
+  <div class="card" x-show="results.length===0" style="color:var(--clr-text-muted)">
     No results available yet. Close the team DE phase to record final rankings.
   </div>
 
@@ -62,7 +62,7 @@
             </td>
             <td>
               <strong x-text="t.name"></strong>
-              <span x-show="t.club_name" style="font-size:.83rem;color:#888" x-text="' — '+t.club_name"></span>
+              <span x-show="t.club_name" style="font-size:.83rem;color:var(--clr-text-muted)" x-text="' — '+t.club_name"></span>
             </td>
             <td>
               <div class="members" x-text="memberList(t)"></div>

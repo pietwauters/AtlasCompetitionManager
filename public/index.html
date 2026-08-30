@@ -8,39 +8,39 @@
   <script src="/js/theme-init.js"></script>
   <style>
     .section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
-                   color:#888;margin:1.5rem 0 .6rem}
+                   color:var(--clr-text-muted);margin:1.5rem 0 .6rem}
     .comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
-    .comp-card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);
-               border-left:4px solid #1a6bab;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.5rem}
-    .comp-card.de{border-left-color:#8e44ad}
+    .comp-card{background:var(--clr-surface);border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);
+               border-left:4px solid var(--clr-brand);padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.5rem}
+    .comp-card.de{border-left-color:var(--clr-de)}
     .comp-card h3{margin:0;font-size:1rem}
-    .comp-meta{font-size:.8rem;color:#888}
+    .comp-meta{font-size:.8rem;color:var(--clr-text-muted)}
     .progress-wrap{display:flex;align-items:center;gap:.5rem}
-    .progress-bar{flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden}
-    .progress-fill{height:100%;background:#1e8449;border-radius:3px;transition:width .3s}
-    .progress-fill.de{background:#8e44ad}
-    .progress-label{font-size:.78rem;color:#555;white-space:nowrap}
-    .open-btn{display:inline-block;margin-top:.25rem;padding:.35rem .9rem;background:#1a6bab;
+    .progress-bar{flex:1;height:6px;background:var(--clr-th-bg);border-radius:3px;overflow:hidden}
+    .progress-fill{height:100%;background:var(--clr-success);border-radius:3px;transition:width .3s}
+    .progress-fill.de{background:var(--clr-de)}
+    .progress-label{font-size:.78rem;color:var(--clr-text-muted);white-space:nowrap}
+    .open-btn{display:inline-block;margin-top:.25rem;padding:.35rem .9rem;background:var(--clr-brand);
               color:#fff;border-radius:5px;text-decoration:none;font-size:.85rem;font-weight:600;
               align-self:flex-start}
     .open-btn:hover{background:#155a9a}
-    .open-btn.de{background:#8e44ad}
-    .open-btn.de:hover{background:#7d3c98}
+    .open-btn.de{background:var(--clr-de)}
+    .open-btn.de:hover{background:var(--clr-de-hover)}
 
     .piste-grid{display:flex;flex-wrap:wrap;gap:.6rem}
     .piste-pill{display:flex;align-items:center;gap:.4rem;padding:.35rem .7rem;
-                background:#f0f2f5;border-radius:6px;font-size:.82rem}
-    .piste-pill.fencing{background:#eaf6ee;border:1px solid #b7e4c7}
+                background:var(--clr-th-bg);border-radius:6px;font-size:.82rem}
+    .piste-pill.fencing{background:var(--clr-success-bg);border:1px solid var(--clr-success-border)}
     .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-    .dot-on{background:#1e8449}
-    .dot-off{background:#ccc}
+    .dot-on{background:var(--clr-success)}
+    .dot-off{background:var(--clr-th-bg)}
 
     .upcoming-list{display:flex;flex-direction:column;gap:.5rem}
     .upcoming-row{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem;
-                  background:#fff;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-    .upcoming-row a{font-size:.82rem;color:#1a6bab;text-decoration:none;margin-left:auto}
+                  background:var(--clr-surface);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .upcoming-row a{font-size:.82rem;color:var(--clr-brand);text-decoration:none;margin-left:auto}
     .upcoming-row a:hover{text-decoration:underline}
-    .empty-note{color:#aaa;font-size:.88rem;padding:.5rem 0}
+    .empty-note{color:var(--clr-text-muted);font-size:.88rem;padding:.5rem 0}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -65,10 +65,10 @@
   <!-- ── Active competitions ─────────────────────────────────────────────── -->
   <div class="section-title">Active competitions</div>
   <template x-if="active.length === 0 && upcoming.length === 0 && between.length === 0">
-    <div style="background:#fff;border-radius:8px;padding:1.5rem 1.25rem;box-shadow:0 2px 6px rgba(0,0,0,.08);
+    <div style="background:var(--clr-surface);border-radius:8px;padding:1.5rem 1.25rem;box-shadow:0 2px 6px rgba(0,0,0,.08);
                 display:flex;flex-direction:column;gap:.75rem;max-width:420px">
-      <div style="font-size:.95rem;color:#555">No competitions running right now.</div>
-      <a href="/tournaments.html" style="display:inline-block;padding:.45rem 1rem;background:#1a6bab;
+      <div style="font-size:.95rem;color:var(--clr-text-muted)">No competitions running right now.</div>
+      <a href="/tournaments.html" style="display:inline-block;padding:.45rem 1rem;background:var(--clr-brand);
          color:#fff;border-radius:5px;text-decoration:none;font-size:.9rem;font-weight:600;align-self:flex-start">
         → Go to Events to start one
       </a>
@@ -104,10 +104,10 @@
       </div>
     </template>
     <template x-if="active.length > 0 || upcoming.length > 0 || between.length > 0">
-      <div style="background:#f8f9fa;border-radius:8px;border:2px dashed #d0d0d0;
+      <div style="background:var(--clr-th-bg);border-radius:8px;border:2px dashed var(--clr-border);
                   padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.5rem;justify-content:center">
-        <div style="font-size:.9rem;color:#666">Start another competition?</div>
-        <a href="/tournaments.html" style="display:inline-block;padding:.35rem .9rem;background:#1a6bab;
+        <div style="font-size:.9rem;color:var(--clr-text-muted)">Start another competition?</div>
+        <a href="/tournaments.html" style="display:inline-block;padding:.35rem .9rem;background:var(--clr-brand);
            color:#fff;border-radius:5px;text-decoration:none;font-size:.85rem;font-weight:600;align-self:flex-start">
           → Events &amp; competitions
         </a>
@@ -128,7 +128,7 @@
               <span x-text="'#'+p.bout.bout_order+' '+p.bout.left+' — '+p.bout.right"></span>
             </template>
             <template x-if="!p.bout">
-              <span style="color:#aaa">idle</span>
+              <span style="color:var(--clr-text-muted)">idle</span>
             </template>
             <span x-show="p.fencersMismatch" class="badge badge-error"
                   style="margin-left:.4rem;cursor:help"
@@ -156,13 +156,13 @@
   </template>
 
   <!-- ── Setup links ────────────────────────────────────────────────────── -->
-  <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid #e5e5e5;
-              display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.82rem;color:#888">
+  <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--clr-border);
+              display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.82rem;color:var(--clr-text-muted)">
     <span>Setup:</span>
-    <a href="/people.html" style="color:#888">People &amp; fencers</a>
-    <a href="/tournaments.html" style="color:#888">Events &amp; competitions</a>
-    <a href="/strips.html" style="color:#888">Strips / Pistes</a>
-    <a href="/opp2.html" style="color:#888">Schedule</a>
+    <a href="/people.html" style="color:var(--clr-text-muted)">People &amp; fencers</a>
+    <a href="/tournaments.html" style="color:var(--clr-text-muted)">Events &amp; competitions</a>
+    <a href="/strips.html" style="color:var(--clr-text-muted)">Strips / Pistes</a>
+    <a href="/opp2.html" style="color:var(--clr-text-muted)">Schedule</a>
   </div>
 
 </main>

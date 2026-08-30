@@ -9,6 +9,27 @@
   --clr-de:            #8e44ad;
   --clr-de-hover:      #7d3c98;
 
+  --clr-warn-bg:       #fff8e1;
+  --clr-warn-text:     #856404;
+  --clr-warn-border:   #ffc107;
+  --clr-danger-bg:     #fde8e8;
+  --clr-danger-text:   #922b21;
+  --clr-danger-border: #f5c2c7;
+  --clr-success-bg:    #d4edda;
+  --clr-success-text:  #155724;
+  --clr-success-border: #a9dfbf;
+  --clr-info-bg:       #eef4fc;
+  --clr-info-text:     #1a4971;
+  --clr-info-border:   #b8cfef;
+  --clr-neutral-bg:    #d6d8db;
+  --clr-neutral-text:  #383d41;
+  --clr-badge-pool-bg:   #dbeafe;
+  --clr-badge-pool-text: #1e40af;
+  --clr-badge-de-bg:     #ede9fe;
+  --clr-badge-de-text:   #5b21b6;
+  --clr-active-bg:       #cfe2ff;
+  --clr-active-text:     #084298;
+
   --clr-bg:            #f0f2f5;
   --clr-surface:       #fff;
   --clr-text:          #1a1a2e;
@@ -48,6 +69,27 @@
     --clr-danger-hover:  #dc2626;
     --clr-de:            #a855f7;
     --clr-de-hover:      #9333ea;
+
+    --clr-warn-bg:       #3a2f0a;
+    --clr-warn-text:     #fbbf24;
+    --clr-warn-border:   #92720a;
+    --clr-danger-bg:     #3a1616;
+    --clr-danger-text:   #f87171;
+    --clr-danger-border: #7f1d1d;
+    --clr-success-bg:    #14291d;
+    --clr-success-text:  #4ade80;
+    --clr-success-border: #2f6b45;
+    --clr-info-bg:       #16202e;
+    --clr-info-text:     #93c5fd;
+    --clr-info-border:   #2c4a6e;
+    --clr-neutral-bg:    #33383d;
+    --clr-neutral-text:  #b8bec5;
+    --clr-badge-pool-bg:   #1e3a5e;
+    --clr-badge-pool-text: #93c5fd;
+    --clr-badge-de-bg:     #3b2f5e;
+    --clr-badge-de-text:   #d8b4fe;
+    --clr-active-bg:       #16283f;
+    --clr-active-text:     #7db6f0;
   }
 }
 
@@ -74,6 +116,27 @@
   --clr-danger-hover:  #a93226;
   --clr-de:            #8e44ad;
   --clr-de-hover:      #7d3c98;
+
+  --clr-warn-bg:       #fff8e1;
+  --clr-warn-text:     #856404;
+  --clr-warn-border:   #ffc107;
+  --clr-danger-bg:     #fde8e8;
+  --clr-danger-text:   #922b21;
+  --clr-danger-border: #f5c2c7;
+  --clr-success-bg:    #d4edda;
+  --clr-success-text:  #155724;
+  --clr-success-border: #a9dfbf;
+  --clr-info-bg:       #eef4fc;
+  --clr-info-text:     #1a4971;
+  --clr-info-border:   #b8cfef;
+  --clr-neutral-bg:    #d6d8db;
+  --clr-neutral-text:  #383d41;
+  --clr-badge-pool-bg:   #dbeafe;
+  --clr-badge-pool-text: #1e40af;
+  --clr-badge-de-bg:     #ede9fe;
+  --clr-badge-de-text:   #5b21b6;
+  --clr-active-bg:       #cfe2ff;
+  --clr-active-text:     #084298;
 }
 
 [data-theme="dark"] {
@@ -99,6 +162,25 @@
   --clr-danger-hover:  #dc2626;
   --clr-de:            #a855f7;
   --clr-de-hover:      #9333ea;
+
+  --clr-warn-bg:       #3a2f0a;
+  --clr-warn-text:     #fbbf24;
+  --clr-warn-border:   #92720a;
+  --clr-danger-bg:     #3a1616;
+  --clr-danger-text:   #f87171;
+  --clr-danger-border: #7f1d1d;
+  --clr-success-bg:    #14291d;
+  --clr-success-text:  #4ade80;
+  --clr-success-border: #2f6b45;
+  --clr-info-bg:       #16202e;
+  --clr-info-text:     #93c5fd;
+  --clr-info-border:   #2c4a6e;
+  --clr-neutral-bg:    #33383d;
+  --clr-neutral-text:  #b8bec5;
+  --clr-badge-pool-bg:   #1e3a5e;
+  --clr-badge-pool-text: #93c5fd;
+  --clr-badge-de-bg:     #3b2f5e;
+  --clr-badge-de-text:   #d8b4fe;
 }
 
 /* ── Global reset ─────────────────────────────────────────────────────────── */
@@ -372,11 +454,11 @@ tr:hover td { background: var(--clr-row-hover); }
   border-radius: 10px;
   font-weight: 600;
 }
-.badge-active, .badge-open      { background: #d4edda; color: #155724; }
-.badge-pending, .badge-draft    { background: #fef3cd; color: #856404; }
-.badge-finished, .badge-closed  { background: #d6d8db; color: #383d41; }
-.badge-archived                 { background: #e2e3e5; color: #6c757d; }
-.badge-error                    { background: #fde8e8; color: #922b21; }
+.badge-active, .badge-open      { background: var(--clr-success-bg); color: var(--clr-success-text); }
+.badge-pending, .badge-draft    { background: var(--clr-warn-bg);    color: var(--clr-warn-text); }
+.badge-finished, .badge-closed  { background: var(--clr-neutral-bg); color: var(--clr-neutral-text); }
+.badge-archived                 { background: var(--clr-neutral-bg); color: var(--clr-neutral-text); }
+.badge-error                    { background: var(--clr-danger-bg);  color: var(--clr-danger-text); }
 
 /* ── Notice bars ─────────────────────────────────────────────────────────── */
 .notice-bar { padding: 0.6rem 1rem; border-radius: 5px; margin-bottom: 1rem; font-size: 0.9rem; }
@@ -467,10 +549,10 @@ a.row-link:hover, a.comp-link:hover { text-decoration: underline; }
 
 /* ── Chips (team status) ─────────────────────────────────────────────────── */
 .chip { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.78rem; font-weight: 600; }
-.chip-pending  { background: #e9ecef; color: #495057; }
-.chip-active   { background: #cfe2ff; color: #084298; }
-.chip-tiebreak { background: #fff3cd; color: #856404; }
-.chip-finished { background: #d1e7dd; color: #0f5132; }
+.chip-pending  { background: var(--clr-neutral-bg); color: var(--clr-neutral-text); }
+.chip-active   { background: var(--clr-active-bg);  color: var(--clr-active-text); }
+.chip-tiebreak { background: var(--clr-warn-bg);    color: var(--clr-warn-text); }
+.chip-finished { background: var(--clr-success-bg); color: var(--clr-success-text); }
 
 /* ── Inline action group (buttons/links side-by-side in table rows) ─────── */
 .row-actions { display: flex; gap: 0.35rem; align-items: center; white-space: nowrap; }

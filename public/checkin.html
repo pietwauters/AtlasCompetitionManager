@@ -9,22 +9,22 @@
   <style>
     .summary {
       display: flex; gap: 1rem; flex-wrap: wrap;
-      background: #fff; border-radius: 8px;
+      background: var(--clr-surface); border-radius: 8px;
       padding: .75rem 1.25rem; margin-bottom: 1rem;
       box-shadow: 0 1px 4px rgba(0,0,0,.07);
     }
     .stat { text-align: center; min-width: 4rem; }
     .stat-n { font-size: 1.6rem; font-weight: 700; line-height: 1; }
-    .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-top: .15rem; }
-    .stat-n.present  { color: #1e8449; }
-    .stat-n.absent   { color: #c0392b; }
-    .stat-n.unknown  { color: #aaa; }
+    .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--clr-text-muted); margin-top: .15rem; }
+    .stat-n.present  { color: var(--clr-success); }
+    .stat-n.absent   { color: var(--clr-danger); }
+    .stat-n.unknown  { color: var(--clr-text-muted); }
 
     .search-bar { position: relative; margin-bottom: .75rem; }
     .search-bar input {
       width: 100%; padding: .6rem 1rem .6rem 2.4rem;
-      border: 1px solid #ddd; border-radius: 8px;
-      font-size: 1rem; background: #fff;
+      border: 1px solid var(--clr-border); border-radius: 8px;
+      font-size: 1rem; background: var(--clr-surface);
       box-sizing: border-box;
     }
     .search-bar::before {
@@ -35,17 +35,17 @@
     .fencer-list { display: flex; flex-direction: column; gap: .4rem; }
     .fencer-row {
       display: flex; align-items: center; gap: .75rem;
-      background: #fff; border-radius: 8px;
+      background: var(--clr-surface); border-radius: 8px;
       padding: .65rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.06);
-      border-left: 4px solid #ddd;
+      border-left: 4px solid var(--clr-border);
       transition: border-color .15s;
     }
-    .fencer-row.present  { border-left-color: #1e8449; background: #f0faf4; }
-    .fencer-row.withdrawn { border-left-color: #c0392b; background: #fdf4f4; opacity: .75; }
+    .fencer-row.present  { border-left-color: var(--clr-success); background: var(--clr-th-bg); }
+    .fencer-row.withdrawn { border-left-color: var(--clr-danger); background: var(--clr-th-bg); opacity: .75; }
 
     .fencer-info { flex: 1; min-width: 0; }
     .fencer-name { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fencer-meta { font-size: .78rem; color: #888; margin-top: .1rem; }
+    .fencer-meta { font-size: .78rem; color: var(--clr-text-muted); margin-top: .1rem; }
 
     .action-btns { display: flex; gap: .4rem; flex-shrink: 0; }
     .btn-present, .btn-absent {
@@ -53,16 +53,16 @@
       font-weight: 600; cursor: pointer; padding: .45rem .8rem;
       transition: opacity .15s;
     }
-    .btn-present          { background: #d4edda; color: #155724; }
-    .btn-present.active   { background: #1e8449; color: #fff; }
+    .btn-present          { background: var(--clr-success-bg); color: var(--clr-success-text); }
+    .btn-present.active   { background: var(--clr-success); color: #fff; }
     .btn-present:hover    { opacity: .85; }
-    .btn-absent           { background: #fde8e8; color: #922b21; }
-    .btn-absent.active    { background: #c0392b; color: #fff; }
+    .btn-absent           { background: var(--clr-danger-bg); color: var(--clr-danger-text); }
+    .btn-absent.active    { background: var(--clr-danger); color: #fff; }
     .btn-absent:hover     { opacity: .85; }
 
     .club-header {
       font-size: .72rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .07em; color: #888; margin: 1rem 0 .35rem;
+      letter-spacing: .07em; color: var(--clr-text-muted); margin: 1rem 0 .35rem;
       padding-left: .25rem;
     }
   </style>
@@ -88,10 +88,10 @@
 
   <div style="display:flex;align-items:baseline;gap:1rem;margin-bottom:.75rem;flex-wrap:wrap">
     <h2 style="margin:0" x-text="comp?.name || 'Check-in'"></h2>
-    <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Competition</a>
+    <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:var(--clr-text-muted)">← Competition</a>
   </div>
 
-  <div x-show="unknownCount > 0" style="font-size:.85rem;color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;padding:.6rem .9rem;margin-bottom:.75rem">
+  <div x-show="unknownCount > 0" style="font-size:.85rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:6px;padding:.6rem .9rem;margin-bottom:.75rem">
     Only fencers marked <strong>present</strong> are entered when a round is created — anyone still
     "Not yet" is left out entirely, not just skipped for later. If a fencer definitely isn't showing
     up, mark them <strong>Withdrawn</strong> here rather than leaving them unresolved.
@@ -117,7 +117,7 @@
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
       <button @click="markAllPresent()" style="font-size:.82rem;padding:.35rem .8rem">✓ All present</button>
-      <button @click="clearAll()" style="font-size:.82rem;padding:.35rem .8rem;background:#fde8e8;color:#922b21;border-color:#f5c6cb">Clear all</button>
+      <button @click="clearAll()" style="font-size:.82rem;padding:.35rem .8rem;background:var(--clr-danger-bg);color:var(--clr-danger-text);border-color:var(--clr-danger-border)">Clear all</button>
     </div>
   </div>
 
@@ -155,7 +155,7 @@
         </template>
       </div>
     </template>
-    <div x-show="filteredGroups.length===0" style="text-align:center;color:#aaa;padding:2rem">
+    <div x-show="filteredGroups.length===0" style="text-align:center;color:var(--clr-text-muted);padding:2rem">
       No fencers match.
     </div>
   </div>

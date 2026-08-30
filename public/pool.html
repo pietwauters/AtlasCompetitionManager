@@ -8,10 +8,10 @@
   <style>
     body{background:#1a1a2e;color:#fff;font-family:Arial,sans-serif}
     header{background:#0d0d1f;padding:.6rem 1.5rem;display:flex;align-items:center;gap:1rem}
-    header a{color:#aad4f5;text-decoration:none;font-size:.9rem}
+    header a{color:var(--clr-nav-link);text-decoration:none;font-size:.9rem}
     .pool-header{padding:1rem 1.5rem;background:#16213e;display:flex;gap:2rem;align-items:center;flex-wrap:wrap}
     .pool-header h2{margin:0;font-size:1.2rem}
-    .meta{font-size:.82rem;color:#aaa}
+    .meta{font-size:.82rem;color:var(--clr-text-muted)}
     .section-label{padding:.6rem 1.5rem .3rem;font-size:.72rem;font-weight:700;text-transform:uppercase;
                    letter-spacing:.07em;color:#556}
 
@@ -19,51 +19,51 @@
     .matrix-wrap{overflow-x:auto;padding:0 1.5rem 1rem}
     .mtx{border-collapse:collapse;font-size:1rem;white-space:nowrap}
     .mtx th,.mtx td{border:1px solid #2a3a5e;padding:.45rem .65rem;text-align:center}
-    .mtx thead th{background:#0d0d1f;color:#aad4f5;font-weight:600;font-size:.85rem}
-    .mtx .td-name{text-align:left;padding-left:.75rem;min-width:11rem;color:#eee}
-    .mtx .td-num{color:#aad4f5;font-weight:600;min-width:2rem}
+    .mtx thead th{background:#0d0d1f;color:var(--clr-nav-link);font-weight:600;font-size:.85rem}
+    .mtx .td-name{text-align:left;padding-left:.75rem;min-width:11rem;color:var(--clr-text-muted)}
+    .mtx .td-num{color:var(--clr-nav-link);font-weight:600;min-width:2rem}
     .mtx .td-diag{background:#0a0a1a}
     .mtx .td-won{color:#4cde80;font-weight:700;font-size:1.05rem}
-    .mtx .td-lost{color:#ccc}
-    .mtx .td-empty{color:#333}
-    .mtx .td-stat{color:#aad4f5;min-width:2.8rem}
+    .mtx .td-lost{color:var(--clr-text-muted)}
+    .mtx .td-empty{color:var(--clr-text-muted)}
+    .mtx .td-stat{color:var(--clr-nav-link);min-width:2.8rem}
     .mtx .td-ind-pos{color:#4cde80}
     .mtx .td-ind-neg{color:#e74c3c}
     .mtx .td-rank{font-weight:700;color:#fff;min-width:2.4rem}
     /* toggle button in section header */
     .section-toggle{display:flex;align-items:center;gap:.5rem;padding:.5rem 1.5rem .3rem;
-                    cursor:pointer;user-select:none;border:none;background:none;color:#888;
+                    cursor:pointer;user-select:none;border:none;background:none;color:var(--clr-text-muted);
                     font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;width:100%}
-    .section-toggle:hover{color:#aad4f5}
+    .section-toggle:hover{color:var(--clr-nav-link)}
     .toggle-arrow{font-size:.9rem;transition:transform .2s;display:inline-block}
     .toggle-arrow.open{transform:rotate(90deg)}
 
     /* ── Scoresheet ──────────────────────────────────────────────────────── */
     .scoresheet{padding:0 1.5rem 1rem}
-    .bout-row{background:#fff;color:#1a1a2e;border-radius:6px;margin-bottom:.6rem;display:flex;
+    .bout-row{background:var(--clr-surface);color:var(--clr-text);border-radius:6px;margin-bottom:.6rem;display:flex;
               align-items:center;gap:.5rem;padding:.5rem .75rem;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-    .bout-row.finished{background:#f0faf5}
+    .bout-row.finished{background:var(--clr-th-bg)}
     .bout-row.active{background:#fffbf0;border-left:3px solid #e67e22}
-    .bout-num{font-size:.75rem;color:#888;width:1.8rem;text-align:center;flex-shrink:0}
+    .bout-num{font-size:.75rem;color:var(--clr-text-muted);width:1.8rem;text-align:center;flex-shrink:0}
     .fencer-name{flex:1;font-size:.92rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .fencer-name.winner{color:#1e8449}
+    .fencer-name.winner{color:var(--clr-success)}
     .score-input{width:2.8rem;height:2.4rem;text-align:center;font-size:1.1rem;font-weight:700;
-                 border:2px solid #ccc;border-radius:5px;background:#fff;color:#1a1a2e}
-    .score-input:focus{outline:none;border-color:#1a6bab}
-    .separator{font-size:1rem;color:#999;padding:0 .2rem}
+                 border:2px solid var(--clr-btn-border);border-radius:5px;background:var(--clr-surface);color:#1a1a2e}
+    .score-input:focus{outline:none;border-color:var(--clr-brand)}
+    .separator{font-size:1rem;color:var(--clr-text-muted);padding:0 .2rem}
     .btn-undo{background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:.3rem .6rem;
               cursor:pointer;font-size:.78rem;flex-shrink:0}
-    .btn-undo:hover{background:#c0392b}
+    .btn-undo:hover{background:var(--clr-danger)}
     .tie-picker{font-size:.78rem;background:#fef3cd;border-radius:4px;padding:.2rem .4rem}
     .tie-picker select{border:none;background:transparent;font-size:.78rem;cursor:pointer}
-    .progress{padding:.5rem 1.5rem;font-size:.85rem;color:#aad4f5}
+    .progress{padding:.5rem 1.5rem;font-size:.85rem;color:var(--clr-nav-link)}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
 <header>
   <strong>Atlas</strong>
   <a :href="pool?'/phase.html?id='+pool.phase_id:'#'">← Phase overview</a>
-  <span style="color:#aad4f5;margin-left:auto"
+  <span style="color:var(--clr-nav-link);margin-left:auto"
         x-text="pool?'Pool '+pool.pool_number+' | '+(pool.strip_name||'No strip'):''"></span>
 </header>
 
@@ -149,7 +149,7 @@
                :value="bout.left_score??''"
                @change="saveScore(bout, $event.target.value, null)"
                @focus="$event.target.select()"
-               :style="bout.winner_id===bout.left_id?'border-color:#1e8449':''">
+               :style="bout.winner_id===bout.left_id?'border-color:var(--clr-success)':''">
 
         <span class="separator">:</span>
 
@@ -157,7 +157,7 @@
                :value="bout.right_score??''"
                @change="saveScore(bout, null, $event.target.value)"
                @focus="$event.target.select()"
-               :style="bout.winner_id===bout.right_id?'border-color:#1e8449':''">
+               :style="bout.winner_id===bout.right_id?'border-color:var(--clr-success)':''">
 
         <span class="fencer-name" :class="{winner: bout.winner_id===bout.right_id}"
               style="text-align:right"

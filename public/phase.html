@@ -8,17 +8,17 @@
   <script src="/js/theme-init.js"></script>
   <style>
     .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:1.5rem}
-    .pool-card{background:var(--clr-surface);border-radius:8px;padding:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid #ddd}
-    .pool-card.active{border-left-color:#1e8449}
-    .pool-card.finished{border-left-color:#1a6bab}
+    .pool-card{background:var(--clr-surface);border-radius:8px;padding:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid var(--clr-border)}
+    .pool-card.active{border-left-color:var(--clr-success)}
+    .pool-card.finished{border-left-color:var(--clr-brand)}
     .pool-card h3{margin:0 0 .5rem;font-size:1rem}
     .pool-meta{font-size:.8rem;color:var(--clr-text-muted);margin-bottom:.5rem}
     .progress-bar{height:6px;background:var(--clr-border);border-radius:3px;overflow:hidden;margin:.4rem 0}
-    .progress-fill{height:100%;background:#1e8449;transition:width .3s}
+    .progress-fill{height:100%;background:var(--clr-success);transition:width .3s}
     .pool-actions{margin-top:.75rem;display:flex;gap:.5rem}
-    .rank-pos{font-weight:700;color:#1a6bab;width:2rem;text-align:center}
-    .adv{color:#1e8449;font-weight:600}
-    .elim{color:#c0392b}
+    .rank-pos{font-weight:700;color:var(--clr-brand);width:2rem;text-align:center}
+    .adv{color:var(--clr-success);font-weight:600}
+    .elim{color:var(--clr-danger)}
     .vr{font-family:monospace}
     .modal-box{width:min(400px,90vw)}
   </style>
@@ -31,7 +31,7 @@
        class="nav-comp-link"></a>
   </template>
   <div class="nav-right">
-    <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+    <span x-show="comp" style="color:var(--clr-nav-link);font-size:.9rem" x-text="'/ '+comp?.name"></span>
     
     <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
@@ -51,22 +51,22 @@
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <h2 style="margin:0" x-text="'Pool phase — ' + (phase?.rule_doc||'')"></h2>
       <span class="badge" :class="'badge-'+(phase?.status||'')" x-text="phase?.status"></span>
-      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
+      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to competition</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
       <button x-show="pools.length>0" @click="autoAssignReferees()"
-              style="background:#eef6ff;color:#1a6bab;border-color:#b8d4ef"
+              style="background:#eef6ff;color:var(--clr-brand);border-color:#b8d4ef"
               title="Draw referees for every pool from the competition's roster, avoiding a nationality/club conflict where possible (FIE t.50.1-2)">
         ⚡ Auto-assign referees
       </button>
       <button x-show="phase?.status==='finished'"
-              style="background:#fff3cd;color:#856404;border-color:#ffc107"
+              style="background:var(--clr-warn-bg);color:var(--clr-warn-text);border-color:var(--clr-warn-border)"
               @click="reopenPhase()">↩ Reopen round</button>
       <template x-if="phase?.status==='active'">
         <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-          <button @click="loadRankings()" style="background:#f0f2f5">⟳ Refresh rankings</button>
+          <button @click="loadRankings()" style="background:var(--clr-th-bg)">⟳ Refresh rankings</button>
           <button @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
-          <span style="font-size:.85rem;color:#666" x-text="allBoutsComplete?'All bouts complete':'Bouts remaining: '+boutsRemaining"></span>
+          <span style="font-size:.85rem;color:var(--clr-text-muted)" x-text="allBoutsComplete?'All bouts complete':'Bouts remaining: '+boutsRemaining"></span>
           <!-- Advancement settings always visible while phase is active -->
           <label style="font-size:.85rem">Advance:
             <select x-model="closeMethod">
@@ -77,11 +77,11 @@
             </select>
           </label>
           <input x-show="closeMethod!=='rule'" type="number" min="0" x-model="closeValue"
-                 style="width:4rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
+                 style="width:4rem;padding:.3rem;border:1px solid var(--clr-btn-border);border-radius:4px"
                  :placeholder="closeMethod==='percentage'?'%':'N'">
           <label x-show="closeMethod==='percentage'" style="font-size:.85rem">rounded up to multiple of
             <input type="number" min="0" x-model="closeRoundTo"
-                   style="width:3.5rem;padding:.3rem;border:1px solid #ccc;border-radius:4px"
+                   style="width:3.5rem;padding:.3rem;border:1px solid var(--clr-btn-border);border-radius:4px"
                    placeholder="none">
           </label>
           <button class="success" :disabled="!allBoutsComplete" @click="closePhase()"
@@ -98,17 +98,17 @@
         <h3 x-text="'Pool ' + pool.pool_number"></h3>
         <div class="pool-meta">
           <span x-show="pool.strip_name">📍 <span x-text="pool.strip_name"></span></span>
-          <span x-show="!pool.strip_name" style="color:#aaa">No strip assigned</span>
+          <span x-show="!pool.strip_name" style="color:var(--clr-text-muted)">No strip assigned</span>
           <br>
           <span x-show="pool.ref_last">👤 <span x-text="(pool.ref_first||'')+' '+(pool.ref_last||'')"></span></span>
-          <span x-show="!pool.ref_last" style="color:#aaa">No referee assigned</span>
+          <span x-show="!pool.ref_last" style="color:var(--clr-text-muted)">No referee assigned</span>
         </div>
-        <div style="font-size:.82rem;color:#555" x-text="pool.bouts_complete+' / '+pool.bouts_total+' bouts complete'"></div>
+        <div style="font-size:.82rem;color:var(--clr-text-muted)" x-text="pool.bouts_complete+' / '+pool.bouts_total+' bouts complete'"></div>
         <div class="progress-bar">
           <div class="progress-fill" :style="'width:'+(pool.bouts_total>0?Math.round(pool.bouts_complete/pool.bouts_total*100):0)+'%'"></div>
         </div>
         <div class="pool-actions">
-          <a :href="'/pool.html?id='+pool.id" class="primary" style="display:inline-block;padding:.4rem .9rem;border-radius:5px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.85rem">Open scoresheet</a>
+          <a :href="'/pool.html?id='+pool.id" class="primary" style="display:inline-block;padding:.4rem .9rem;border-radius:5px;background:var(--clr-brand);color:#fff;text-decoration:none;font-size:.85rem">Open scoresheet</a>
           <button @click="assignResources(pool)" style="font-size:.82rem">Assign strip/ref</button>
         </div>
       </div>
@@ -150,7 +150,7 @@
       <h3 style="margin:0 0 1rem">Auto-assign referees — result</h3>
       <p style="font-size:.9rem;margin:0 0 .75rem">
         <span x-text="assignResult?.assigned?.length||0"></span> pool(s) assigned.
-        <span x-show="assignResult?.assigned?.some(a=>a.conflicts>0)" style="color:#856404">
+        <span x-show="assignResult?.assigned?.some(a=>a.conflicts>0)" style="color:var(--clr-warn-text)">
           <span x-text="assignResult.assigned.filter(a=>a.conflicts>0).length"></span> had an unavoidable nationality/club conflict.
         </span>
       </p>
@@ -159,7 +159,7 @@
         <div style="margin-bottom:1rem">
           <div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Assigned with a conflict</div>
           <template x-for="a in assignResult.assigned.filter(a=>a.conflicts>0)" :key="a.pool_id">
-            <div style="font-size:.85rem;padding:.4rem .6rem;background:#fff8e1;border:1px solid #ffc107;border-radius:5px;margin-bottom:.35rem">
+            <div style="font-size:.85rem;padding:.4rem .6rem;background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:5px;margin-bottom:.35rem">
               Pool <span x-text="poolNumberById(a.pool_id)"></span> — <span x-text="refereeName(a.referee_id)"></span>
               (<span x-text="a.conflicts"></span> criterion violated)
             </div>
@@ -171,7 +171,7 @@
         <div style="margin-bottom:1rem">
           <div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem">Why some pools couldn't get a clean referee</div>
           <template x-for="(s, i) in assignResult.shortfalls" :key="i">
-            <div style="font-size:.85rem;padding:.5rem .6rem;background:#fde8e8;border:1px solid #f1a9a9;border-radius:5px;margin-bottom:.4rem">
+            <div style="font-size:.85rem;padding:.5rem .6rem;background:var(--clr-danger-bg);border:1px solid var(--clr-danger-border);border-radius:5px;margin-bottom:.4rem">
               <div>
                 Pool<span x-text="s.pools.length>1?'s':''"></span>
                 <span x-text="s.pools.map(p=>poolNumberById(p.pool_id)).join(', ')"></span>
@@ -181,11 +181,11 @@
                 <span x-text="s.threshold===0?'a fully clean assignment':('at most '+s.threshold+' violated criterion/criteria')"></span>.
               </div>
               <template x-for="p in s.pools" :key="p.pool_id">
-                <div style="font-size:.8rem;color:#555;margin:.15rem 0 0 .5rem">
+                <div style="font-size:.8rem;color:var(--clr-text-muted);margin:.15rem 0 0 .5rem">
                   Pool <span x-text="poolNumberById(p.pool_id)"></span>: <span x-text="poolBlockingDetail(p)"></span>
                 </div>
               </template>
-              <div style="color:#922b21;margin-top:.35rem">
+              <div style="color:var(--clr-danger-text);margin-top:.35rem">
                 Short by <strong x-text="s.shortfall"></strong> — add
                 <span x-text="s.shortfall"></span> more referee(s) avoiding
                 <span x-text="blockingSummary(s)"></span> to resolve this
@@ -197,7 +197,7 @@
       </template>
 
       <template x-if="assignResult?.unassigned?.length">
-        <div style="font-size:.85rem;color:#922b21;margin-bottom:1rem">
+        <div style="font-size:.85rem;color:var(--clr-danger-text);margin-bottom:1rem">
           <span x-text="assignResult.unassigned.length"></span> pool(s) got no referee at all:
           Pool <span x-text="assignResult.unassigned.map(id=>poolNumberById(id)).join(', ')"></span>.
           Not enough referees registered for this competition — add more to the roster or assign these by hand.
@@ -214,7 +214,7 @@
   <div class="card" x-show="rankings.length>0">
     <h2 style="margin-top:0">
       Rankings
-      <span style="font-size:.8rem;color:#888;font-weight:400" x-show="phase?.status!=='finished'"> (live — not saved yet)</span>
+      <span style="font-size:.8rem;color:var(--clr-text-muted);font-weight:400" x-show="phase?.status!=='finished'"> (live — not saved yet)</span>
     </h2>
     <table class="table-responsive">
       <thead><tr>

@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .badge-fencer  { background: #d6eaf8; color: #1a6bab; }
-    .badge-referee { background: #d5f5e3; color: #1e8449; }
+    .badge-fencer  { background: #d6eaf8; color: var(--clr-brand); }
+    .badge-referee { background: var(--clr-success-bg); color: var(--clr-success); }
     .toolbar input[type=search] { flex: 1; min-width: 180px; }
     .import-area textarea { font-family: monospace; font-size: 0.8rem; resize: vertical; }
-    .import-hint { font-size: 0.78rem; color: #777; margin-top: 0.25rem; }
-    details summary { cursor: pointer; font-weight: 600; color: #1a6bab; user-select: none; }
+    .import-hint { font-size: 0.78rem; color: var(--clr-text-muted); margin-top: 0.25rem; }
+    details summary { cursor: pointer; font-weight: 600; color: var(--clr-brand); user-select: none; }
     .modal-box { width: min(560px, 90vw); }
   </style>
 </head>
@@ -166,7 +166,7 @@
       </select>
       <button class="primary" @click="openForm()">+ Add person</button>
       <a href="/api/people/export?role=fencer" class="success" download>↓ Export CSV</a>
-      <a href="/clubs.html" style="font-size:.85rem;color:#1a6bab">Manage clubs →</a>
+      <a href="/clubs.html" style="font-size:.85rem;color:var(--clr-brand)">Manage clubs →</a>
     </div>
 
     <table class="table-responsive">
@@ -204,7 +204,7 @@
           </tr>
         </template>
         <tr x-show="filteredPeople.length === 0">
-          <td colspan="7" style="text-align:center;color:#999;padding:1.5rem">No people found.</td>
+          <td colspan="7" style="text-align:center;color:var(--clr-text-muted);padding:1.5rem">No people found.</td>
         </tr>
       </tbody>
     </table>

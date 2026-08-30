@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .badge-connected{background:#d4edda;color:#155724}
-    .badge-disconnected{background:#d6d8db;color:#383d41}
-    .badge-pool{background:#dbeafe;color:#1e40af}
-    .badge-de{background:#ede9fe;color:#5b21b6}
+    .badge-connected{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-disconnected{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
+    .badge-pool{background:var(--clr-badge-pool-bg);color:var(--clr-badge-pool-text)}
+    .badge-de{background:var(--clr-badge-de-bg);color:var(--clr-badge-de-text)}
     .table{border-collapse:collapse;font-size:.88rem}
-    .table th,.table td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid #e5e7eb}
-    .table th{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
-    .form-label{display:block;font-size:.83rem;font-weight:600;margin-bottom:.3rem;color:#374151}
-    .form-input{width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:6px;font-size:.9rem}
+    .table th,.table td{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--clr-border)}
+    .table th{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-text-muted)}
+    .form-label{display:block;font-size:.83rem;font-weight:600;margin-bottom:.3rem;color:var(--clr-text)}
+    .form-input{width:100%;padding:.55rem .75rem;border:1px solid var(--clr-border);border-radius:6px;font-size:.9rem}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -32,7 +32,7 @@
     <a href="/referee-schedule.html">Referees</a>
     <a href="/people.html">People</a>
     <a href="/clubs.html">Clubs</a>
-    <a href="/admin.html" style="color:#aad4f5">Admin</a>
+    <a href="/admin.html" style="color:var(--clr-nav-link)">Admin</a>
   </div>
 </header>
 <main class="layout-data">
@@ -43,22 +43,22 @@
   <summary><h2 style="display:inline;margin:0">MQTT Broker</h2>
     <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
           x-text="status.connected?'Connected':'Disconnected'"></span>
-    <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
+    <span x-show="status.connected" style="font-size:.82rem;color:var(--clr-text-muted)" x-text="status.brokerUrl"></span>
   </summary>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:1rem">
       <input type="text" x-model="brokerUrl" placeholder="mqtt://openpiste.local:1883"
              style="flex:1;min-width:16rem">
       <button class="primary" x-show="!status.connected" @click="connect()">Connect</button>
       <button x-show="status.connected" @click="disconnect()"
-              style="background:#fde8e8;color:#922b21;border-color:#f5c2c7">Disconnect</button>
-      <button @click="saveSettings()" style="background:#f0f2f5">Save</button>
+              style="background:var(--clr-danger-bg);color:var(--clr-danger-text);border-color:var(--clr-danger-border)">Disconnect</button>
+      <button @click="saveSettings()" style="background:var(--clr-th-bg)">Save</button>
     </div>
     <div x-show="status.connected && status.brokerIdentity && status.brokerIdentity.connectedIp"
-         style="font-size:.8rem;color:#555;margin-top:.5rem">
+         style="font-size:.8rem;color:var(--clr-text-muted);margin-top:.5rem">
       Connected to the broker at <code x-text="status.brokerIdentity.connectedIp"></code>.
     </div>
     <div x-show="status.brokerIdentity && status.brokerIdentity.mismatch"
-         style="font-size:.8rem;color:#922b21;background:#fde8e8;border:1px solid #f5c2c7;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
+         style="font-size:.8rem;color:var(--clr-danger-text);background:var(--clr-danger-bg);border:1px solid var(--clr-danger-border);border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
       ⚠ <code x-text="status.brokerIdentity && status.brokerIdentity.hostname"></code> currently resolves to
       <code x-text="status.brokerIdentity && status.brokerIdentity.resolvedIp"></code>, but this server is
       actually connected to the broker at <code x-text="status.brokerIdentity && status.brokerIdentity.connectedIp"></code>.
@@ -67,14 +67,14 @@
       recognize, treat this network as untrusted until this is resolved.
     </div>
     <div x-show="effectiveBrokerUrl && effectiveBrokerUrl !== brokerUrl"
-         style="font-size:.8rem;color:#856404;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
+         style="font-size:.8rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem">
       ⚠ <code x-text="brokerUrl"></code> means "this device" to a tablet, not this server. Scoresheets on other
       devices will connect via <code x-text="effectiveBrokerUrl"></code> instead.
     </div>
     <div x-show="status.crl && status.crl.isWarning"
          :style="status.crl && status.crl.isStale
-                   ? 'font-size:.8rem;color:#922b21;background:#fde8e8;border:1px solid #f5c2c7;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'
-                   : 'font-size:.8rem;color:#856404;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'">
+                   ? 'font-size:.8rem;color:var(--clr-danger-text);background:var(--clr-danger-bg);border:1px solid var(--clr-danger-border);border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'
+                   : 'font-size:.8rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid #ffe082;border-radius:5px;padding:.4rem .6rem;margin-top:.6rem'">
       <template x-if="status.crl && status.crl.isStale">
         <span>⚠ The device-certificate revocation list (CRL) on the broker has gone stale — every
           certificate-based device (Tier A: scoring apparatus, the CMS itself) may now be refused,
@@ -87,11 +87,11 @@
       </template>
       <div style="margin-top:.4rem">
         <button @click="refreshCrl()" :disabled="crlRefreshing"
-                style="font-size:.8rem;padding:.25rem .6rem;background:#fff;border:1px solid #922b21;color:#922b21;border-radius:4px;cursor:pointer">
+                style="font-size:.8rem;padding:.25rem .6rem;background:var(--clr-surface);border:1px solid var(--clr-danger-text);color:var(--clr-danger-text);border-radius:4px;cursor:pointer">
           <span x-show="!crlRefreshing">Refresh CRL now</span>
           <span x-show="crlRefreshing">Refreshing…</span>
         </button>
-        <span style="font-size:.75rem;color:#856404;margin-left:.4rem">
+        <span style="font-size:.75rem;color:var(--clr-warn-text);margin-left:.4rem">
           Needs a one-time sudoers grant — see <code>scripts/push-tier-a-crl.sh</code>. Falls back to
           running <code>./scripts/sync-mosquitto-tier-a.sh</code> yourself if that hasn't been set up.
         </span>
@@ -101,7 +101,7 @@
 
   <details class="card" open data-key="pairing">
   <summary><h2 style="display:inline;margin:0">Device pairing</h2></summary>
-    <p style="font-size:.85rem;color:#6b7280;margin:1rem 0 .75rem">
+    <p style="font-size:.85rem;color:var(--clr-text-muted);margin:1rem 0 .75rem">
       Pair scoring apparatus, remote controls, and e-scoresheet apps with the CMS.
     </p>
     <a href="/pairing.html"><button class="primary">Pair a device</button></a>
@@ -109,7 +109,7 @@
 
   <details class="card" open data-key="escoresheet">
   <summary><h2 style="display:inline;margin:0">Install e-scoresheet</h2></summary>
-    <p style="font-size:.85rem;color:#6b7280;margin:1rem 0 .75rem">
+    <p style="font-size:.85rem;color:var(--clr-text-muted);margin:1rem 0 .75rem">
       Once a device has been paired above, use this to get the QR code or link that
       opens the e-scoresheet app on it, already signed in.
     </p>
@@ -118,7 +118,7 @@
 
   <details class="card" open data-key="kiosk">
   <summary><h2 style="display:inline;margin:0">Kiosk displays</h2></summary>
-    <p style="font-size:.85rem;color:#6b7280;margin:1rem 0 .75rem">
+    <p style="font-size:.85rem;color:var(--clr-text-muted);margin:1rem 0 .75rem">
       Full-screen, auto-scrolling waiting-room screens. Open on the display device and leave running.
     </p>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
@@ -133,7 +133,7 @@
       <input type="checkbox" x-model="autoNextOnEnd" @change="saveSettings()" style="width:1rem;height:1rem">
       Automatically send next match after END is acknowledged
     </label>
-    <div style="font-size:.8rem;color:#888;margin-top:.3rem;margin-left:1.6rem">
+    <div style="font-size:.8rem;color:var(--clr-text-muted);margin-top:.3rem;margin-left:1.6rem">
       When enabled, the next bout loads on the apparatus as soon as the score is confirmed —
       the referee does not need to press NEXT between bouts.
     </div>
@@ -147,7 +147,7 @@
       <button @click="printAllBadges()" x-show="users.length > 0" style="font-size:.85rem">Print all badges</button>
     </div>
 
-    <div x-show="users.length === 0" style="color:#888;font-size:.9rem">No users yet.</div>
+    <div x-show="users.length === 0" style="color:var(--clr-text-muted);font-size:.9rem">No users yet.</div>
 
     <table class="table table-responsive" x-show="users.length > 0" style="width:100%">
       <thead>
@@ -165,7 +165,7 @@
             <td data-label="Username" x-text="u.username"></td>
             <td data-label="Role"><span class="badge" :class="roleBadge(u.role)" x-text="u.role"></span></td>
             <td data-label="Person" x-text="u.first_name ? u.first_name+' '+u.last_name : '—'"></td>
-            <td data-label="Last login" x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:#888"></td>
+            <td data-label="Last login" x-text="u.last_login_at ? fmtDate(u.last_login_at) : 'Never'" style="font-size:.82rem;color:var(--clr-text-muted)"></td>
             <td data-label="" style="text-align:right;white-space:nowrap">
               <button @click="showQr(u)"    style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">QR</button>
               <button @click="doResetPin(u)" style="font-size:.82rem;padding:.3rem .7rem;margin:0 .3rem 0 0">Reset PIN</button>
@@ -194,7 +194,7 @@
       </label>
     </div>
     <button class="primary" @click="saveTieBreak()">Save</button>
-    <p style="font-size:.82rem;color:#6b7280;margin:.75rem 0 0">
+    <p style="font-size:.82rem;color:var(--clr-text-muted);margin:.75rem 0 0">
       When fencers are equal on all pool ranking criteria (V/M, indicator, TS, TR),
       this setting controls how they are ordered for DE seeding.
       Enable manual reordering to adjust tied groups from the phase rankings page (for testing/verification).
@@ -204,23 +204,23 @@
   <!-- ── Bout timing defaults ─────────────────────────────────────────── -->
   <details class="card" open data-key="bouttiming">
   <summary><h2 style="display:inline;margin:0">Bout Timing Defaults</h2></summary>
-    <p style="font-size:.82rem;color:#6b7280;margin:1rem 0 1rem">
+    <p style="font-size:.82rem;color:var(--clr-text-muted);margin:1rem 0 1rem">
       Used to compute predicted end times in the piste schedule.
       Observed average activates after 4 bouts and overrides the configured default automatically.
     </p>
 
     <template x-for="weapon in ['F','E','S']" :key="weapon">
       <div style="margin-bottom:1.25rem">
-        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:.4rem"
+        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--clr-text-muted);margin-bottom:.4rem"
              x-text="{'F':'Foil','E':'Épée','S':'Sabre'}[weapon]"></div>
         <table class="table table-responsive" style="width:100%">
           <thead>
             <tr>
               <th style="width:5rem">Gender</th>
               <th>Pool default (min/bout)</th>
-              <th style="color:#1a6bab">Pool observed</th>
+              <th style="color:var(--clr-brand)">Pool observed</th>
               <th>DE default (min/bout)</th>
-              <th style="color:#1a6bab">DE observed</th>
+              <th style="color:var(--clr-brand)">DE observed</th>
               <th></th>
             </tr>
           </thead>
@@ -229,17 +229,17 @@
               <tr>
                 <td data-label="Gender" style="font-weight:600" x-text="{'M':'Men','F':'Women','X':'Mixed'}[gender]"></td>
                 <td data-label="Pool default (min/bout)">
-                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
+                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid var(--clr-border);border-radius:4px;font-size:.88rem"
                     :value="getStd(weapon,gender,'pool')?.minutes_per_bout"
                     @change="saveDefault(weapon,gender,'pool',+$event.target.value)">
                 </td>
-                <td data-label="Pool observed" style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'pool')"></td>
+                <td data-label="Pool observed" style="font-size:.82rem;color:var(--clr-brand)" x-text="fmtObserved(weapon,gender,'pool')"></td>
                 <td data-label="DE default (min/bout)">
-                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid #d1d5db;border-radius:4px;font-size:.88rem"
+                  <input type="number" min="1" max="60" style="width:4rem;padding:.25rem .4rem;border:1px solid var(--clr-border);border-radius:4px;font-size:.88rem"
                     :value="getStd(weapon,gender,'de')?.minutes_per_bout"
                     @change="saveDefault(weapon,gender,'de',+$event.target.value)">
                 </td>
-                <td data-label="DE observed" style="font-size:.82rem;color:#1a6bab" x-text="fmtObserved(weapon,gender,'de')"></td>
+                <td data-label="DE observed" style="font-size:.82rem;color:var(--clr-brand)" x-text="fmtObserved(weapon,gender,'de')"></td>
                 <td data-label="" style="text-align:right">
                   <button style="font-size:.78rem;padding:.25rem .6rem"
                           x-show="hasObserved(weapon,gender)"
@@ -256,7 +256,7 @@
   <!-- ── Create user modal ───────────────────────────────────────────────── -->
   <div x-show="createModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
        display:flex;align-items:center;justify-content:center" @click.self="createModal.open=false">
-    <div style="background:#fff;border-radius:10px;padding:2rem;min-width:320px;max-width:420px;width:90%">
+    <div style="background:var(--clr-surface);border-radius:10px;padding:2rem;min-width:320px;max-width:420px;width:90%">
       <h3 style="margin:0 0 1.25rem">New user</h3>
 
       <label class="form-label">Username</label>
@@ -280,12 +280,12 @@
   <!-- ── QR code modal ─────────────────────────────────────────────────── -->
   <div x-show="qrModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
        display:flex;align-items:center;justify-content:center" @click.self="qrModal.open=false">
-    <div style="background:#fff;border-radius:10px;padding:2rem;text-align:center;min-width:280px">
+    <div style="background:var(--clr-surface);border-radius:10px;padding:2rem;text-align:center;min-width:280px">
       <img :src="qrModal.user ? '/api/users/'+qrModal.user.id+'/qr' : ''"
            width="200" height="200" style="display:block;margin:0 auto">
       <div style="font-size:1.15rem;font-weight:700;margin-top:.75rem" x-text="qrModal.user?.username"></div>
-      <div style="font-size:.85rem;color:#555;margin-bottom:.25rem" x-text="roleLabel(qrModal.user?.role)"></div>
-      <div style="font-size:.65rem;color:#bbb;word-break:break-all;margin-bottom:1.25rem;max-width:240px;margin-left:auto;margin-right:auto"
+      <div style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.25rem" x-text="roleLabel(qrModal.user?.role)"></div>
+      <div style="font-size:.65rem;color:var(--clr-text-muted);word-break:break-all;margin-bottom:1.25rem;max-width:240px;margin-left:auto;margin-right:auto"
            x-text="qrModal.user?.user_token"></div>
       <div style="display:flex;gap:.5rem;justify-content:center">
         <button class="primary" @click="printBadge(qrModal.user)">Print badge</button>
@@ -297,11 +297,11 @@
   <!-- ── PIN reveal modal ────────────────────────────────────────────────── -->
   <div x-show="pinModal.open" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;
        display:flex;align-items:center;justify-content:center">
-    <div style="background:#1a1a2e;color:#eee;border-radius:10px;padding:2rem;min-width:320px;max-width:380px;width:90%;text-align:center">
-      <div style="font-size:.85rem;color:#aaa;margin-bottom:.5rem" x-text="pinModal.label"></div>
+    <div style="background:#1a1a2e;color:var(--clr-text-muted);border-radius:10px;padding:2rem;min-width:320px;max-width:380px;width:90%;text-align:center">
+      <div style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.5rem" x-text="pinModal.label"></div>
       <div style="font-size:3rem;font-weight:700;letter-spacing:.3em;color:#e94560;margin:.5rem 0"
            x-text="pinModal.pin"></div>
-      <div style="font-size:.82rem;color:#888;margin-bottom:1.5rem">
+      <div style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:1.5rem">
         Write this down — it will not be shown again.<br>
         The user must change it on first login.
       </div>
@@ -454,13 +454,13 @@ function app() {
       return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Badge — ${u.username}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;background:#fff}
-  .badge{width:8cm;padding:1cm;border:1px solid #ccc;border-radius:.4cm;text-align:center;
+  body{font-family:Arial,sans-serif;background:var(--clr-surface)}
+  .badge{width:8cm;padding:1cm;border:1px solid var(--clr-btn-border);border-radius:.4cm;text-align:center;
          page-break-inside:avoid;display:inline-block;margin:.3cm}
   .badge img{display:block;margin:0 auto;width:5cm;height:5cm}
   .name{font-size:1.1rem;font-weight:700;margin-top:.4cm}
-  .role{font-size:.85rem;color:#555;margin-top:.15cm}
-  .token{font-size:.5rem;color:#bbb;margin-top:.3cm;word-break:break-all}
+  .role{font-size:.85rem;color:var(--clr-text-muted);margin-top:.15cm}
+  .token{font-size:.5rem;color:var(--clr-text-muted);margin-top:.3cm;word-break:break-all}
   @media print{@page{margin:.5cm}body{margin:0}}
 </style></head><body>
 <div class="badge">
@@ -494,13 +494,13 @@ function app() {
       w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>All Badges</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;background:#fff;padding:.5cm}
-  .badge{width:8cm;padding:1cm;border:1px solid #ccc;border-radius:.4cm;text-align:center;
+  body{font-family:Arial,sans-serif;background:var(--clr-surface);padding:.5cm}
+  .badge{width:8cm;padding:1cm;border:1px solid var(--clr-btn-border);border-radius:.4cm;text-align:center;
          page-break-inside:avoid;display:inline-block;margin:.3cm;vertical-align:top}
   .badge img{display:block;margin:0 auto;width:5cm;height:5cm}
   .name{font-size:1.1rem;font-weight:700;margin-top:.4cm}
-  .role{font-size:.85rem;color:#555;margin-top:.15cm}
-  .token{font-size:.5rem;color:#bbb;margin-top:.3cm;word-break:break-all}
+  .role{font-size:.85rem;color:var(--clr-text-muted);margin-top:.15cm}
+  .token{font-size:.5rem;color:var(--clr-text-muted);margin-top:.3cm;word-break:break-all}
   @media print{@page{margin:.5cm}body{margin:0;padding:.2cm}}
 </style></head><body>${badges}
 <script>window.onload=()=>{window.print();}<\/script>

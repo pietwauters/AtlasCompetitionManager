@@ -13,8 +13,8 @@
   .sp-stage-row input[type=number], .sp-stage-row input[type=text] { width: 100%; padding: .25rem .4rem; border: 1px solid var(--clr-btn-border); border-radius: 4px; background: var(--clr-surface); color: var(--clr-text); }
   .sp-comp-block { margin-bottom: 1.25rem; }
   .sp-comp-title { font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
-  .sp-shortfall { font-size: .85rem; padding: .5rem .6rem; background: #fde8e8; border: 1px solid #f1a9a9; border-radius: 5px; margin-bottom: .5rem; color: #922b21; }
-  .sp-shortfall.ok { background: #d4edda; border-color: #b7dfc2; color: #155724; }
+  .sp-shortfall { font-size: .85rem; padding: .5rem .6rem; background: var(--clr-danger-bg); border: 1px solid var(--clr-danger-border); border-radius: 5px; margin-bottom: .5rem; color: var(--clr-danger-text); }
+  .sp-shortfall.ok { background: var(--clr-success-bg); border-color: var(--clr-success-border); color: var(--clr-success-text); }
   .sp-insufficient { font-size: .85rem; padding: .5rem .6rem; background: var(--clr-th-bg); border: 1px solid var(--clr-border); border-radius: 5px; margin-bottom: .5rem; color: var(--clr-text-muted); }
 </style>
 </head>
@@ -134,7 +134,7 @@
                     <button class="danger" @click="removeStage(stage)" style="font-size:.75rem;padding:.2rem .5rem">✕</button>
                   </span>
                 </div>
-                <div x-show="stage.computed?.flightsWarnings?.length" style="font-size:.78rem;color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin:.2rem 0 .4rem">
+                <div x-show="stage.computed?.flightsWarnings?.length" style="font-size:.78rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.3rem .5rem;margin:.2rem 0 .4rem">
                   <template x-for="(w, i) in (stage.computed?.flightsWarnings || [])" :key="i">
                     <div>
                       ⚠ <span x-text="w.round ? ('Round of ' + w.tableauSize) : 'Pools'"></span>:
@@ -173,7 +173,7 @@
                 <div x-show="stage.computed?.fixedStartNotices?.length" style="font-size:.78rem;margin:.2rem 0 .4rem">
                   <template x-for="(n, i) in (stage.computed?.fixedStartNotices || [])" :key="i">
                     <div :style="n.severity==='warning'
-                          ? 'color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-bottom:.2rem'
+                          ? 'color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.3rem .5rem;margin-bottom:.2rem'
                           : 'color:var(--clr-text-muted)'">
                       <span x-text="n.round ? ('Round of ' + n.tableauSize) : 'This phase'"></span>:
                       <template x-if="n.severity==='warning'">
@@ -360,7 +360,7 @@
             Ends <span x-text="editingEnd"></span> — duration unchanged, only moves the window.
             Applies to this piste only; other pistes in the same round keep their own time.
           </p>
-          <p x-show="slotEditorConflict" style="font-size:.82rem;color:#856404;background:#fff8e1;border:1px solid #ffc107;border-radius:4px;padding:.3rem .5rem;margin-top:.5rem">
+          <p x-show="slotEditorConflict" style="font-size:.82rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.3rem .5rem;margin-top:.5rem">
             ⚠ <span x-text="slotEditorConflict"></span> is already scheduled on this piste at an overlapping time —
             saving anyway will double-book it.
           </p>

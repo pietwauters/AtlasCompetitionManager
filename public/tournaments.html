@@ -67,7 +67,7 @@
               </td>
             </tr>
           </template>
-          <tr x-show="visibleCompetitions.length===0"><td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No competitions yet.</td></tr>
+          <tr x-show="visibleCompetitions.length===0"><td colspan="9" style="text-align:center;color:var(--clr-text-muted);padding:1.5rem">No competitions yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -78,7 +78,7 @@
           <div class="full" style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem">
             XML file *
             <input type="file" accept=".xml" @change="fieReadFile($event)" style="padding:.3rem 0;font-size:.9rem">
-            <span x-show="fieForm.fileName" x-text="'Selected: '+fieForm.fileName" style="font-size:.8rem;color:#555"></span>
+            <span x-show="fieForm.fileName" x-text="'Selected: '+fieForm.fileName" style="font-size:.8rem;color:var(--clr-text-muted)"></span>
           </div>
           <label>Attach to existing tournament (optional)
             <select x-model="fieForm.tournamentId">
@@ -93,12 +93,12 @@
               x-text="fieImportLoading ? 'Importing…' : 'Import'"></button>
             <button @click="fieImportOpen=false">Cancel</button>
           </div>
-          <div class="full" x-show="fieImportResult" style="background:#d5f5e3;color:#1e5631;padding:.75rem 1rem;border-radius:5px;font-size:.9rem">
+          <div class="full" x-show="fieImportResult" style="background:var(--clr-success-bg);color:var(--clr-success-text);padding:.75rem 1rem;border-radius:5px;font-size:.9rem">
             <div>
               <strong x-text="(fieImportResult?.created||0)+' created, '+(fieImportResult?.updated||0)+' updated'"></strong>
               <span x-show="fieImportResult?.skipped" x-text="' · '+(fieImportResult?.skipped)+' skipped'"></span>
             </div>
-            <div x-show="fieImportResult?.warnings?.length" style="margin-top:.4rem;color:#856404">
+            <div x-show="fieImportResult?.warnings?.length" style="margin-top:.4rem;color:var(--clr-warn-text)">
               <template x-for="w in (fieImportResult?.warnings||[])" :key="w">
                 <div x-text="w"></div>
               </template>
@@ -148,22 +148,22 @@
         <h2 style="margin:0;flex:1">Tournaments</h2>
         <button class="primary" @click="openTournForm()">+ New tournament</button>
       </div>
-      <div x-show="tournaments.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No tournaments yet.</div>
+      <div x-show="tournaments.length===0" style="color:var(--clr-text-muted);font-size:.9rem;padding:.5rem 0">No tournaments yet.</div>
       <template x-for="t in tournamentGroups" :key="t.id">
-        <div style="border:1px solid #ddd;border-radius:6px;margin-bottom:1rem;overflow:hidden">
+        <div style="border:1px solid var(--clr-border);border-radius:6px;margin-bottom:1rem;overflow:hidden">
           <!-- Tournament header -->
-          <div style="background:#f0f2f5;padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <div style="background:var(--clr-th-bg);padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
             <strong x-text="t.name" style="font-size:1rem;flex:1"></strong>
-            <span style="font-size:.82rem;color:#555" x-show="t.city" x-text="t.city"></span>
-            <span style="font-size:.82rem;color:#555" x-show="t.date_start" x-text="formatDates(t)"></span>
-            <span style="font-size:.82rem;color:#555" x-show="t.level" x-text="t.level"></span>
+            <span style="font-size:.82rem;color:var(--clr-text-muted)" x-show="t.city" x-text="t.city"></span>
+            <span style="font-size:.82rem;color:var(--clr-text-muted)" x-show="t.date_start" x-text="formatDates(t)"></span>
+            <span style="font-size:.82rem;color:var(--clr-text-muted)" x-show="t.level" x-text="t.level"></span>
             <span class="badge" :class="'badge-'+t.status" x-text="t.status"></span>
             <a :href="'/schedule-planner.html?tournament_id='+t.id" style="font-size:.82rem">📅 Schedule planner</a>
             <button @click="editTourn(t)" style="font-size:.82rem">Edit</button>
             <button class="danger" @click="deleteTourn(t)" style="font-size:.82rem">Delete</button>
           </div>
           <!-- Competitions inside this tournament -->
-          <div x-show="t.competitions.length===0" style="padding:.75rem 1rem;font-size:.85rem;color:#999">No competitions linked to this tournament.</div>
+          <div x-show="t.competitions.length===0" style="padding:.75rem 1rem;font-size:.85rem;color:var(--clr-text-muted)">No competitions linked to this tournament.</div>
           <table class="table-responsive" x-show="t.competitions.length>0" style="margin:0">
             <thead><tr>
               <th>Name</th><th>Weapon</th><th>Gender</th><th>Age</th><th>Date</th><th>Fencers</th><th>Status</th><th></th>

@@ -1,0 +1,106 @@
+# Grandfathered hardcoded-color debt, as of the 2026-08-30 palette cleanup.
+# Format: one `path/to/file.html:#hexvalue` pair per line (lowercase hex).
+#
+# check-architecture.sh's "Hardcoded colors" section WARNs (not FAILs) on any
+# hardcoded color listed here — this is known, accepted debt, not something
+# to re-litigate on every commit. Any hardcoded color NOT listed here FAILs
+# the check instead: per CLAUDE.md, new code must reuse an existing
+# var(--clr-...) token from style.css. A genuinely new color needs the user's
+# explicit authorization first, then becomes a named token in style.css (not
+# an inline literal) — see CLAUDE.md's "No new hardcoded colors" rule.
+#
+# To retire an entry: fix the color to use a token, then delete its line here.
+# Never add a line here to silence a FAIL without that authorization — that
+# defeats the point. A single-line, author-visible exception belongs inline
+# as a `theme-ok` comment instead (see the check's own section for that
+# escape hatch), not as a new baseline entry.
+public/admin.html:#1a1a2e
+public/admin.html:#e94560
+public/admin.html:#ffe082
+public/change-pin.html:#0f3460
+public/change-pin.html:#16213e
+public/change-pin.html:#1a1a2e
+public/change-pin.html:#1a4a7a
+public/change-pin.html:#28a745
+public/change-pin.html:#c73652
+public/change-pin.html:#e94560
+public/change-pin.html:#fff
+public/checkin.html:#fff
+public/clubs.html:#bf360c
+public/clubs.html:#e65100
+public/clubs.html:#ffb74d
+public/clubs.html:#ffe082
+public/clubs.html:#fff
+public/clubs.html:#fff3e0
+public/competition-detail.html:#3949ab
+public/competition-detail.html:#a15c00
+public/competition-detail.html:#d6eaf8
+public/competition-detail.html:#dde
+public/competition-detail.html:#e5e8f0
+public/competition-detail.html:#e8eaf6
+public/competition-detail.html:#f0dca0
+public/competition-detail.html:#fef3cd
+public/competition-detail.html:#fff
+public/competition-detail.html:#fff8ea
+public/de.html:#1a6bab
+public/de.html:#6b21a8
+public/de.html:#b87333
+public/de.html:#c9a000
+public/de.html:#d8b4fe
+public/de.html:#eaf6ee
+public/de.html:#f5f0ff
+public/fencer-roster.html:#1a1a2e
+public/fencers.html:#fff
+public/index.html:#155a9a
+public/index.html:#e67e22
+public/index.html:#fff
+public/kiosk-fencers.html:#fff
+public/kiosk-officials.html:#fff
+public/login.html:#0f3460
+public/login.html:#16213e
+public/login.html:#1a1a2e
+public/login.html:#1a4a7a
+public/login.html:#c73652
+public/login.html:#e94560
+public/login.html:#fff
+public/opp2.html:#aaa
+public/opp2.html:#c8dff7
+public/opp2.html:#ccc
+public/opp2.html:#dce9fa
+public/opp2.html:#fff
+public/pairing.html:#fff
+public/people.html:#d6eaf8
+public/phase.html:#6b21a8
+public/phase.html:#b8d4ef
+public/phase.html:#d8b4fe
+public/phase.html:#eef6ff
+public/phase.html:#f5f0ff
+public/phase.html:#fff
+public/piste-qr.html:#1a1a2e
+public/pool.html:#0a0a1a
+public/pool.html:#0d0d1f
+public/pool.html:#16213e
+public/pool.html:#1a1a2e
+public/pool.html:#2a3a5e
+public/pool.html:#4cde80
+public/pool.html:#556
+public/pool.html:#e67e22
+public/pool.html:#e74c3c
+public/pool.html:#fef3cd
+public/pool.html:#fff
+public/pool.html:#fffbf0
+public/referee-checkin.html:#fff
+public/referee-schedule.html:#edfaf1
+public/referee-schedule.html:#fff
+public/results.html:#b87333
+public/results.html:#c9a000
+public/schedule-planner.html:#fff
+public/team-de.html:#0d6efd
+public/team-de.html:#842029
+public/team-de.html:#f8d7da
+public/team-match.html:#198754
+public/team-match.html:#842029
+public/team-match.html:#f8d7da
+public/team-match.html:#fffde7
+public/team-results.html:#b87333
+public/team-results.html:#c9a000

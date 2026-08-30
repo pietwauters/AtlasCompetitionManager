@@ -159,6 +159,103 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────
+# 8. Hardcoded colors in public/*.html — opp2.html and tournaments.html
+#    both shipped panel/header backgrounds and borders as literal hex
+#    values instead of this app's theme-aware CSS variables (--clr-surface,
+#    --clr-border, --clr-text-muted, etc. — see public/css/style.css's
+#    :root block), so half the "Piste assignment" card and the tournament
+#    header row stayed light in dark mode (found+fixed 2026-08-29).
+#
+#    Originally scoped to near-grayscale values only (structural colors
+#    happened to all be grayscale, status colors hued). Broadened
+#    2026-08-29 to flag every hardcoded hex color, not just grayscale: the
+#    goal isn't only dark-mode correctness anymore but making a future
+#    look-and-feel re-skin easy — any hardcoded color, hued or not (brand
+#    blue, status colors, badge colors), is a color a re-skinner would have
+#    to hunt down by hand instead of changing one variable in style.css.
+#    public/css/style.css now carries a full token set for this: structural
+#    (surface/bg/border/muted-text/row-hover/table-header/button) plus
+#    semantic box colors (warn/danger/success/info bg+text+border) plus a
+#    few small app-specific categories (neutral/secondary badge, pool/DE
+#    badge). A 2026-08-29 pass converted ~608 sites to these tokens.
+#
+#    What's deliberately still hardcoded and NOT a bug: real-world fixed
+#    conventions this app must never let a re-skin touch — e.g. FIE card
+#    colors (yellow/red/black cards in scoresheet.html) and per-item
+#    categorical color-coding (assigning a fencer/team/referee "red" vs
+#    "black" as a chip color) are domain colors, not brand identity, and a
+#    re-skin has no business changing what a black card looks like. These
+#    should get a `theme-ok` comment to document the decision and silence
+#    the warning; the check does not try to guess this itself, since only a
+#    human can tell "domain-fixed color" from "brand color someone forgot
+#    to tokenize."
+#
+#    Escape hatch: a `theme-ok` comment anywhere on the same line marks a
+#    hardcoded color as deliberate — same pattern as the dynamic-sql-ok
+#    marker for db.prepare() above. A page-local custom-property definition
+#    (`--foo: #hex;`) is exempted automatically rather than needing
+#    theme-ok on every one — that hex IS the token's definition, the same
+#    role style.css's own :root block plays (which this check doesn't scan
+#    at all, for the same reason).
+#
+#    CLAUDE.md hard rule (added 2026-08-30, "No new hardcoded colors"): new
+#    code must reuse an existing var(--clr-...) token, or get the user's
+#    explicit authorization before introducing a genuinely new color. This
+#    is enforced here via scripts/color-debt-baseline.txt — every hardcoded
+#    color already known about at the time the rule was added is grandfathered
+#    in as a WARN; anything NOT in that baseline (a color in a file/value
+#    combination that isn't already listed) is a FAIL. This is what makes the
+#    rule bite only on new debt instead of blocking every commit over the
+#    138 pre-existing warnings — see the baseline file's own header for how
+#    to retire an entry (fix it) versus add one (don't, without authorization
+#    — use an inline theme-ok comment for a genuine one-off instead).
+# ─────────────────────────────────────────────────────────────────────────
+section "Hardcoded colors in public/*.html"
+COLOR_HITS=0
+NEW_COLOR_HITS=0
+declare -A COLOR_BASELINE
+if [ -f scripts/color-debt-baseline.txt ]; then
+  while IFS= read -r line; do
+    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+    COLOR_BASELINE["$line"]=1
+  done < scripts/color-debt-baseline.txt
+fi
+for f in public/*.html; do
+  [ -f "$f" ] || continue
+  hits=$(awk '
+    {
+      n = $0
+      off = 0
+      while (match(n, /#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?/)) {
+        hex = substr(n, RSTART, RLENGTH)
+        pre = substr($0, 1, off + RSTART - 1)
+        n = substr(n, RSTART + RLENGTH)
+        off += RSTART + RLENGTH - 1
+        if ($0 !~ /theme-ok/ && pre !~ /--[a-zA-Z0-9-]+ *: *$/) {
+          print FNR": "hex
+        }
+      }
+    }
+  ' "$f")
+  if [ -n "$hits" ]; then
+    while IFS= read -r hit; do
+      hexval=$(echo "$hit" | sed -E 's/^[0-9]+: //' | tr 'A-F' 'a-f')
+      key="$f:$hexval"
+      if [ -n "${COLOR_BASELINE[$key]:-}" ]; then
+        echo "  warn: $f:$hit — hardcoded color, use a var(--clr-...) token instead (grandfathered, see scripts/color-debt-baseline.txt)"
+        WARN=$((WARN+1))
+      else
+        echo "  FAIL: $f:$hit — new hardcoded color, not in scripts/color-debt-baseline.txt. Reuse an existing var(--clr-...) token, or get explicit user authorization before adding a new one (then add it to style.css as a named token, not an inline literal)."
+        FAIL=$((FAIL+1))
+        NEW_COLOR_HITS=$((NEW_COLOR_HITS+1))
+      fi
+      COLOR_HITS=$((COLOR_HITS+1))
+    done <<< "$hits"
+  fi
+done
+[ "$COLOR_HITS" -eq 0 ] && echo "  (clean)"
+
+# ─────────────────────────────────────────────────────────────────────────
 echo
 echo "== Summary =="
 echo "  warnings: $WARN"

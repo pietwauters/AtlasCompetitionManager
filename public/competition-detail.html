@@ -8,24 +8,24 @@
   <script src="/js/theme-init.js"></script>
   <style>
     .toolbar input[type=search]{flex:1;min-width:160px}
-    .badge-registered{background:#d6eaf8;color:#1a6bab}
+    .badge-registered{background:#d6eaf8;color:var(--clr-brand)}
     .comp-header{display:flex;gap:1.5rem;align-items:baseline;flex-wrap:wrap;margin-bottom:.25rem}
     .comp-header h2{margin:0}
-    .comp-meta{font-size:.85rem;color:#555}
+    .comp-meta{font-size:.85rem;color:var(--clr-text-muted)}
     .comp-meta span{margin-right:1rem}
-    .seed-input{width:3.5rem;padding:.2rem .3rem;border:1px solid #ccc;border-radius:3px;font-size:.85rem;text-align:center}
-    .elig-row.registered td{color:#aaa}
-    .phase-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid #eee;flex-wrap:wrap}
+    .seed-input{width:3.5rem;padding:.2rem .3rem;border:1px solid var(--clr-btn-border);border-radius:3px;font-size:.85rem;text-align:center}
+    .elig-row.registered td{color:var(--clr-text-muted)}
+    .phase-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--clr-border);flex-wrap:wrap}
     .phase-row:last-child{border-bottom:none}
-    .badge-pending{background:#fef3cd;color:#856404}
-    .badge-finished{background:#d6d8db;color:#383d41}
-    select.inline{padding:.35rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
-    .team-card{border:1px solid #dde;border-radius:6px;padding:.75rem;margin-bottom:.6rem;background:#fafbff}
+    .badge-pending{background:#fef3cd;color:var(--clr-warn-text)}
+    .badge-finished{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
+    select.inline{padding:.35rem .6rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.85rem}
+    .team-card{border:1px solid var(--clr-border);border-radius:6px;padding:.75rem;margin-bottom:.6rem;background:var(--clr-th-bg)}
     .team-card .team-header{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
-    .member-row{display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee;font-size:.88rem}
+    .member-row{display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid var(--clr-border);font-size:.88rem}
     .member-row:last-child{border-bottom:none}
-    .badge-regular{background:#d4edda;color:#155724}
-    .badge-reserve{background:#fef3cd;color:#856404}
+    .badge-regular{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-reserve{background:#fef3cd;color:var(--clr-warn-text)}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -53,10 +53,10 @@
     <div class="comp-header">
       <h2 x-text="comp?.name"></h2>
       <span class="badge" :class="'badge-'+(comp?.status||'')" x-text="comp?.status"></span>
-      <a href="/tournaments.html" style="font-size:.85rem;color:#888">← Back to events</a>
-      <a :href="'/checkin.html?id='+compId" style="font-size:.85rem;color:#1a6bab">✓ Check-in</a>
-      <a :href="'/referee-checkin.html?id='+compId" style="font-size:.85rem;color:#1a6bab">✓ Referee check-in</a>
-      <a :href="(comp?.is_team?'/team-results.html':'/results.html')+'?id='+compId" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
+      <a href="/tournaments.html" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to events</a>
+      <a :href="'/checkin.html?id='+compId" style="font-size:.85rem;color:var(--clr-brand)">✓ Check-in</a>
+      <a :href="'/referee-checkin.html?id='+compId" style="font-size:.85rem;color:var(--clr-brand)">✓ Referee check-in</a>
+      <a :href="(comp?.is_team?'/team-results.html':'/results.html')+'?id='+compId" style="font-size:.85rem;color:var(--clr-brand)">📋 Results</a>
     </div>
     <div class="comp-meta">
       <span x-text="{foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||comp?.weapon"></span>
@@ -69,10 +69,10 @@
       <button x-show="!comp?.is_team" @click="autoSeed()">⚡ Auto-seed by ranking</button>
       <button x-show="comp?.is_team"  @click="autoSeedTeams()">⚡ Auto-seed teams by ranking</button>
       <button x-show="comp?.status==='active'"
-              style="background:#fff3cd;color:#856404;border-color:#ffc107"
+              style="background:var(--clr-warn-bg);color:var(--clr-warn-text);border-color:var(--clr-warn-border)"
               @click="closeCompetition()">✓ Close competition</button>
       <button x-show="comp?.status==='finished'"
-              style="background:#f8d7da;color:#721c24;border-color:#f5c6cb"
+              style="background:var(--clr-danger-bg);color:var(--clr-danger-text);border-color:var(--clr-danger-border)"
               @click="setStatus('active')">↩ Reopen competition</button>
     </div>
     <div style="margin-top:.6rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
@@ -85,7 +85,7 @@
           <option value="nationality,club">Nationality + Club</option>
         </select>
       </label>
-      <span style="font-size:.78rem;color:#888">
+      <span style="font-size:.78rem;color:var(--clr-text-muted)">
         Which fencer attribute(s) a referee/official assignment should avoid matching — not yet enforced automatically.
       </span>
     </div>
@@ -110,9 +110,9 @@
 
     <!-- ── Format picker (shown only when no phases exist and no format set) ── -->
     <div x-show="!comp?.is_team && !comp?.format_id && phases.length === 0 && comp?.status !== 'finished'"
-         style="margin-bottom:1rem;padding:.75rem;background:#f8f9ff;border-radius:6px;border:1px solid #dde">
-      <div style="font-size:.85rem;font-weight:600;margin-bottom:.5rem">Competition format <span style="font-weight:400;color:#777">(optional)</span></div>
-      <div style="font-size:.83rem;color:#666;margin-bottom:.6rem">
+         style="margin-bottom:1rem;padding:.75rem;background:var(--clr-th-bg);border-radius:6px;border:1px solid #dde">
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:.5rem">Competition format <span style="font-weight:400;color:var(--clr-text-muted)">(optional)</span></div>
+      <div style="font-size:.83rem;color:var(--clr-text-muted);margin-bottom:.6rem">
         Choose a predefined format to guide phase creation with exemptions and multi-cohort finals.
         Leave unset for manual, round-by-round control.
       </div>
@@ -132,11 +132,11 @@
       </select>
 
       <div x-show="selectedFormatInfo()"
-           style="font-size:.83rem;background:#fff;border:1px solid #dde;border-radius:4px;padding:.6rem .7rem;margin-bottom:.5rem">
-        <div x-show="selectedFormatInfo()?.ruleRefs?.length" style="font-weight:600;color:#1a6bab;margin-bottom:.35rem"
+           style="font-size:.83rem;background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:4px;padding:.6rem .7rem;margin-bottom:.5rem">
+        <div x-show="selectedFormatInfo()?.ruleRefs?.length" style="font-weight:600;color:var(--clr-brand);margin-bottom:.35rem"
              x-text="'FIE Organisation Rules ' + (selectedFormatInfo()?.ruleRefs||[]).join(', ')"></div>
-        <div x-show="selectedFormatInfo()?.why" style="color:#333;margin-bottom:.45rem" x-text="selectedFormatInfo()?.why"></div>
-        <div x-show="selectedFormatInfo()?.mechanics" style="color:#666;font-size:.8rem;line-height:1.5"
+        <div x-show="selectedFormatInfo()?.why" style="color:var(--clr-text-muted);margin-bottom:.45rem" x-text="selectedFormatInfo()?.why"></div>
+        <div x-show="selectedFormatInfo()?.mechanics" style="color:var(--clr-text-muted);font-size:.8rem;line-height:1.5"
              x-text="selectedFormatInfo()?.mechanics"></div>
       </div>
       <div x-show="selectedFormatInfo()?.note"
@@ -159,11 +159,11 @@
 
     <!-- ── Format stage plan ── -->
     <div x-show="comp?.format_id && formatPlan" style="margin-bottom:1rem">
-      <div style="font-size:.82rem;color:#666;margin-bottom:.5rem"
+      <div style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:.5rem"
            x-text="formatPlan?.format?.description"></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem">
         <template x-for="stage in formatPlan?.stages||[]" :key="stage.id">
-          <div style="border:1px solid #dde;border-radius:6px;padding:.6rem .75rem;background:#fafbff">
+          <div style="border:1px solid var(--clr-border);border-radius:6px;padding:.6rem .75rem;background:var(--clr-th-bg)">
             <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
               <span class="badge"
                     :class="stage.status==='finished'?'badge-finished':stage.status==='active'?'badge-active':'badge-pending'"
@@ -172,9 +172,9 @@
                     x-text="stage.phaseType==='de'?'DE':'Pool'"></span>
             </div>
             <div style="font-weight:600;font-size:.88rem" x-text="stage.label"></div>
-            <div style="font-size:.8rem;color:#666;margin-top:.2rem"
+            <div style="font-size:.8rem;color:var(--clr-text-muted);margin-top:.2rem"
                  x-text="stage.participantCount ? stage.participantCount+' fencers' : ''"></div>
-            <div x-show="stage.survivorTarget" style="font-size:.78rem;color:#856404;margin-top:.1rem"
+            <div x-show="stage.survivorTarget" style="font-size:.78rem;color:var(--clr-warn-text);margin-top:.1rem"
                  x-text="'→ top '+stage.survivorTarget+' advance'"></div>
 
             <!-- Build a DE bracket now, from an estimate — before this stage's
@@ -183,7 +183,7 @@
                  prior stage actually finishes. -->
             <template x-if="stage.phaseType==='de' && stage.status==='pending'">
               <div style="margin-top:.4rem;border-top:1px solid #e5e8f0;padding-top:.4rem">
-                <button style="font-size:.75rem;padding:.2rem .5rem;background:#f0f4ff;border:1px solid #b8cfef;border-radius:4px;cursor:pointer"
+                <button style="font-size:.75rem;padding:.2rem .5rem;background:var(--clr-info-bg);border:1px solid var(--clr-info-border);border-radius:4px;cursor:pointer"
                         @click="openSkeletonForm(stage)">
                   <span x-text="skeletonFormOpenId===stage.id ? 'Cancel' : 'Build bracket now'"></span>
                 </button>
@@ -192,10 +192,10 @@
                     Estimated headcount
                     <input type="number" min="2" x-model.number="skeletonEstimateN" style="width:80px">
                   </label>
-                  <div style="font-size:.75rem;color:#666;margin-top:.25rem"
+                  <div style="font-size:.75rem;color:var(--clr-text-muted);margin-top:.25rem"
                        x-text="skeletonEstimateN>=2 ? ('→ tableau '+getTableauSizeClient(skeletonEstimateN)) : ''"></div>
                   <div x-show="skeletonEstimateN>=2 && isRiskyEstimate(skeletonEstimateN)"
-                       style="font-size:.75rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.3rem .45rem;margin-top:.3rem">
+                       style="font-size:.75rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.3rem .45rem;margin-top:.3rem">
                     ⚠ Close to a tableau-size boundary — a small real-world deviation could add or
                     remove a whole round. You'll be asked to confirm before building.
                   </div>
@@ -209,25 +209,25 @@
       </div>
       <!-- Format removal (only before any phase is created) -->
       <div x-show="phases.length===0" style="margin-top:.5rem">
-        <button style="font-size:.8rem;color:#999;background:none;border:none;cursor:pointer;padding:0"
+        <button style="font-size:.8rem;color:var(--clr-text-muted);background:none;border:none;cursor:pointer;padding:0"
                 @click="removeFormat()">✕ Remove format</button>
       </div>
     </div>
 
     <!-- Existing phases -->
-    <div x-show="phases.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No rounds yet.</div>
+    <div x-show="phases.length===0" style="color:var(--clr-text-muted);font-size:.9rem;padding:.5rem 0">No rounds yet.</div>
     <template x-for="ph in phases" :key="ph.id">
       <div class="phase-row">
         <span class="badge" :class="'badge-'+ph.status" x-text="ph.status"></span>
         <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:10px;font-weight:600;background:#e8eaf6;color:#3949ab" x-text="ph.type==='de'?'DE':ph.type==='team_de'?'Team DE':'Pool'"></span>
         <span style="font-weight:600;font-size:.9rem" x-text="ph.rule_doc.replace('.json','')"></span>
-        <span x-show="ph.format_stage" style="font-size:.78rem;color:#6c757d;font-style:italic" x-text="formatStageLabel(ph.format_stage)"></span>
-        <span x-show="ph.type==='pool'" style="font-size:.82rem;color:#666" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
-        <span x-show="ph.type==='team_de'" style="font-size:.82rem;color:#666" x-text="'Matches: '+(ph.matches_complete||0)+'/'+(ph.matches_total||0)"></span>
-        <a :href="ph.type==='team_de'?'/team-de.html?phase='+ph.id+'&comp='+compId:(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:#1a6bab;color:#fff;text-decoration:none;font-size:.82rem">Open</a>
+        <span x-show="ph.format_stage" style="font-size:.78rem;color:var(--clr-text-muted);font-style:italic" x-text="formatStageLabel(ph.format_stage)"></span>
+        <span x-show="ph.type==='pool'" style="font-size:.82rem;color:var(--clr-text-muted)" x-text="'Pools: '+(ph.pool_count||0)+'  Bouts: '+(ph.bouts_complete||0)+'/'+(ph.bouts_total||0)"></span>
+        <span x-show="ph.type==='team_de'" style="font-size:.82rem;color:var(--clr-text-muted)" x-text="'Matches: '+(ph.matches_complete||0)+'/'+(ph.matches_total||0)"></span>
+        <a :href="ph.type==='team_de'?'/team-de.html?phase='+ph.id+'&comp='+compId:(ph.type==='de'?'/de.html':'/phase.html')+'?id='+ph.id" class="primary" style="display:inline-block;padding:.3rem .8rem;border-radius:4px;background:var(--clr-brand);color:#fff;text-decoration:none;font-size:.82rem">Open</a>
         <!-- Close button for format-driven preliminary DEs -->
         <button x-show="ph.type==='de' && ph.format_stage && ph.status==='active' && isFormatPrelimDE(ph)"
-                style="font-size:.8rem;background:#fff3cd;color:#856404;border-color:#ffc107"
+                style="font-size:.8rem;background:var(--clr-warn-bg);color:var(--clr-warn-text);border-color:var(--clr-warn-border)"
                 @click="closeFormatDE(ph)">
           Close (<span x-text="getFormatStage(ph.format_stage)?.survivorTarget||'?'"></span> survivors)
         </button>
@@ -236,7 +236,7 @@
     </template>
 
     <!-- New phase form (free-form, no format) -->
-    <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
+    <div x-show="phaseFormOpen" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--clr-border)">
       <!-- Phase type selector -->
       <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
         <button x-show="!comp?.is_team" :class="newPhaseType==='pool'?'primary':''" @click="newPhaseType='pool';poolOptions=null;chosenSizes=null;deOptions=null;newRuleDoc=''">Pool round</button>
@@ -266,7 +266,7 @@
           <button @click="fetchPoolOptions()" :disabled="!newRuleDoc">Calculate pool options</button>
         </div>
         <div x-show="poolOptions" style="margin-top:.75rem">
-          <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
+          <div style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.4rem"
                x-text="'For '+(poolOptions?.fencerCount||0)+' active competitors:'"></div>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
             <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
@@ -309,9 +309,9 @@
             Combined ranking across all pool rounds (aggregate V/M, indicator, touches)
           </label>
         </div>
-        <div x-show="deOptions" style="margin-top:.75rem;font-size:.85rem;color:#555">
+        <div x-show="deOptions" style="margin-top:.75rem;font-size:.85rem;color:var(--clr-text-muted)">
           <span x-text="deOptions?.N+' competitors → '+deOptions?.tableauSize+'-person tableau'"></span>
-          <span x-show="deOptions?.byeCount>0" style="color:#856404;margin-left:.5rem"
+          <span x-show="deOptions?.byeCount>0" style="color:var(--clr-warn-text);margin-left:.5rem"
                 x-text="'('+deOptions?.byeCount+' bye'+(deOptions?.byeCount>1?'s':'')+' for top seed'+(deOptions?.byeCount>1?'s':'')+')'" ></span>
         </div>
         <div x-show="deOptions" style="margin-top:.75rem">
@@ -321,9 +321,9 @@
 
       <!-- Team DE phase form -->
       <div x-show="newPhaseType==='team_de'">
-        <div style="font-size:.85rem;color:#555;margin-bottom:.6rem"
+        <div style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.6rem"
              x-text="teams.filter(t=>t.status==='active'&&t.seed).length + ' seeded teams → ' + teamTableauInfo()"></div>
-        <div style="font-size:.83rem;color:#856404;margin-bottom:.6rem"
+        <div style="font-size:.83rem;color:var(--clr-warn-text);margin-bottom:.6rem"
              x-show="teams.filter(t=>t.status==='active'&&t.seed).length < 2">
           At least 2 seeded teams required. Auto-seed teams first.
         </div>
@@ -335,7 +335,7 @@
 
     <!-- Format-guided new stage form -->
     <div x-show="formatStageFormOpenId"
-         style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee">
+         style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--clr-border)">
       <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem"
            x-text="'Create: '+formatStageLabel(formatStageFormOpenId)"></div>
 
@@ -355,7 +355,7 @@
             </button>
           </div>
           <div x-show="poolOptions" style="margin-top:.75rem">
-            <div style="font-size:.85rem;color:#555;margin-bottom:.4rem"
+            <div style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.4rem"
                  x-text="'For '+(poolOptions?.fencerCount||0)+' participants in this stage:'"></div>
             <div style="display:flex;gap:.5rem;flex-wrap:wrap">
               <template x-for="(opt, i) in poolOptions?.options||[]" :key="i">
@@ -376,9 +376,9 @@
 
       <template x-if="nextFormatStage()?.phaseType==='de'">
         <div>
-          <div x-show="formatDeInfo" style="font-size:.85rem;color:#555;margin-bottom:.6rem"
+          <div x-show="formatDeInfo" style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.6rem"
                x-text="formatDeInfo?.N+' participants → T'+formatDeInfo?.tableauSize+(formatDeInfo?.byeCount?' ('+formatDeInfo?.byeCount+' bye'+(formatDeInfo?.byeCount>1?'s':'')+')':'')"></div>
-          <div x-show="nextFormatStage()?.survivorTarget" style="font-size:.83rem;color:#856404;margin-bottom:.6rem"
+          <div x-show="nextFormatStage()?.survivorTarget" style="font-size:.83rem;color:var(--clr-warn-text);margin-bottom:.6rem"
                x-text="'Runs until '+nextFormatStage()?.survivorTarget+' survivors remain, then close manually'"></div>
           <button class="success" @click="createFormatDE()">Create tableau</button>
         </div>
@@ -390,31 +390,31 @@
   <details class="card" open data-key="teams" x-show="comp?.is_team">
   <summary><h2 style="display:inline;margin:0">
     Teams
-    <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+teams.length+')'"></span>
+    <span style="font-weight:400;font-size:.85rem;color:var(--clr-text-muted)" x-text="'('+teams.length+')'"></span>
   </h2></summary>
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:.75rem;margin:1rem 0 .75rem">
       <button class="primary" @click="addingTeam=!addingTeam">+ Add team</button>
     </div>
 
     <!-- Add team inline form -->
-    <div x-show="addingTeam" style="display:flex;gap:.5rem;align-items:flex-end;margin-bottom:.75rem;padding:.75rem;background:#f8f9ff;border-radius:6px">
+    <div x-show="addingTeam" style="display:flex;gap:.5rem;align-items:flex-end;margin-bottom:.75rem;padding:.75rem;background:var(--clr-th-bg);border-radius:6px">
       <label style="flex:1;font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">
         Team name
-        <input x-model="newTeamName" type="text" placeholder="e.g. Leonidas A" style="padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px">
+        <input x-model="newTeamName" type="text" placeholder="e.g. Leonidas A" style="padding:.35rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px">
       </label>
       <button class="success" :disabled="!newTeamName.trim()" @click="createTeam()">Create</button>
       <button @click="addingTeam=false;newTeamName=''">Cancel</button>
     </div>
 
-    <div x-show="teams.length===0" style="color:#999;font-size:.9rem;padding:.5rem 0">No teams yet.</div>
+    <div x-show="teams.length===0" style="color:var(--clr-text-muted);font-size:.9rem;padding:.5rem 0">No teams yet.</div>
 
     <template x-for="team in teams" :key="team.id">
       <div class="team-card">
         <div class="team-header">
           <span class="badge" :class="'badge-'+(team.seed?'registered':'pending')" x-text="team.seed ? '#'+team.seed : 'unseeded'"></span>
           <strong x-text="team.name"></strong>
-          <span style="font-size:.82rem;color:#666" x-text="team.club_name||''"></span>
-          <span style="font-size:.82rem;color:#888" x-text="team.members.filter(m=>m.role==='regular').length+'/3 fencers'+(team.members.find(m=>m.role==='reserve')?' + R':'')"></span>
+          <span style="font-size:.82rem;color:var(--clr-text-muted)" x-text="team.club_name||''"></span>
+          <span style="font-size:.82rem;color:var(--clr-text-muted)" x-text="team.members.filter(m=>m.role==='regular').length+'/3 fencers'+(team.members.find(m=>m.role==='reserve')?' + R':'')"></span>
           <button style="margin-left:auto;font-size:.8rem" @click="expandedTeam=expandedTeam===team.id?null:team.id">
             <span x-text="expandedTeam===team.id ? '▲ Hide members' : '▼ Members'"></span>
           </button>
@@ -427,21 +427,21 @@
             <div class="member-row">
               <span class="badge" :class="m.role==='reserve'?'badge-reserve':'badge-regular'" x-text="m.role==='reserve'?'R':'●'"></span>
               <span x-text="m.last_name+', '+m.first_name"></span>
-              <span style="color:#888;margin-left:.25rem" x-text="m.ranking?'rank '+m.ranking:''"></span>
+              <span style="color:var(--clr-text-muted);margin-left:.25rem" x-text="m.ranking?'rank '+m.ranking:''"></span>
               <button class="danger" style="font-size:.75rem;padding:.1rem .4rem;margin-left:auto" @click="removeMember(team.id, m.competitor_id)">✕</button>
             </div>
           </template>
-          <div x-show="team.members.length===0" style="color:#aaa;font-size:.85rem;padding:.25rem 0">No members yet.</div>
+          <div x-show="team.members.length===0" style="color:var(--clr-text-muted);font-size:.85rem;padding:.25rem 0">No members yet.</div>
 
           <!-- Add member -->
           <div style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
-            <select x-model="addMemberSel[team.id]" style="flex:1;min-width:160px;padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem">
+            <select x-model="addMemberSel[team.id]" style="flex:1;min-width:160px;padding:.3rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.85rem">
               <option value="">— add competitor —</option>
               <template x-for="c in availableCompetitors(team)" :key="c.competitor_id">
                 <option :value="c.competitor_id" x-text="c.last_name+', '+c.first_name+(c.ranking?' (rank '+c.ranking+')':'')"></option>
               </template>
             </select>
-            <select x-model="addMemberRole[team.id]" style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem">
+            <select x-model="addMemberRole[team.id]" style="padding:.3rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.85rem">
               <option value="regular">Regular</option>
               <option value="reserve">Reserve</option>
             </select>
@@ -462,7 +462,7 @@
         explicitly marked <strong>present</strong> will be entered into this round; the rest will be
         left out entirely, not just skipped for later.
       </p>
-      <p style="font-size:.85rem;color:#666;margin:0 0 1rem">
+      <p style="font-size:.85rem;color:var(--clr-text-muted);margin:0 0 1rem">
         It's best to resolve this on the <a :href="'/checkin.html?id='+compId" target="_blank">check-in page</a>
         first — explicitly withdraw/scratch fencers who won't show, rather than leaving them unknown.
       </p>
@@ -482,9 +482,9 @@
     <div class="card">
       <h2 style="margin-top:0">
         <span x-text="comp?.is_team ? 'Registered fencers' : 'Competitors'"></span>
-        <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+competitors.length+')'"></span>
+        <span style="font-weight:400;font-size:.85rem;color:var(--clr-text-muted)" x-text="'('+competitors.length+')'"></span>
       </h2>
-      <div x-show="comp?.is_team" style="font-size:.83rem;color:#856404;margin-bottom:.6rem">
+      <div x-show="comp?.is_team" style="font-size:.83rem;color:var(--clr-warn-text);margin-bottom:.6rem">
         Add fencers here first, then assign them to teams below.
       </div>
       <table>
@@ -503,7 +503,7 @@
             </tr>
           </template>
           <tr x-show="competitors.length===0">
-            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No fencers yet. Add from the right panel.</td>
+            <td colspan="5" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No fencers yet. Add from the right panel.</td>
           </tr>
         </tbody>
       </table>
@@ -560,7 +560,7 @@
             </tr>
           </template>
           <tr x-show="filteredEligible.length===0">
-            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No eligible fencers found.</td>
+            <td colspan="5" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No eligible fencers found.</td>
           </tr>
         </tbody>
       </table>
@@ -576,8 +576,8 @@
     <div class="card">
       <h2 style="margin-top:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
         <span>Referees</span>
-        <span style="font-weight:400;font-size:.85rem;color:#888" x-text="'('+refereeRoster.length+')'"></span>
-        <a :href="'/referee-checkin.html?id='+compId" style="margin-left:auto;font-size:.85rem;color:#1a6bab">✓ Check-in</a>
+        <span style="font-weight:400;font-size:.85rem;color:var(--clr-text-muted)" x-text="'('+refereeRoster.length+')'"></span>
+        <a :href="'/referee-checkin.html?id='+compId" style="margin-left:auto;font-size:.85rem;color:var(--clr-brand)">✓ Check-in</a>
         <button style="font-size:.78rem;padding:.25rem .6rem" @click="autoRankReferees()"
                 :disabled="refereeRoster.length===0" title="Rank by referee level (t.50.3: best referees per weapon)">
           ⚡ Auto-rank by level
@@ -607,7 +607,7 @@
             </tr>
           </template>
           <tr x-show="refereeRoster.length===0">
-            <td colspan="7" style="text-align:center;color:#999;padding:1rem">No referees yet. Add from the right panel.</td>
+            <td colspan="7" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No referees yet. Add from the right panel.</td>
           </tr>
         </tbody>
       </table>
@@ -648,7 +648,7 @@
             </tr>
           </template>
           <tr x-show="filteredEligibleReferees.length===0">
-            <td colspan="5" style="text-align:center;color:#999;padding:1rem">No referees found.</td>
+            <td colspan="5" style="text-align:center;color:var(--clr-text-muted);padding:1rem">No referees found.</td>
           </tr>
         </tbody>
       </table>

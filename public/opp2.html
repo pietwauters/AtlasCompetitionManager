@@ -8,82 +8,82 @@
   <script src="/js/theme-init.js"></script>
   <style>
     .badge{margin-right:.3rem}
-    .badge-connected{background:#d4edda;color:#155724}
-    .badge-disconnected{background:#d6d8db;color:#383d41}
-    .badge-done{background:#d6d8db;color:#383d41}
-    .badge-online{background:#d4edda;color:#155724}
-    .badge-offline{background:#fde8e8;color:#922b21}
+    .badge-connected{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-disconnected{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
+    .badge-done{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
+    .badge-online{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-offline{background:var(--clr-danger-bg);color:var(--clr-danger-text)}
 
     /* ── Two-panel layout ──────────────────────────────── */
-    .schedule-panel{display:flex;gap:0;border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.07)}
-    .strip-list-panel{width:380px;flex-shrink:0;border-right:1px solid #ddd;display:flex;flex-direction:column;background:#f8f9fb}
-    .strip-list-header{padding:.6rem 1rem;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:.5rem}
-    .strip-list-header label{margin-left:auto;font-size:.78rem;font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:.3rem;cursor:pointer;color:#555}
+    .schedule-panel{display:flex;gap:0;border:1px solid var(--clr-border);border-radius:8px;overflow:hidden;background:var(--clr-surface);box-shadow:0 2px 6px rgba(0,0,0,.07)}
+    .strip-list-panel{width:380px;flex-shrink:0;border-right:1px solid var(--clr-border);display:flex;flex-direction:column;background:var(--clr-th-bg)}
+    .strip-list-header{padding:.6rem 1rem;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-text-muted);border-bottom:1px solid var(--clr-border);display:flex;align-items:center;gap:.5rem}
+    .strip-list-header label{margin-left:auto;font-size:.78rem;font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:.3rem;cursor:pointer;color:var(--clr-text-muted)}
     .strip-rows{overflow-y:auto;flex:1;display:grid;grid-template-columns:1fr 1fr;align-content:start}
-    .strip-row{padding:.45rem .75rem;cursor:pointer;border-bottom:1px solid #eee;border-right:1px solid #eee;transition:background .1s}
+    .strip-row{padding:.45rem .75rem;cursor:pointer;border-bottom:1px solid var(--clr-border);border-right:1px solid var(--clr-border);transition:background .1s}
     .strip-row:nth-child(even){border-right:none}
-    .strip-row:hover{background:#eef2f7}
-    .strip-row.selected{background:#1a6bab;color:#fff}
+    .strip-row:hover{background:var(--clr-row-hover)}
+    .strip-row.selected{background:var(--clr-brand);color:#fff}
     .strip-row.selected .strip-row-meta{color:#c8dff7}
     .strip-row-name{display:flex;align-items:center;gap:.4rem;font-size:.83rem;font-weight:600}
-    .strip-row-meta{font-size:.72rem;color:#888;margin-top:.1rem;padding-left:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .strip-row-meta{font-size:.72rem;color:var(--clr-text-muted);margin-top:.1rem;padding-left:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
     .strip-row.selected .status-dot{outline:2px solid rgba(255,255,255,.5)}
 
     /* ── Pipeline detail panel ─────────────────────────── */
     .pipeline-panel{flex:1;min-width:0;display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:400px}
-    .pipeline-panel-header{padding:.75rem 1.25rem;background:#f0f2f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;flex-shrink:0}
+    .pipeline-panel-header{padding:.75rem 1.25rem;background:var(--clr-th-bg);border-bottom:1px solid var(--clr-border);display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;flex-shrink:0}
     .pipeline-panel-header h2{margin:0;font-size:1.05rem}
     .pipeline-body{flex:1;overflow-y:auto;padding:.75rem 1rem}
 
     /* ── Slots ─────────────────────────────────────────── */
-    .slot{border:1px solid #e0e0e0;border-radius:6px;margin-bottom:.5rem;background:#fafafa}
+    .slot{border:1px solid var(--clr-border);border-radius:6px;margin-bottom:.5rem;background:var(--clr-th-bg)}
     .slot-dragging{opacity:.35;border-style:dashed}
-    .slot-drop-target{border-top:3px solid #1a6bab;margin-top:-.1rem}
-    .drag-handle{cursor:grab;color:#ccc;padding:0 .2rem;font-size:1rem;user-select:none;line-height:1}
-    .drag-handle:hover{color:#999}
+    .slot-drop-target{border-top:3px solid var(--clr-brand);margin-top:-.1rem}
+    .drag-handle{cursor:grab;color:var(--clr-btn-border);padding:0 .2rem;font-size:1rem;user-select:none;line-height:1}
+    .drag-handle:hover{color:var(--clr-text-muted)}
     .slot-head{padding:.4rem .7rem;display:flex;align-items:center;gap:.4rem}
     .slot-label{flex:1;font-size:.85rem;font-weight:600}
-    .slot-time{font-size:.78rem;color:#666;white-space:nowrap}
-    .predicted{color:#1a6bab;font-weight:600}
-    .overlap-warn{color:#856404}
-    .slot-detail{padding:.3rem .7rem .6rem;font-size:.78rem;color:#555;border-top:1px solid #eee}
+    .slot-time{font-size:.78rem;color:var(--clr-text-muted);white-space:nowrap}
+    .predicted{color:var(--clr-brand);font-weight:600}
+    .overlap-warn{color:var(--clr-warn-text)}
+    .slot-detail{padding:.3rem .7rem .6rem;font-size:.78rem;color:var(--clr-text-muted);border-top:1px solid var(--clr-border)}
     .slot-detail .row{display:flex;gap:.5rem;align-items:center;margin-bottom:.2rem;flex-wrap:wrap}
     .slot-detail label{display:flex;flex-direction:column;gap:.1rem;font-size:.78rem}
-    .slot-detail input[type=time]{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
-    .slot-detail input[type=number]{width:4.5rem;padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
-    .slot-detail select{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.78rem}
+    .slot-detail input[type=time]{padding:.2rem .4rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.78rem}
+    .slot-detail input[type=number]{width:4.5rem;padding:.2rem .4rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.78rem}
+    .slot-detail select{padding:.2rem .4rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.78rem}
     .slot-actions{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.4rem}
 
     /* ── Add slot form ─────────────────────────────────── */
-    .add-slot-section{padding:.75rem 1rem;border-top:2px solid #e0e0e0;background:#f8f9fb;flex-shrink:0;max-height:50%;overflow-y:auto}
-    .add-slot-section h3{margin:0 0 .6rem;font-size:.85rem;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.04em}
+    .add-slot-section{padding:.75rem 1rem;border-top:2px solid var(--clr-border);background:var(--clr-th-bg);flex-shrink:0;max-height:50%;overflow-y:auto}
+    .add-slot-section h3{margin:0 0 .6rem;font-size:.85rem;font-weight:700;color:var(--clr-text-muted);text-transform:uppercase;letter-spacing:.04em}
     .add-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
     .add-form-grid .full{grid-column:1/-1}
-    .add-form-grid select,.add-form-grid input{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.82rem;width:100%;box-sizing:border-box}
-    .add-form-grid label{font-size:.78rem;color:#555;display:flex;flex-direction:column;gap:.15rem}
+    .add-form-grid select,.add-form-grid input{padding:.3rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.82rem;width:100%;box-sizing:border-box}
+    .add-form-grid label{font-size:.78rem;color:var(--clr-text-muted);display:flex;flex-direction:column;gap:.15rem}
     .form-actions{margin-top:.25rem}
 
     /* ── Bulk assign modal ─────────────────────────────── */
     .modal-box{width:min(740px,94vw)}
     .bulk-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
-    .bulk-table th{text-align:left;padding:.4rem .6rem;background:#f0f2f5;border-bottom:2px solid #ddd;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555}
-    .bulk-table td{padding:.4rem .6rem;border-bottom:1px solid #eee;vertical-align:middle}
-    .bulk-row-conflict td{background:#fff8e1}
-    .bulk-row-unassigned td{background:#fde8e8;color:#922b21}
+    .bulk-table th{text-align:left;padding:.4rem .6rem;background:var(--clr-th-bg);border-bottom:2px solid var(--clr-border);font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--clr-text-muted)}
+    .bulk-table td{padding:.4rem .6rem;border-bottom:1px solid var(--clr-border);vertical-align:middle}
+    .bulk-row-conflict td{background:var(--clr-warn-bg)}
+    .bulk-row-unassigned td{background:var(--clr-danger-bg);color:var(--clr-danger-text)}
 
     /* ── Piste status dots ─────────────────────────────── */
     .piste-status-grid{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem}
-    .piste-dot{display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border-radius:5px;background:#f0f2f5}
+    .piste-dot{display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border-radius:5px;background:var(--clr-th-bg)}
 
     /* ── Ref table ─────────────────────────────────────── */
     .ref-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
-    .ref-table th{text-align:left;padding:.4rem .6rem;background:#f0f2f5;border-bottom:2px solid #ddd}
-    .ref-table td{padding:.4rem .6rem;border-bottom:1px solid #eee;vertical-align:top}
+    .ref-table th{text-align:left;padding:.4rem .6rem;background:var(--clr-th-bg);border-bottom:2px solid var(--clr-border)}
+    .ref-table td{padding:.4rem .6rem;border-bottom:1px solid var(--clr-border);vertical-align:top}
 
     /* ── Broker ────────────────────────────────────────── */
     .broker-row{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-top:.75rem}
-    .broker-row input{flex:1;min-width:220px;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+    .broker-row input{flex:1;min-width:220px;padding:.4rem .6rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.9rem}
 
     main{padding:1rem}
     @media(max-width:900px){.strip-list-panel{width:200px}.pipeline-panel{height:auto;min-height:300px}}
@@ -106,7 +106,7 @@
   <div class="nav-right">
     <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
-    <a href="/opp2.html" style="color:#aad4f5">Schedule</a>
+    <a href="/opp2.html" style="color:var(--clr-nav-link)">Schedule</a>
     <a href="/referee-schedule.html">Referees</a>
     <a href="/admin.html">Admin</a>
   </div>
@@ -121,23 +121,23 @@
       <h2 style="display:inline;margin:0">Piste Schedule</h2>
       <span class="badge" :class="status.connected?'badge-connected':'badge-disconnected'"
             x-text="status.connected?'Connected':'Disconnected'"></span>
-      <span x-show="status.connected" style="font-size:.82rem;color:#555" x-text="status.brokerUrl"></span>
-      <a href="/admin.html" @click.stop style="font-size:.82rem;color:#888;margin-left:auto">⚙ Settings</a>
+      <span x-show="status.connected" style="font-size:.82rem;color:var(--clr-text-muted)" x-text="status.brokerUrl"></span>
+      <a href="/admin.html" @click.stop style="font-size:.82rem;color:var(--clr-text-muted);margin-left:auto">⚙ Settings</a>
   </summary>
     <template x-if="status.connected && status.pistes.length">
       <div style="margin-top:.75rem">
-        <div style="font-size:.82rem;color:#666;margin-bottom:.3rem">Apparatus status</div>
+        <div style="font-size:.82rem;color:var(--clr-text-muted);margin-bottom:.3rem">Apparatus status</div>
         <div class="piste-status-grid">
           <template x-for="p in status.pistes" :key="p.pisteId">
             <div class="piste-dot">
-              <span :style="'width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(p.apparatusOnline?'#1e8449':'#aaa')"></span>
+              <span :style="'width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(p.apparatusOnline?'var(--clr-success)':'#aaa')"></span>
               <span style="font-weight:600" x-text="p.pisteId"></span>
               <template x-if="p.bout">
-                <span style="color:#1a6bab;font-size:.8rem"
+                <span style="color:var(--clr-brand);font-size:.8rem"
                   x-text="'#'+p.bout.bout_order+' '+p.bout.left+' — '+p.bout.right"></span>
               </template>
               <template x-if="!p.bout">
-                <span style="color:#aaa;font-size:.8rem">idle</span>
+                <span style="color:var(--clr-text-muted);font-size:.8rem">idle</span>
               </template>
             </div>
           </template>
@@ -160,20 +160,20 @@
           <input type="checkbox" x-model="hideOffline"> Hide offline
         </label>
       </div>
-      <div style="padding:.5rem .75rem;border-bottom:1px solid #ddd;display:flex;flex-direction:column;gap:.3rem">
-        <button @click="openBulkModal()" style="width:100%;font-size:.8rem;background:#1a6bab;color:#fff;border:none;padding:.4rem;border-radius:4px;cursor:pointer">
+      <div style="padding:.5rem .75rem;border-bottom:1px solid var(--clr-border);display:flex;flex-direction:column;gap:.3rem">
+        <button @click="openBulkModal()" style="width:100%;font-size:.8rem;background:var(--clr-brand);color:#fff;border:none;padding:.4rem;border-radius:4px;cursor:pointer">
           ⚡ Bulk assign pools / DE
         </button>
         <button x-show="lastBulkSlotIds.length > 0" @click="undoBulkAssign()"
-                style="width:100%;font-size:.78rem;background:#fff;color:#922b21;border:1px solid #e5a0a0;padding:.3rem;border-radius:4px;cursor:pointer"
+                style="width:100%;font-size:.78rem;background:var(--clr-surface);color:var(--clr-danger-text);border:1px solid var(--clr-danger-border);padding:.3rem;border-radius:4px;cursor:pointer"
                 x-text="'↩ Undo last bulk assign (' + lastBulkSlotIds.length + ' slots)'">
         </button>
         <button x-show="confirmedByeSlotCount > 0" @click="removeConfirmedByes()"
-                style="width:100%;font-size:.78rem;background:#fff;color:#1a4971;border:1px solid #b8cfef;padding:.3rem;border-radius:4px;cursor:pointer"
+                style="width:100%;font-size:.78rem;background:var(--clr-surface);color:var(--clr-info-text);border:1px solid var(--clr-info-border);padding:.3rem;border-radius:4px;cursor:pointer"
                 x-text="'✂ Remove ' + confirmedByeSlotCount + ' confirmed bye' + (confirmedByeSlotCount !== 1 ? 's' : '') + ' (shift up)'">
         </button>
         <button @click="clearEntireSchedule()"
-                style="width:100%;font-size:.75rem;background:#fff;color:#922b21;border:1px solid #f5c2c7;padding:.3rem;border-radius:4px;cursor:pointer">
+                style="width:100%;font-size:.75rem;background:var(--clr-surface);color:var(--clr-danger-text);border:1px solid var(--clr-danger-border);padding:.3rem;border-radius:4px;cursor:pointer">
           🗑 Clear entire schedule
         </button>
       </div>
@@ -192,8 +192,8 @@
             </div>
           </div>
         </template>
-        <div x-show="strips.length === 0" style="padding:1rem;font-size:.85rem;color:#999;text-align:center">
-          No strips configured.<br><a href="/strips.html" style="color:#1a6bab">Add strips →</a>
+        <div x-show="strips.length === 0" style="padding:1rem;font-size:.85rem;color:var(--clr-text-muted);text-align:center">
+          No strips configured.<br><a href="/strips.html" style="color:var(--clr-brand)">Add strips →</a>
         </div>
       </div>
     </div>
@@ -203,7 +203,7 @@
 
       <!-- Empty state -->
       <template x-if="!selectedStripId">
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:.95rem;padding:2rem">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--clr-text-muted);font-size:.95rem;padding:2rem">
           ← Select a strip to manage its pipeline
         </div>
       </template>
@@ -214,7 +214,7 @@
           <!-- Strip header -->
           <div class="pipeline-panel-header">
             <button x-show="isNarrow" @click="backToStrips()"
-                    style="font-size:.8rem;background:none;border:1px solid #ccc;padding:.25rem .6rem;border-radius:4px;cursor:pointer">
+                    style="font-size:.8rem;background:none;border:1px solid var(--clr-btn-border);padding:.25rem .6rem;border-radius:4px;cursor:pointer">
               ← Back to strips
             </button>
             <h2 x-text="selectedStrip.name || 'Piste ' + selectedStrip.strip_number"></h2>
@@ -224,16 +224,16 @@
                 x-text="liveState(selectedStrip.name).apparatusOnline ? 'online' : 'offline'"></span>
             </template>
             <template x-if="liveState(selectedStrip.name)?.bout">
-              <span style="font-size:.8rem;color:#1a6bab"
+              <span style="font-size:.8rem;color:var(--clr-brand)"
                 x-text="'▶ #' + liveState(selectedStrip.name).bout.bout_order + ' ' + liveState(selectedStrip.name).bout.left + ' — ' + liveState(selectedStrip.name).bout.right"></span>
             </template>
-            <span style="margin-left:auto;font-size:.78rem;color:#888">drag or ▲▼ to reorder</span>
+            <span style="margin-left:auto;font-size:.78rem;color:var(--clr-text-muted)">drag or ▲▼ to reorder</span>
           </div>
 
           <!-- Slot list -->
           <div class="pipeline-body">
             <template x-if="selectedStrip.slots.length === 0">
-              <div style="color:#aaa;font-size:.88rem;text-align:center;padding:1.5rem 0">No slots yet — add one below.</div>
+              <div style="color:var(--clr-text-muted);font-size:.88rem;text-align:center;padding:1.5rem 0">No slots yet — add one below.</div>
             </template>
 
             <template x-for="(slot, idx) in selectedStrip.slots" :key="slot.id">
@@ -251,7 +251,7 @@
                        style="cursor:pointer;opacity:.55">
                     <span class="badge badge-done">✓ done</span>
                     <span class="slot-label" x-text="slotLabel(slot)"></span>
-                    <span style="font-size:.75rem;color:#aaa;margin-left:auto">▶ show</span>
+                    <span style="font-size:.75rem;color:var(--clr-text-muted);margin-left:auto">▶ show</span>
                   </div>
                 </template>
 
@@ -262,7 +262,7 @@
                       <span class="drag-handle" title="Drag to reorder">⠿</span>
                       <span class="badge" :class="'badge-' + slot.status" x-text="slot.status"></span>
                       <span class="slot-label" x-text="slotLabel(slot)"></span>
-                      <span x-show="slot.strip_count > 1" style="font-size:.75rem;color:#1a6bab;margin-left:.3rem"
+                      <span x-show="slot.strip_count > 1" style="font-size:.75rem;color:var(--clr-brand);margin-left:.3rem"
                         :title="slot.dynamic_reorder ? 'Dynamic reordering enabled' : 'Multi-strip distribution'"
                         x-text="'×' + slot.strip_count + ' pistes'"></span>
                       <span class="slot-time">
@@ -273,7 +273,7 @@
                       </span>
                       <template x-if="slot.status === 'done'">
                         <span @click="expandedSlots.delete(slot.id); expandedSlots = new Set(expandedSlots)"
-                              style="font-size:.75rem;color:#aaa;cursor:pointer;margin-left:.5rem">▼ hide</span>
+                              style="font-size:.75rem;color:var(--clr-text-muted);cursor:pointer;margin-left:.5rem">▼ hide</span>
                       </template>
                     </div>
                     <div class="slot-detail">
@@ -293,7 +293,7 @@
                             <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.referee_id == r.referee_id"
-                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                :style="r.busy ? 'color:var(--clr-text-muted);background:var(--clr-btn-bg)' : ''"
                                 x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
@@ -306,7 +306,7 @@
                             <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.referee2_id == r.referee_id"
-                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                :style="r.busy ? 'color:var(--clr-text-muted);background:var(--clr-btn-bg)' : ''"
                                 x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
@@ -317,7 +317,7 @@
                             <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.video_assistant_id == r.referee_id"
-                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                :style="r.busy ? 'color:var(--clr-text-muted);background:var(--clr-btn-bg)' : ''"
                                 x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
@@ -328,7 +328,7 @@
                             <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.assessor1_id == r.referee_id"
-                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                :style="r.busy ? 'color:var(--clr-text-muted);background:var(--clr-btn-bg)' : ''"
                                 x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
@@ -339,7 +339,7 @@
                             <template x-for="r in officialOptionsFor(slot)" :key="r.referee_id">
                               <option :value="r.referee_id"
                                 :selected="slot.assessor2_id == r.referee_id"
-                                :style="r.busy ? 'color:#999;background:#f2f2f2' : ''"
+                                :style="r.busy ? 'color:var(--clr-text-muted);background:var(--clr-btn-bg)' : ''"
                                 x-text="r.last_name + ', ' + r.first_name + (r.busy ? ' — busy' : '')"></option>
                             </template>
                           </select>
@@ -349,13 +349,13 @@
                         <button @click="moveSlot(slot.id, 'up')" style="font-size:.75rem;padding:.2rem .5rem">▲</button>
                         <button @click="moveSlot(slot.id, 'down')" style="font-size:.75rem;padding:.2rem .5rem">▼</button>
                         <select @change="moveSlotToStrip(slot.id, $event.target.value); $event.target.value=''"
-                                style="font-size:.75rem;padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;background:#f8f9fb;cursor:pointer">
+                                style="font-size:.75rem;padding:.2rem .4rem;border:1px solid var(--clr-btn-border);border-radius:4px;background:var(--clr-th-bg);cursor:pointer">
                           <option value="">Move to →</option>
                           <template x-for="s in strips.filter(s => s.id !== selectedStrip.id)" :key="s.id">
                             <option :value="s.id" x-text="s.name || 'Piste ' + s.strip_number"></option>
                           </template>
                         </select>
-                        <button @click="deleteSlot(slot.id)" style="font-size:.75rem;padding:.2rem .5rem;color:#922b21">Remove</button>
+                        <button @click="deleteSlot(slot.id)" style="font-size:.75rem;padding:.2rem .5rem;color:var(--clr-danger-text)">Remove</button>
                       </div>
                     </div>
                   </div>
@@ -394,13 +394,13 @@
                   </label>
                   <!-- Multi-strip split (8+ bouts) -->
                   <div x-show="multiPool && multiPool.bouts_total >= 8"
-                       style="margin-top:.4rem;border-top:1px solid #ddd;padding-top:.4rem">
+                       style="margin-top:.4rem;border-top:1px solid var(--clr-border);padding-top:.4rem">
                     <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;cursor:pointer">
                       <input type="checkbox" x-model="wantMulti" @change="if(!wantMulti){multiStrips=[];multiDynamic=false;}">
                       <strong>Split bouts across multiple pistes</strong>
                     </label>
                     <div x-show="wantMulti" style="margin-top:.3rem;padding-left:1rem">
-                      <div style="font-size:.75rem;color:#555;margin-bottom:.25rem"
+                      <div style="font-size:.75rem;color:var(--clr-text-muted);margin-bottom:.25rem"
                         x-text="(multiPool?.bouts_total || 0) + ' bouts — also fence on:'"></div>
                       <template x-for="s in otherStrips" :key="s.id">
                         <label style="display:flex;align-items:center;gap:.35rem;font-size:.8rem;margin-bottom:.15rem;cursor:pointer">
@@ -409,9 +409,9 @@
                         </label>
                       </template>
                       <div x-show="multiStrips.length > 0" style="margin-top:.25rem">
-                        <div style="font-size:.75rem;background:#f0f4f8;border-radius:4px;padding:.25rem .4rem;margin-bottom:.25rem"
+                        <div style="font-size:.75rem;background:var(--clr-th-bg);border-radius:4px;padding:.25rem .4rem;margin-bottom:.25rem"
                           x-text="'~' + Math.ceil((multiPool?.bouts_total || 0) / (multiStrips.length + 1)) + ' bouts/strip across ' + (multiStrips.length + 1) + ' strips'"></div>
-                        <div x-show="!areStripsAdjacent" style="font-size:.75rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.25rem .4rem;margin-bottom:.25rem">
+                        <div x-show="!areStripsAdjacent" style="font-size:.75rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.25rem .4rem;margin-bottom:.25rem">
                           ⚠ Selected strips are not adjacent — prefer consecutive piste numbers.
                         </div>
                         <label style="display:flex;align-items:center;gap:.35rem;font-size:.78rem;cursor:pointer">
@@ -455,7 +455,7 @@
                       <label>To bout
                         <input type="number" x-model.number="addForm.bout_end" min="1" style="width:4rem">
                       </label>
-                      <span style="font-size:.75rem;color:#888;padding-bottom:.3rem"
+                      <span style="font-size:.75rem;color:var(--clr-text-muted);padding-bottom:.3rem"
                         x-text="'1–' + (addForm.tableau / 2) + ' available'"></span>
                     </div>
                   </template>
@@ -474,13 +474,13 @@
                       </template>
                     </select>
                   </label>
-                  <div x-show="!availableTeamMatches.length" style="font-size:.78rem;color:#888;margin-top:.25rem">No active team matches available.</div>
+                  <div x-show="!availableTeamMatches.length" style="font-size:.78rem;color:var(--clr-text-muted);margin-top:.25rem">No active team matches available.</div>
                   <template x-if="addForm.team_match_id">
                     <div x-data="{ get m() { return availableTeamMatches.find(x => x.id == addForm.team_match_id); } }">
-                      <div x-show="m && !m.draw_done" style="font-size:.78rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.25rem .4rem;margin-top:.25rem">
+                      <div x-show="m && !m.draw_done" style="font-size:.78rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.25rem .4rem;margin-top:.25rem">
                         ⚠ Draw not done — fencer names will be empty on the apparatus.
                       </div>
-                      <div x-show="m && m.draw_done && m.order_count < 6" style="font-size:.78rem;color:#856404;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:.25rem .4rem;margin-top:.25rem">
+                      <div x-show="m && m.draw_done && m.order_count < 6" style="font-size:.78rem;color:var(--clr-warn-text);background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:4px;padding:.25rem .4rem;margin-top:.25rem">
                         ⚠ Fencer order not fully submitted (<span x-text="m?.order_count"></span>/6).
                       </div>
                     </div>
@@ -500,10 +500,10 @@
                       </template>
                     </select>
                   </label>
-                  <div x-show="!availableVirtualStages.length" style="font-size:.78rem;color:#888;margin-top:.25rem">
+                  <div x-show="!availableVirtualStages.length" style="font-size:.78rem;color:var(--clr-text-muted);margin-top:.25rem">
                     No competitions have a not-yet-real format stage right now.
                   </div>
-                  <div style="font-size:.78rem;color:#555;margin-top:.25rem">
+                  <div style="font-size:.78rem;color:var(--clr-text-muted);margin-top:.25rem">
                     A placeholder — it fills in with the real pool/DE data automatically once that
                     phase is actually created (even if a prior stage hasn't finished yet).
                   </div>
@@ -542,26 +542,26 @@
         <div style="width:110px;flex-shrink:0">
           <div style="height:26px"></div>
           <template x-for="row in ganttData.rows" :key="row.name+'_l'">
-            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid #f0f0f0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid var(--clr-border);font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                  x-text="row.name"></div>
           </template>
         </div>
         <div style="flex:1;position:relative;min-width:0">
-          <div style="height:26px;position:relative;border-bottom:2px solid #ddd">
+          <div style="height:26px;position:relative;border-bottom:2px solid var(--clr-border)">
             <template x-for="tick in ganttData.ticks" :key="'lbl'+tick.left">
               <div x-show="tick.isHour"
-                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:#666;white-space:nowrap;pointer-events:none"
+                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:var(--clr-text-muted);white-space:nowrap;pointer-events:none"
                    :style="{ left: tick.left+'%' }" x-text="tick.label"></div>
             </template>
           </div>
           <template x-for="tick in ganttData.ticks" :key="'grid'+tick.left">
             <div style="position:absolute;top:26px;bottom:0;pointer-events:none"
-                 :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? '#ddd' : '#f0f0f0' }"></div>
+                 :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? 'var(--clr-btn-border)' : 'var(--clr-th-bg)' }"></div>
           </template>
-          <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
+          <div style="position:absolute;top:0;bottom:0;width:2px;background:var(--clr-danger);opacity:.7;z-index:2;pointer-events:none"
                :style="{ left: ganttData.nowLeft+'%' }"></div>
           <template x-for="row in ganttData.rows" :key="row.name">
-            <div style="height:34px;position:relative;border-bottom:1px solid #f0f0f0">
+            <div style="height:34px;position:relative;border-bottom:1px solid var(--clr-border)">
               <template x-for="bar in row.bars" :key="bar.id">
                 <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
                      :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
@@ -573,11 +573,11 @@
           </template>
         </div>
       </div>
-      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
-        <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
-        <span style="margin-left:auto;color:#aaa">Only slots with a scheduled start time are shown.</span>
+      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:var(--clr-text-muted)">
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-brand);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-success);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-th-bg);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
+        <span style="margin-left:auto;color:var(--clr-text-muted)">Only slots with a scheduled start time are shown.</span>
       </div>
     </div>
   </details>
@@ -588,16 +588,16 @@
       <h2 style="margin:0 0 1rem">Bulk assign to pistes</h2>
 
       <!-- Type tabs -->
-      <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid #ccc;border-radius:6px;overflow:hidden;width:fit-content">
+      <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--clr-btn-border);border-radius:6px;overflow:hidden;width:fit-content">
         <button @click="bulkModal.type='pools';bulkModal.selectedPisteIds=[]"
-                :style="bulkModal.type==='pools' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
+                :style="bulkModal.type==='pools' ? 'background:var(--clr-brand);color:#fff' : 'background:var(--clr-th-bg);color:var(--clr-text)'"
                 style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer">Pools</button>
         <button @click="bulkModal.type='de';bulkModal.selectedPisteIds=[]"
-                :style="bulkModal.type==='de' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
-                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid #ccc">DE rounds</button>
+                :style="bulkModal.type==='de' ? 'background:var(--clr-brand);color:#fff' : 'background:var(--clr-th-bg);color:var(--clr-text)'"
+                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid var(--clr-btn-border)">DE rounds</button>
         <button @click="bulkModal.type='virtual';bulkModal.selectedPisteIds=[]"
-                :style="bulkModal.type==='virtual' ? 'background:#1a6bab;color:#fff' : 'background:#f8f9fb;color:#333'"
-                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid #ccc">Planned</button>
+                :style="bulkModal.type==='virtual' ? 'background:var(--clr-brand);color:#fff' : 'background:var(--clr-th-bg);color:var(--clr-text)'"
+                style="border:none;padding:.4rem .9rem;font-size:.83rem;cursor:pointer;border-left:1px solid var(--clr-btn-border)">Planned</button>
       </div>
 
       <!-- ── Virtual: not-yet-real stage selector ─────────────────── -->
@@ -610,7 +610,7 @@
             </template>
           </select>
         </label>
-        <div style="font-size:.8rem;color:#555;margin-top:.35rem">
+        <div style="font-size:.8rem;color:var(--clr-text-muted);margin-top:.35rem">
           One placeholder per selected piste — fills in automatically once the real phase exists.
         </div>
       </div>
@@ -649,19 +649,19 @@
             </select>
           </label>
         </div>
-        <div x-show="bulkModal.deStartRound" style="font-size:.8rem;color:#555;margin-bottom:.35rem">
+        <div x-show="bulkModal.deStartRound" style="font-size:.8rem;color:var(--clr-text-muted);margin-bottom:.35rem">
           Select pistes — one slot per bout, pistes rotate in sequence.
         </div>
         <div x-show="bulkDeEstimatedByeNote"
-             style="margin-bottom:.5rem;padding:.4rem .6rem;background:#eef4fc;border:1px solid #b8cfef;border-radius:5px;font-size:.78rem;color:#1a4971"
+             style="margin-bottom:.5rem;padding:.4rem .6rem;background:var(--clr-info-bg);border:1px solid var(--clr-info-border);border-radius:5px;font-size:.78rem;color:var(--clr-info-text)"
              x-text="bulkDeEstimatedByeNote"></div>
         <div x-show="bulkDePrevPisteIds">
           <button @click="bulkModal.selectedPisteIds = [...bulkDePrevPisteIds]"
-                  style="font-size:.79rem;padding:.25rem .55rem;background:#f0f4ff;border:1px solid #b8cfef;border-radius:4px;cursor:pointer"
+                  style="font-size:.79rem;padding:.25rem .55rem;background:var(--clr-info-bg);border:1px solid var(--clr-info-border);border-radius:4px;cursor:pointer"
                   x-text="'↻ Same pistes as R' + (Number(bulkModal.deStartRound) - 1)"></button>
         </div>
         <div x-show="bulkDeInvalidReason"
-             style="margin-top:.4rem;font-size:.8rem;color:#922b21;padding:.25rem .4rem;background:#fde8e8;border-radius:4px"
+             style="margin-top:.4rem;font-size:.8rem;color:var(--clr-danger-text);padding:.25rem .4rem;background:var(--clr-danger-bg);border-radius:4px"
              x-text="bulkDeInvalidReason"></div>
       </div>
 
@@ -674,13 +674,13 @@
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:.4rem">
           <template x-for="s in strips" :key="s.id">
-            <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border:1px solid #ddd;border-radius:5px;cursor:pointer"
-                   :style="bulkModal.selectedPisteIds.includes(s.id) ? 'background:#1a6bab;color:#fff;border-color:#1a6bab' : (pisteIsBusy(s, bulkModal.startTime) ? 'background:#fff8e1' : 'background:#f8f9fb')">
+            <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;padding:.3rem .6rem;border:1px solid var(--clr-border);border-radius:5px;cursor:pointer"
+                   :style="bulkModal.selectedPisteIds.includes(s.id) ? 'background:var(--clr-brand);color:#fff;border-color:var(--clr-brand)' : (pisteIsBusy(s, bulkModal.startTime) ? 'background:var(--clr-warn-bg)' : 'background:var(--clr-th-bg)')">
               <input type="checkbox" style="display:none"
                 :checked="bulkModal.selectedPisteIds.includes(s.id)"
                 @change="toggleBulkPiste(s.id, $event.target.checked)">
               <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0"
-                    :style="'background:' + (liveState(s.name)?.apparatusOnline ? '#1e8449' : '#ccc')"></span>
+                    :style="'background:' + (liveState(s.name)?.apparatusOnline ? 'var(--clr-success)' : '#ccc')"></span>
               <span x-text="s.name || 'Piste ' + s.strip_number"></span>
               <span x-show="pisteIsBusy(s, bulkModal.startTime)" style="font-size:.7rem;opacity:.75">⚠ busy</span>
             </label>
@@ -694,14 +694,14 @@
           Start time
           <input type="time" step="300" x-model="bulkModal.startTime"
                  @change="bulkModal.startTime = round5($event.target.value)"
-                 style="padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+                 style="padding:.3rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.83rem">
         </label>
-        <span style="font-size:.78rem;color:#888">Leave blank to assign without times.</span>
+        <span style="font-size:.78rem;color:var(--clr-text-muted)">Leave blank to assign without times.</span>
       </div>
 
       <!-- ── Pools: conflict action ────────────────────────────────── -->
       <div x-show="bulkModal.type === 'pools' && bulkPreview.some(r => r.conflict)"
-           style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;font-size:.83rem">
+           style="margin-bottom:.6rem;padding:.5rem .75rem;background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:6px;font-size:.83rem">
         <strong>⚠ Some selected pistes already have slots.</strong>
         <div style="margin-top:.3rem;display:flex;gap:1rem">
           <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
@@ -718,7 +718,7 @@
            dropping the excess — see opp2-bulk-assign.js's bulkPreview/
            bulkDePreview. Shown whenever that takes more than one pass. -->
       <div x-show="(bulkModal.type === 'pools' || bulkModal.type === 'de') && bulkReadyToSubmit && bulkWaveCount > 1"
-           style="margin-bottom:.6rem;padding:.5rem .75rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:.83rem;color:#856404">
+           style="margin-bottom:.6rem;padding:.5rem .75rem;background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:6px;font-size:.83rem;color:var(--clr-warn-text)">
         ⚠ Only <span x-text="bulkModal.selectedPisteIds.length"></span> piste(s) selected for
         <span x-text="bulkModal.type==='pools' ? bulkPreview.length+' pools' : bulkDePreview.length+' bouts'"></span>
         — this will run across <strong x-text="bulkWaveCount"></strong> rounds, reusing the same pistes
@@ -730,24 +730,24 @@
            style="margin-bottom:.75rem">
         <div style="font-size:.83rem;font-weight:600;margin-bottom:.35rem">
           Assignment preview
-          <span style="font-weight:400;color:#888;font-size:.78rem" x-text="' — ' + bulkPreview.length + ' pools'"></span>
+          <span style="font-weight:400;color:var(--clr-text-muted);font-size:.78rem" x-text="' — ' + bulkPreview.length + ' pools'"></span>
         </div>
         <table class="bulk-table">
           <thead><tr><th>Round</th><th>Pool</th><th>Bouts</th><th></th><th>Piste</th><th>Start</th><th>Status</th></tr></thead>
           <tbody>
             <template x-for="row in bulkPreview" :key="row.pool.id">
               <tr :class="row.conflict ? 'bulk-row-conflict' : ''">
-                <td x-text="row.wave + 1" style="color:#888;width:2rem"></td>
+                <td x-text="row.wave + 1" style="color:var(--clr-text-muted);width:2rem"></td>
                 <td x-text="row.pool.competition_name + ' — Pool ' + row.pool.pool_number"></td>
                 <td x-text="row.pool.bouts_total + ' bouts'"></td>
-                <td style="color:#888">→</td>
+                <td style="color:var(--clr-text-muted)">→</td>
                 <td x-text="row.piste.name || 'Piste ' + row.piste.strip_number"></td>
-                <td x-text="row.slotStart || '—'" style="font-size:.78rem;color:#555"></td>
+                <td x-text="row.slotStart || '—'" style="font-size:.78rem;color:var(--clr-text-muted)"></td>
                 <td>
-                  <span x-show="row.conflict" style="color:#856404;font-size:.78rem">
+                  <span x-show="row.conflict" style="color:var(--clr-warn-text);font-size:.78rem">
                     ⚠ busy (<span x-text="pendingSlotCount(row.piste)"></span> slots)
                   </span>
-                  <span x-show="!row.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
+                  <span x-show="!row.conflict" style="color:var(--clr-success);font-size:.78rem">idle</span>
                 </td>
               </tr>
             </template>
@@ -763,33 +763,33 @@
           <tbody>
             <template x-for="pa in bulkDePreview" :key="pa.bout_start">
               <tr :class="pa.conflict ? 'bulk-row-conflict' : ''"
-                  :style="pa.predictedBye ? 'background:#f5f8fd' : ''">
-                <td x-text="pa.bout_start" style="color:#888;width:2rem"></td>
-                <td x-text="pa.wave + 1" style="color:#888;width:2rem"></td>
+                  :style="pa.predictedBye ? 'background:var(--clr-th-bg)' : ''">
+                <td x-text="pa.bout_start" style="color:var(--clr-text-muted);width:2rem"></td>
+                <td x-text="pa.wave + 1" style="color:var(--clr-text-muted);width:2rem"></td>
                 <td style="font-size:.8rem">
                   <span x-text="pa.matchLabel"></span>
                   <span x-show="pa.predictedBye" title="Predicted bye — an estimate from the projected headcount, not yet confirmed"
-                        style="margin-left:.4rem;font-size:.72rem;color:#1a4971;background:#dce9fa;border-radius:3px;padding:.05rem .35rem">predicted bye</span>
+                        style="margin-left:.4rem;font-size:.72rem;color:var(--clr-info-text);background:#dce9fa;border-radius:3px;padding:.05rem .35rem">predicted bye</span>
                 </td>
-                <td style="color:#888">→</td>
+                <td style="color:var(--clr-text-muted)">→</td>
                 <td x-text="pa.piste.name || 'Piste ' + pa.piste.strip_number"></td>
-                <td x-text="pa.slotStart || '—'" style="font-size:.78rem;color:#555"></td>
+                <td x-text="pa.slotStart || '—'" style="font-size:.78rem;color:var(--clr-text-muted)"></td>
                 <td>
-                  <span x-show="pa.conflict" style="color:#856404;font-size:.78rem">⚠ busy</span>
-                  <span x-show="!pa.conflict" style="color:#1e8449;font-size:.78rem">idle</span>
+                  <span x-show="pa.conflict" style="color:var(--clr-warn-text);font-size:.78rem">⚠ busy</span>
+                  <span x-show="!pa.conflict" style="color:var(--clr-success);font-size:.78rem">idle</span>
                 </td>
               </tr>
             </template>
           </tbody>
         </table>
         <div x-show="bulkDePreview.length && bulkModal.deRoundsForBulk.find(r => r.de_round === Number(bulkModal.deStartRound))?.bye_count > 0"
-             style="font-size:.78rem;color:#856404;margin-top:.3rem"
+             style="font-size:.78rem;color:var(--clr-warn-text);margin-top:.3rem"
              x-text="'⚠ ' + bulkModal.deRoundsForBulk.find(r => r.de_round === Number(bulkModal.deStartRound))?.bye_count + ' bye position(s) in this round will be skipped automatically.'"></div>
       </div>
 
       <!-- ── No piste message ──────────────────────────────────────── -->
       <div x-show="bulkReady && bulkModal.selectedPisteIds.length === 0"
-           style="font-size:.85rem;color:#aaa;margin-bottom:.75rem">
+           style="font-size:.85rem;color:var(--clr-text-muted);margin-bottom:.75rem">
         Select pistes above to see the assignment preview.
       </div>
 
@@ -830,16 +830,16 @@
             <strong x-text="conflictModal.refereeName"></strong> is already assigned as
             <strong x-text="conflictModal.otherRole"></strong> on:
           </p>
-          <div style="font-size:.85rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;margin-bottom:.5rem">
+          <div style="font-size:.85rem;padding:.5rem .75rem;background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:6px;margin-bottom:.5rem">
             <div x-text="(conflictModal.otherSlot?.__stripName || '') + ' — ' + (conflictModal.otherSlot ? slotLabel(conflictModal.otherSlot) : '')"></div>
-            <div style="color:#856404" x-text="(conflictModal.otherSlot?.scheduled_start || '—') + ' → ' + (conflictModal.otherSlot?.predicted_end || '—')"></div>
+            <div style="color:var(--clr-warn-text)" x-text="(conflictModal.otherSlot?.scheduled_start || '—') + ' → ' + (conflictModal.otherSlot?.predicted_end || '—')"></div>
           </div>
           <p style="font-size:.9rem;margin:0 0 .5rem">This overlaps with:</p>
-          <div style="font-size:.85rem;padding:.5rem .75rem;background:#fff8e1;border:1px solid #ffc107;border-radius:6px;margin-bottom:1rem">
+          <div style="font-size:.85rem;padding:.5rem .75rem;background:var(--clr-warn-bg);border:1px solid var(--clr-warn-border);border-radius:6px;margin-bottom:1rem">
             <div x-text="(conflictModal.currentSlot ? (strips.find(s=>s.slots.some(sl=>sl.id===conflictModal.currentSlot.id))?.name || 'Piste') : '') + ' — ' + (conflictModal.currentSlot ? slotLabel(conflictModal.currentSlot) : '')"></div>
-            <div style="color:#856404" x-text="(conflictModal.currentSlot?.scheduled_start || '—') + ' → ' + (conflictModal.currentSlot?.predicted_end || '—')"></div>
+            <div style="color:var(--clr-warn-text)" x-text="(conflictModal.currentSlot?.scheduled_start || '—') + ' → ' + (conflictModal.currentSlot?.predicted_end || '—')"></div>
           </div>
-          <p style="font-size:.85rem;color:#555;margin:0 0 1rem">
+          <p style="font-size:.85rem;color:var(--clr-text-muted);margin:0 0 1rem">
             Assigning this would double-book the same person at overlapping times.
           </p>
           <div style="display:flex;gap:.5rem;justify-content:flex-end">
@@ -852,23 +852,23 @@
       <template x-if="conflictModal.step === 2">
         <div>
           <h2 style="margin:0 0 1rem">Which comes first?</h2>
-          <p style="font-size:.85rem;color:#555;margin:0 0 .75rem">
+          <p style="font-size:.85rem;color:var(--clr-text-muted);margin:0 0 .75rem">
             The later assignment's start time will be pushed to start right after the earlier one ends.
           </p>
           <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem">
-            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px">
+            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid var(--clr-border);border-radius:6px">
               <input type="radio" x-model="conflictModal.order" value="current-first" style="margin-top:.2rem">
               <span>
                 <strong x-text="conflictModal.currentSlot ? slotLabel(conflictModal.currentSlot) : ''"></strong>
-                <span style="display:block;font-size:.8rem;color:#888"
+                <span style="display:block;font-size:.8rem;color:var(--clr-text-muted)"
                       x-text="(conflictModal.currentSlot?.scheduled_start || '—') + ' → ' + (conflictModal.currentSlot?.predicted_end || '—') + ' comes first'"></span>
               </span>
             </label>
-            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px">
+            <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;padding:.5rem .75rem;border:1px solid var(--clr-border);border-radius:6px">
               <input type="radio" x-model="conflictModal.order" value="other-first" style="margin-top:.2rem">
               <span>
                 <strong x-text="conflictModal.otherSlot ? slotLabel(conflictModal.otherSlot) : ''"></strong>
-                <span style="display:block;font-size:.8rem;color:#888"
+                <span style="display:block;font-size:.8rem;color:var(--clr-text-muted)"
                       x-text="(conflictModal.otherSlot?.scheduled_start || '—') + ' → ' + (conflictModal.otherSlot?.predicted_end || '—') + ' comes first'"></span>
               </span>
             </label>
@@ -934,7 +934,7 @@
         </tbody>
       </table>
     </template>
-    <div x-show="selectedReferee && !refSchedule.length" style="color:#888;font-size:.9rem">No slots assigned to this referee.</div>
+    <div x-show="selectedReferee && !refSchedule.length" style="color:var(--clr-text-muted);font-size:.9rem">No slots assigned to this referee.</div>
   </details>
 
   <!-- ── Referee schedule (Gantt) ─────────────────────────────────────────── -->
@@ -945,26 +945,26 @@
         <div style="width:110px;flex-shrink:0">
           <div style="height:26px"></div>
           <template x-for="row in refGanttData.rows" :key="row.name+'_l'">
-            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid #f0f0f0;font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+            <div style="height:34px;display:flex;align-items:center;border-bottom:1px solid var(--clr-border);font-size:.82rem;font-weight:600;padding-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                  x-text="row.name"></div>
           </template>
         </div>
         <div style="flex:1;position:relative;min-width:0">
-          <div style="height:26px;position:relative;border-bottom:2px solid #ddd">
+          <div style="height:26px;position:relative;border-bottom:2px solid var(--clr-border)">
             <template x-for="tick in refGanttData.ticks" :key="'lbl'+tick.left">
               <div x-show="tick.isHour"
-                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:#666;white-space:nowrap;pointer-events:none"
+                   style="position:absolute;transform:translateX(-50%);bottom:4px;font-size:.72rem;color:var(--clr-text-muted);white-space:nowrap;pointer-events:none"
                    :style="{ left: tick.left+'%' }" x-text="tick.label"></div>
             </template>
           </div>
           <template x-for="tick in refGanttData.ticks" :key="'grid'+tick.left">
             <div style="position:absolute;top:26px;bottom:0;pointer-events:none"
-                 :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? '#ddd' : '#f0f0f0' }"></div>
+                 :style="{ left: tick.left+'%', width:'1px', background: tick.isHour ? 'var(--clr-btn-border)' : 'var(--clr-th-bg)' }"></div>
           </template>
-          <div style="position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;opacity:.7;z-index:2;pointer-events:none"
+          <div style="position:absolute;top:0;bottom:0;width:2px;background:var(--clr-danger);opacity:.7;z-index:2;pointer-events:none"
                :style="{ left: refGanttData.nowLeft+'%' }"></div>
           <template x-for="row in refGanttData.rows" :key="row.name">
-            <div style="height:34px;position:relative;border-bottom:1px solid #f0f0f0">
+            <div style="height:34px;position:relative;border-bottom:1px solid var(--clr-border)">
               <template x-for="bar in row.bars" :key="bar.id">
                 <div style="position:absolute;top:7px;height:20px;border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:.7rem;color:#fff;white-space:nowrap;box-sizing:border-box;z-index:1"
                      :style="{ left: bar.left+'%', width: bar.width+'%', background: bar.color }"
@@ -976,11 +976,11 @@
           </template>
         </div>
       </div>
-      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:#666">
-        <span><span style="display:inline-block;width:12px;height:12px;background:#1a6bab;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#1e8449;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#999;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
-        <span style="margin-left:auto;color:#aaa">Only referee-assigned slots with a scheduled start time are shown.</span>
+      <div style="display:flex;gap:1rem;margin-top:.6rem;font-size:.75rem;color:var(--clr-text-muted)">
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-brand);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Pending</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-success);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Active</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:var(--clr-th-bg);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Done</span>
+        <span style="margin-left:auto;color:var(--clr-text-muted)">Only referee-assigned slots with a scheduled start time are shown.</span>
       </div>
     </div>
   </details>

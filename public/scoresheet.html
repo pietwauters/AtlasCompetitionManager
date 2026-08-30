@@ -19,8 +19,8 @@
       --text-2:      #aaaaaa;
       --text-3:      #888888;
       --text-4:      #555555;
-      --text-num:    #aad4f5;
-      --text-order:  #667788;
+      --text-num:    var(--clr-nav-link);
+      --text-order:  var(--text-3);
       --sep-color:   #555555;
 
       --ok-bg:    #0d3321;  --ok:    #4cde80;
@@ -28,24 +28,26 @@
       --slot-lbl: #8aabbf;
 
       --active-bg:       #0d1f35;  --active-border:   #4aa3df;
-      --finished-border: #2a6e3a;
+      --finished-border: var(--ok);
       --hover:           #0d1a30;
       --toggle-bg:       #0f1a2e;
 
       --live-bg: #2a1a00;  --live: #f39c12;
 
-      --mtx-head-bg:   #0d0d1f;  --mtx-head: #aad4f5;
-      --mtx-num-color: #aad4f5;
+      --mtx-head-bg:   #0d0d1f;  --mtx-head: var(--clr-nav-link);
+      --mtx-num-color: var(--clr-nav-link);
       --mtx-name-color:#eeeeee;
       --mtx-diag-bg:   #0a1020;
       --mtx-won:       #4cde80;
-      --mtx-lost:      #cccccc;
-      --mtx-stat:      #aad4f5;
+      --mtx-lost:      var(--text-3);
+      --mtx-stat:      var(--clr-nav-link);
       --mtx-rank:      #ffffff;
       --ind-pos:       #4cde80;
       --ind-neg:       #e74c3c;
 
       --chip-black-border: #555;
+      --warn:              #f0ad4e;
+      --drilldown-border:  #5a7abf;
       --theme-icon: '☀';
     }
 
@@ -59,19 +61,19 @@
       --border-2:    #aabcd0;
       --border-3:    #ccd8e8;
       --text:        #1a2a3a;
-      --text-2:      #3a5068;
+      --text-2:      var(--mtx-head);
       --text-3:      #607080;
       --text-4:      #8090a8;
       --text-num:    #2a5080;
-      --text-order:  #8090a8;
+      --text-order:  var(--text-3);
       --sep-color:   #aabbcc;
 
       --ok-bg:    #eaf5ee;  --ok:    #1a7a3a;
-      --err-bg:   #fdecea;  --err:   #c0392b;
+      --err-bg:   #fdecea;  --err:   var(--clr-danger);
       --slot-lbl: #4a6a80;
 
       --active-bg:       #ddeeff;  --active-border:   #2a7abf;
-      --finished-border: #1a7a3a;
+      --finished-border: var(--ok);
       --hover:           #e4ecf5;
       --toggle-bg:       #e4ecf5;
 
@@ -82,13 +84,15 @@
       --mtx-name-color:#1a2a3a;
       --mtx-diag-bg:   #e8eef6;
       --mtx-won:       #1a7a3a;
-      --mtx-lost:      #777777;
+      --mtx-lost:      var(--text-3);
       --mtx-stat:      #2a4a68;
       --mtx-rank:      #1a2a3a;
       --ind-pos:       #1a7a3a;
-      --ind-neg:       #c0392b;
+      --ind-neg:       var(--clr-danger);
 
       --chip-black-border: #999;
+      --warn:              #856404;
+      --drilldown-border:  #2a5a8a;
       --theme-icon: '🌙';
     }
 
@@ -99,11 +103,11 @@
     /* ── Status bar ── */
     .status-bar{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;font-size:.85rem;font-weight:600}
     .status-bar.ok{background:var(--ok-bg);color:var(--ok)}
-    .status-bar.warn{background:#fff3cd;color:#856404}
+    .status-bar.warn{background:var(--clr-warn-bg);color:var(--clr-warn-text)}
     .status-bar.err{background:var(--err-bg);color:var(--err)}
     .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .ok .status-dot{background:var(--ok)}
-    .warn .status-dot{background:#f0ad4e}
+    .warn .status-dot{background:var(--warn)}
     .err .status-dot{background:var(--err)}
     .slot-label{margin-left:auto;font-size:.78rem;font-weight:400;color:var(--slot-lbl)}
     .theme-btn{background:none;border:1px solid var(--border-2);border-radius:5px;color:var(--text-3);
@@ -191,9 +195,9 @@
     .cards-row{display:flex;gap:.35rem;margin-top:.45rem;min-height:1.8rem}
     .card-chip{display:inline-flex;align-items:center;justify-content:center;
                width:1.8rem;height:1.8rem;border-radius:4px;font-size:.85rem;font-weight:700}
-    .card-chip.yellow{background:#f1c40f;color:#1a1a2e}
-    .card-chip.red{background:#e74c3c;color:#fff}
-    .card-chip.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)}
+    .card-chip.yellow{background:#f1c40f;color:#1a1a2e} /* theme-ok: FIE card color, fixed real-world convention */
+    .card-chip.red{background:#e74c3c;color:#fff} /* theme-ok: FIE card color, fixed real-world convention */
+    .card-chip.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)} /* theme-ok: FIE card color, fixed real-world convention */
     .fencer-block.right .cards-row{flex-direction:row-reverse}
     .fencer-block.right .fencer-name{text-align:right}
     .fencer-block.right .fencer-detail{text-align:right}
@@ -215,7 +219,7 @@
     .official-picker{margin-bottom:.9rem}
     .official-chip{padding:.45rem .75rem;background:var(--input-bg);border:1px solid var(--border-2);
                    border-radius:8px;color:var(--text);font-size:.85rem;cursor:pointer;margin:0 .4rem .4rem 0}
-    .official-chip.selected{border-color:#4a8abf;background:var(--active-bg);color:var(--text)}
+    .official-chip.selected{border-color:var(--active-border);background:var(--active-bg);color:var(--text)}
 
     /* ── Dialog overlay ── */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;
@@ -226,9 +230,9 @@
     .dialog-title{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:.6rem;
                   color:var(--text)}
     .card-badge{display:inline-block;padding:.25rem .8rem;border-radius:6px;font-size:.9rem;font-weight:700}
-    .card-badge.yellow{background:#f1c40f;color:#1a1a2e}
-    .card-badge.red{background:#e74c3c;color:#fff}
-    .card-badge.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)}
+    .card-badge.yellow{background:#f1c40f;color:#1a1a2e} /* theme-ok: FIE card color, fixed real-world convention */
+    .card-badge.red{background:#e74c3c;color:#fff} /* theme-ok: FIE card color, fixed real-world convention */
+    .card-badge.black{background:#1a1a2e;color:#fff;border:1px solid var(--chip-black-border)} /* theme-ok: FIE card color, fixed real-world convention */
     .dialog-fencer{font-size:.9rem;color:var(--text-2);margin-top:.3rem}
 
     .reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:1rem}
@@ -236,8 +240,8 @@
                 border-radius:8px;color:var(--text);font-size:.9rem;text-align:left;cursor:pointer;
                 line-height:1.35;transition:background .12s}
     .reason-btn:hover,.reason-btn:active{background:var(--hover)}
-    .reason-btn.drilldown{border-color:#5a7abf;color:#aad4f5}
-    body.light .reason-btn.drilldown{border-color:#2a5a8a;color:#2a5a8a}
+    .reason-btn.drilldown{border-color:var(--drilldown-border);color:var(--clr-nav-link)}
+    body.light .reason-btn.drilldown{border-color:var(--drilldown-border);color:var(--drilldown-border)}
     .reason-btn.drilldown:hover,.reason-btn.drilldown:active{background:var(--hover)}
     .back-btn{background:none;border:none;color:var(--text-3);font-size:.95rem;cursor:pointer;
               padding:.2rem 0;margin-bottom:.5rem}
@@ -248,10 +252,10 @@
                         border:1px solid var(--border-2);border-radius:8px;
                         color:var(--text);font-size:.95rem;outline:none}
     .freetext-row input:focus{border-color:var(--active-border)}
-    .freetext-row button{padding:.6rem 1rem;background:#1a6bab;color:#fff;border:none;
+    .freetext-row button{padding:.6rem 1rem;background:var(--clr-brand);color:#fff;border:none; /* theme-ok: white text on brand-fill button */
                          border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;
                          white-space:nowrap}
-    body.light .freetext-row button{background:#2a7abf}
+    body.light .freetext-row button{background:var(--active-border)}
     .freetext-row button:disabled{opacity:.4;cursor:default}
     .skip-btn{width:100%;padding:.6rem;background:none;border:1px solid var(--border);
               border-radius:8px;color:var(--text-4);font-size:.9rem;cursor:pointer}
@@ -281,15 +285,15 @@
 
   <!-- Team relay info banner -->
   <div x-show="matchInfo?.type === 'T'"
-       style="background:#0d2040;border-bottom:1px solid #1e3a5a;padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-    <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#4aa3df">
+       style="background:var(--active-bg);border-bottom:1px solid var(--border-2);padding:.6rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--active-border)">
       Team relay <span x-text="(matchInfo?.relay||'') + ' / ' + (matchInfo?.relay_total||9)"></span>
     </span>
-    <span style="font-size:.85rem;color:#aad4f5" x-text="matchInfo?.left_team||''"></span>
-    <span style="font-weight:700;color:#eee;font-size:1.05rem;font-variant-numeric:tabular-nums"
+    <span style="font-size:.85rem;color:var(--clr-nav-link)" x-text="matchInfo?.left_team||''"></span>
+    <span style="font-weight:700;color:var(--clr-text-muted);font-size:1.05rem;font-variant-numeric:tabular-nums"
           x-text="(matchInfo?.left_cumul??'—') + ' – ' + (matchInfo?.right_cumul??'—')"></span>
-    <span style="font-size:.85rem;color:#aad4f5" x-text="matchInfo?.right_team||''"></span>
-    <span style="font-size:.78rem;color:#667;margin-left:auto"
+    <span style="font-size:.85rem;color:var(--clr-nav-link)" x-text="matchInfo?.right_team||''"></span>
+    <span style="font-size:.78rem;color:var(--text-order);margin-left:auto"
           x-text="'target ' + (matchInfo?.target||'')"></span>
   </div>
 
@@ -429,7 +433,7 @@
           <span class="card-badge" :class="dialog.card"
                 x-text="dialog.card?.charAt(0).toUpperCase() + dialog.card?.slice(1) + ' card'"></span>
           <span x-show="dialog.step === 1" x-text="dialog.side === 'left' ? '← Left' : 'Right →'"></span>
-          <span x-show="dialog.step === 2" style="color:#4a8abf">Which Group 1 offence?</span>
+          <span x-show="dialog.step === 2" style="color:var(--active-border)">Which Group 1 offence?</span>
         </div>
         <div class="dialog-fencer" x-text="dialog.fencerName"></div>
       </div>

@@ -9,24 +9,24 @@
 <script src="/js/theme-init.js"></script>
 <style>
   main{max-width:1000px;margin:0 auto;padding:1rem}
-  .back{font-size:.85rem;color:#555;text-decoration:none;display:inline-block;margin-bottom:.75rem}
-  .back:hover{color:#333}
+  .back{font-size:.85rem;color:var(--clr-text-muted);text-decoration:none;display:inline-block;margin-bottom:.75rem}
+  .back:hover{color:var(--clr-text-muted)}
   .notice{padding:.6rem 1rem;border-radius:5px;margin-bottom:.75rem;font-size:.9rem}
-  .notice.ok{background:#d1e7dd;color:#0f5132}
+  .notice.ok{background:var(--clr-success-bg);color:var(--clr-success-text)}
   .notice.err{background:#f8d7da;color:#842029}
 
   /* Tableau grid */
   .tableau{display:flex;gap:1.5rem;overflow-x:auto;padding-bottom:.5rem}
   .round-col{display:flex;flex-direction:column;gap:.75rem;min-width:200px}
-  .round-title{font-size:.8rem;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:.25rem;text-align:center}
-  .match-card{background:#fff;border:1px solid #dde;border-radius:6px;padding:.6rem .75rem;cursor:pointer;transition:box-shadow .15s}
+  .round-title{font-size:.8rem;font-weight:700;text-transform:uppercase;color:var(--clr-text-muted);margin-bottom:.25rem;text-align:center}
+  .match-card{background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:6px;padding:.6rem .75rem;cursor:pointer;transition:box-shadow .15s}
   .match-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
   .match-card.bye-card{opacity:.5;cursor:default}
   .match-card .team-row{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;font-size:.9rem}
   .match-card .team-row.winner{font-weight:700}
   .match-card .team-row .score{margin-left:auto;font-weight:700;min-width:1.5rem;text-align:right}
-  .match-card .team-row .seed-badge{font-size:.72rem;color:#888;min-width:1.2rem}
-  .match-card .meta{font-size:.75rem;color:#999;margin-top:.3rem;display:flex;gap:.5rem;align-items:center}
+  .match-card .team-row .seed-badge{font-size:.72rem;color:var(--clr-text-muted);min-width:1.2rem}
+  .match-card .meta{font-size:.75rem;color:var(--clr-text-muted);margin-top:.3rem;display:flex;gap:.5rem;align-items:center}
   .spacer{flex:1}
 </style>
 </head>
@@ -50,7 +50,7 @@
 <main>
   <div style="display:flex;gap:1rem;align-items:center;margin-bottom:.75rem">
     <a class="back" style="margin-bottom:0" :href="'/competition-detail.html?id='+compId">← Back to competition</a>
-    <a :href="'/team-results.html?id='+compId" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
+    <a :href="'/team-results.html?id='+compId" style="font-size:.85rem;color:var(--clr-brand)">📋 Results</a>
   </div>
 
   <div x-show="notice.text" :class="'notice '+(notice.error?'err':'ok')" x-text="notice.text"></div>
@@ -64,7 +64,7 @@
               class="success" @click="closePhase()">Close phase</button>
       <button x-show="phase?.status!=='finished'" @click="simulatePhase()">Simulate all</button>
     </div>
-    <div style="font-size:.85rem;color:#666" x-show="phase?.status==='active'"
+    <div style="font-size:.85rem;color:var(--clr-text-muted)" x-show="phase?.status==='active'"
          x-text="(phase?.matches_complete||0)+' / '+(phase?.matches_total||0)+' matches complete'"></div>
   </div>
 
@@ -133,7 +133,7 @@
       </tr></thead>
       <tbody>
         <template x-for="t in rankedTeams" :key="t.id">
-          <tr style="border-bottom:1px solid #f0f0f0">
+          <tr style="border-bottom:1px solid var(--clr-border)">
             <td style="padding:.35rem .5rem;font-weight:700" x-text="t.final_rank"></td>
             <td style="padding:.35rem .5rem" x-text="t.name"></td>
           </tr>

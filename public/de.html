@@ -14,8 +14,8 @@
     .bracket-wrap{overflow-x:auto;padding-bottom:.5rem}
     .bracket{display:flex;gap:0;align-items:stretch;width:100%}
     .round-col{display:flex;flex-direction:column;justify-content:space-around;flex:1;min-width:180px}
-    .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#666;margin:0 0 0;padding:.5rem 0;border-bottom:1px solid #e5e5e5}
-    .round-col-note{font-size:.72rem;color:#aaa;text-align:center;padding:.15rem 0 .25rem}
+    .round-col h3{text-align:center;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-text-muted);margin:0 0 0;padding:.5rem 0;border-bottom:1px solid var(--clr-border)}
+    .round-col-note{font-size:.72rem;color:var(--clr-text-muted);text-align:center;padding:.15rem 0 .25rem}
     .bout-slot{flex:1;display:flex;align-items:center;padding:.25rem .5rem}
 
     /* Narrow screens: round-by-round accordion instead of horizontal scroll
@@ -26,10 +26,10 @@
     .bracket.bracket-accordion .round-col{min-width:0;width:100%;flex:none}
     .bracket.bracket-accordion .round-col h3{
       display:flex;justify-content:space-between;align-items:center;text-align:left;
-      cursor:pointer;background:#f5f5f5;border-radius:6px;border-bottom:none;
+      cursor:pointer;background:var(--clr-btn-bg);border-radius:6px;border-bottom:none;
       padding:.6rem .75rem;margin-bottom:.4rem;
     }
-    .bracket.bracket-accordion .round-col h3::after{content:'▸';font-size:.7rem;color:#999;margin-left:.5rem}
+    .bracket.bracket-accordion .round-col h3::after{content:'▸';font-size:.7rem;color:var(--clr-text-muted);margin-left:.5rem}
     .bracket.bracket-accordion .round-col.expanded h3::after{content:'▾'}
     .bracket.bracket-accordion .round-col:not(.expanded){margin-bottom:.4rem}
     .bracket.bracket-accordion .bout-slot{padding:.2rem .25rem}
@@ -38,24 +38,24 @@
     .list-section{}
     .list-round{margin-bottom:1rem}
     .list-round-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.4rem;flex-wrap:wrap}
-    .list-round-label{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555}
-    .list-round-note{font-size:.78rem;color:#aaa}
+    .list-round-label{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-text-muted)}
+    .list-round-note{font-size:.78rem;color:var(--clr-text-muted)}
     .list-bouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.4rem}
 
     /* ── Bout card (shared) ── */
-    .bout-card{width:100%;background:#fff;border:1px solid #ddd;border-radius:6px;overflow:hidden;font-size:.82rem;cursor:pointer;transition:box-shadow .15s;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+    .bout-card{width:100%;background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:6px;overflow:hidden;font-size:.82rem;cursor:pointer;transition:box-shadow .15s;box-shadow:0 1px 3px rgba(0,0,0,.07)}
     .bout-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.15)}
-    .bout-card.selected{border-color:#1a6bab;box-shadow:0 0 0 2px #1a6bab44}
-    .bout-card.finished{border-left:3px solid #1a6bab}
-    .bout-card.bye{border-left:3px solid #ccc;opacity:.7;cursor:default}
-    .bout-card.empty{background:#f8f8f8;border-style:dashed;cursor:default}
+    .bout-card.selected{border-color:var(--clr-brand);box-shadow:0 0 0 2px #1a6bab44}
+    .bout-card.finished{border-left:3px solid var(--clr-brand)}
+    .bout-card.bye{border-left:3px solid var(--clr-btn-border);opacity:.7;cursor:default}
+    .bout-card.empty{background:var(--clr-th-bg);border-style:dashed;cursor:default}
     .bout-row{display:flex;align-items:center;padding:.3rem .5rem;gap:.3rem;min-height:28px}
-    .bout-row+.bout-row{border-top:1px solid #f0f0f0}
+    .bout-row+.bout-row{border-top:1px solid var(--clr-border)}
     .bout-row.winner{background:#eaf6ee;font-weight:600}
     .bout-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .bout-score{font-family:monospace;font-weight:700;font-size:.9rem;min-width:1.5rem;text-align:center;color:#1a6bab}
-    .bye-label{color:#aaa;font-style:italic;font-size:.78rem;padding:.3rem .5rem}
-    .place-label{font-size:.72rem;color:#999;padding:.2rem .5rem 0;text-align:right}
+    .bout-score{font-family:monospace;font-weight:700;font-size:.9rem;min-width:1.5rem;text-align:center;color:var(--clr-brand)}
+    .bye-label{color:var(--clr-text-muted);font-style:italic;font-size:.78rem;padding:.3rem .5rem}
+    .place-label{font-size:.72rem;color:var(--clr-text-muted);padding:.2rem .5rem 0;text-align:right}
 
     /* ── Strip picker (shared) ── */
 
@@ -65,13 +65,13 @@
     .modal-title{margin:0 0 1rem;font-size:1rem;font-weight:700;line-height:1.3}
     .score-inputs{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;margin-bottom:.75rem;justify-content:center}
     .score-block{display:flex;flex-direction:column;align-items:center;gap:.3rem}
-    .score-block label{font-size:.82rem;color:#555;font-weight:600;text-align:center;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .score-input{width:4rem;text-align:center;font-size:1.6rem;font-weight:700;padding:.3rem;border:2px solid #ccc;border-radius:6px}
-    .score-input:focus{border-color:#1a6bab;outline:none}
-    .vs-sep{font-size:1.3rem;color:#aaa;padding-top:1.4rem}
+    .score-block label{font-size:.82rem;color:var(--clr-text-muted);font-weight:600;text-align:center;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .score-input{width:4rem;text-align:center;font-size:1.6rem;font-weight:700;padding:.3rem;border:2px solid var(--clr-btn-border);border-radius:6px}
+    .score-input:focus{border-color:var(--clr-brand);outline:none}
+    .vs-sep{font-size:1.3rem;color:var(--clr-text-muted);padding-top:1.4rem}
 
     .medal-gold{color:#c9a000;font-weight:700}
-    .medal-silver{color:#777;font-weight:700}
+    .medal-silver{color:var(--clr-text-muted);font-weight:700}
     .medal-bronze{color:#b87333;font-weight:700}
   </style>
 </head>
@@ -83,7 +83,7 @@
        class="nav-comp-link"></a>
   </template>
   <div class="nav-right">
-    <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+    <span x-show="comp" style="color:var(--clr-nav-link);font-size:.9rem" x-text="'/ '+comp?.name"></span>
     <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
     <a href="/opp2.html">Schedule</a>
@@ -102,19 +102,19 @@
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <h2 style="margin:0" x-text="'Direct Elimination — '+(phase?.rule_doc||'').replace('.json','')"></h2>
       <span class="badge" :class="'badge-'+(phase?.status||'')" x-text="phase?.status"></span>
-      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#888">← Back to competition</a>
-      <a :href="'/results.html?id='+(comp?.id||'')" style="font-size:.85rem;color:#1a6bab">📋 Results</a>
+      <a :href="'/competition-detail.html?id='+(comp?.id||'')" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to competition</a>
+      <a :href="'/results.html?id='+(comp?.id||'')" style="font-size:.85rem;color:var(--clr-brand)">📋 Results</a>
     </div>
     <div style="margin-top:.75rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
       <span style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-        <span style="font-size:.85rem;color:#666" x-text="progressLabel()"></span>
+        <span style="font-size:.85rem;color:var(--clr-text-muted)" x-text="progressLabel()"></span>
         <button x-show="phase?.status==='active'" @click="simulate()" style="background:#f5f0ff;color:#6b21a8;border-color:#d8b4fe">🎲 Simulate</button>
       </span>
       <span style="margin-left:auto;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
         <template x-if="sections.length > 1">
           <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
-            <label style="color:#666">Section:</label>
-            <select x-model="filterSectionId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+            <label style="color:var(--clr-text-muted)">Section:</label>
+            <select x-model="filterSectionId" style="padding:.25rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.83rem">
               <option value="">All</option>
               <template x-for="s in sections" :key="s.id">
                 <option :value="s.id" x-text="s.label"></option>
@@ -124,8 +124,8 @@
         </template>
         <template x-if="activeSectionRoundOptions.length > 0">
           <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
-            <label style="color:#666">From:</label>
-            <select x-model.number="filterFromRoundIdx" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+            <label style="color:var(--clr-text-muted)">From:</label>
+            <select x-model.number="filterFromRoundIdx" style="padding:.25rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.83rem">
               <option :value="0">All rounds</option>
               <template x-for="opt in activeSectionRoundOptions" :key="opt.idx">
                 <option :value="opt.idx" x-text="opt.label"></option>
@@ -135,8 +135,8 @@
         </template>
         <template x-if="deStripOptions.length > 0">
           <span style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">
-            <label style="color:#666">Piste:</label>
-            <select x-model="filterStripId" style="padding:.25rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.83rem">
+            <label style="color:var(--clr-text-muted)">Piste:</label>
+            <select x-model="filterStripId" style="padding:.25rem .5rem;border:1px solid var(--clr-btn-border);border-radius:4px;font-size:.83rem">
               <option value="">All</option>
               <template x-for="s in deStripOptions" :key="s.id">
                 <option :value="String(s.id)" x-text="s.name"></option>
@@ -171,7 +171,7 @@
                 <h3 @click="isNarrow && toggleRound(section.id, ri)" x-text="round.label"></h3>
                 <div class="round-col-note" x-show="round.note" x-text="round.note"></div>
                 <div x-show="round.stripSlot && roundPisteLabel(round)"
-                     style="font-size:.72rem;color:#1a6bab;text-align:center;padding:.15rem .5rem .3rem"
+                     style="font-size:.72rem;color:var(--clr-brand);text-align:center;padding:.15rem .5rem .3rem"
                      x-text="roundPisteLabel(round)"></div>
                 <template x-for="bout in round.bouts" :key="bout.id">
                   <div class="bout-slot" x-show="boutVisible(round, bout) && !isBye(bout) && (!isNarrow || isRoundExpanded(section.id, ri))">
@@ -186,8 +186,8 @@
                       </template>
                       <template x-if="isEmpty(bout)">
                         <div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:var(--clr-text-muted)">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:var(--clr-text-muted)">TBD</span></div>
                         </div>
                       </template>
                       <template x-if="!isBye(bout) && !isEmpty(bout)">
@@ -220,7 +220,7 @@
                 <span class="list-round-label" x-text="round.label"></span>
                 <span class="list-round-note" x-show="round.note" x-text="round.note"></span>
                 <span x-show="round.stripSlot && roundPisteLabel(round)"
-                      style="margin-left:auto;font-size:.75rem;color:#1a6bab"
+                      style="margin-left:auto;font-size:.75rem;color:var(--clr-brand)"
                       x-text="roundPisteLabel(round)"></span>
               </div>
               <div class="list-bouts">
@@ -237,8 +237,8 @@
                       </template>
                       <template x-if="isEmpty(bout)">
                         <div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
-                          <div class="bout-row"><span class="bout-name" style="color:#bbb">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:var(--clr-text-muted)">TBD</span></div>
+                          <div class="bout-row"><span class="bout-name" style="color:var(--clr-text-muted)">TBD</span></div>
                         </div>
                       </template>
                       <template x-if="!isBye(bout) && !isEmpty(bout)">
@@ -316,7 +316,7 @@
       <tbody>
         <template x-for="r in finalResults" :key="r.id">
           <tr>
-            <td style="font-weight:700;color:#1a6bab">
+            <td style="font-weight:700;color:var(--clr-brand)">
               <span :class="r.medalClass" x-text="r.place"></span>
             </td>
             <td x-text="'('+r.seed+') '+r.name"></td>

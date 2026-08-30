@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .place{font-weight:700;font-size:1rem;min-width:4rem;color:#1a6bab}
+    .place{font-weight:700;font-size:1rem;min-width:4rem;color:var(--clr-brand)}
     .place-1{color:#c9a000}
-    .place-2{color:#777}
+    .place-2{color:var(--clr-text-muted)}
     .place-34{color:#b87333}
-    .note{font-size:.8rem;color:#888}
-    .pool-row td{color:#aaa}
+    .note{font-size:.8rem;color:var(--clr-text-muted)}
+    .pool-row td{color:var(--clr-text-muted)}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -23,7 +23,7 @@
        class="nav-comp-link"></a>
   </template>
   <div class="nav-right">
-    <span x-show="comp" style="color:#aad4f5;font-size:.9rem" x-text="'/ '+comp?.name"></span>
+    <span x-show="comp" style="color:var(--clr-nav-link);font-size:.9rem" x-text="'/ '+comp?.name"></span>
     
     <a href="/tournaments.html">Events</a>
     <a href="/strips.html">Strips</a>
@@ -38,14 +38,14 @@
   <div class="card">
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <h2 style="margin:0" x-text="(comp?.name||'Competition')+' — Final Results'"></h2>
-      <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:#888">← Back to competition</a>
+      <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to competition</a>
     </div>
-    <div style="margin-top:.3rem;font-size:.85rem;color:#666"
+    <div style="margin-top:.3rem;font-size:.85rem;color:var(--clr-text-muted)"
          x-text="({foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||'') + ' · ' + ({M:'Men',F:'Women',X:'Mixed'}[comp?.gender]||'')">
     </div>
   </div>
 
-  <div class="card" x-show="results.length === 0" style="color:#999">
+  <div class="card" x-show="results.length === 0" style="color:var(--clr-text-muted)">
     No results available yet.
   </div>
 
@@ -69,7 +69,7 @@
                 x-text="r.place_label">
               </span>
             </td>
-            <td data-label="Seed" style="color:#aaa;font-size:.85rem" x-text="r.de_seed||'—'"></td>
+            <td data-label="Seed" style="color:var(--clr-text-muted);font-size:.85rem" x-text="r.de_seed||'—'"></td>
             <td data-label="Name" x-text="r.last_name+', '+r.first_name"></td>
             <td data-label="Club" x-text="r.club||'—'"></td>
             <td data-label="Note" class="note" x-text="r.note||''"></td>

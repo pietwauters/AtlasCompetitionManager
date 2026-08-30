@@ -7,16 +7,16 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .form-row{margin-top:1rem;padding-top:1rem;border-top:1px solid #eee}
+    .form-row{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--clr-border)}
     .form-row input{width:8rem}
-    .badge-idle{background:#d6d8db;color:#383d41}
-    .badge-assigned{background:#d4edda;color:#155724}
-    .badge-maintenance{background:#fde8e8;color:#922b21}
-    .badge-online{background:#d4edda;color:#155724}
-    .badge-offline{background:#d6d8db;color:#383d41}
+    .badge-idle{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
+    .badge-assigned{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-maintenance{background:var(--clr-danger-bg);color:var(--clr-danger-text)}
+    .badge-online{background:var(--clr-success-bg);color:var(--clr-success-text)}
+    .badge-offline{background:var(--clr-neutral-bg);color:var(--clr-neutral-text)}
     .name-input{font-size:.9rem;width:100%;padding:.25rem .4rem;border:1px solid transparent;border-radius:4px;background:transparent;transition:border-color .15s,background .15s}
-    .name-input:hover{border-color:#ccc;background:var(--clr-th-bg)}
-    .name-input:focus{border-color:#1a6bab;background:var(--clr-surface);outline:none}
+    .name-input:hover{border-color:var(--clr-btn-border);background:var(--clr-th-bg)}
+    .name-input:focus{border-color:var(--clr-brand);background:var(--clr-surface);outline:none}
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -66,7 +66,7 @@
             </td>
             <td data-label="Status"><span class="badge" :class="'badge-'+s.status" x-text="s.status"></span></td>
             <td data-label="Network"><span class="badge" :class="'badge-'+s.network_state" x-text="s.network_state"></span></td>
-            <td data-label="Current bout" style="font-size:.85rem;color:#555">
+            <td data-label="Current bout" style="font-size:.85rem;color:var(--clr-text-muted)">
               <span x-text="s.bout ? '#'+s.bout.bout_order+': '+s.bout.left+' — '+s.bout.right : '—'"></span>
               <span x-show="s.fencersMismatch" class="badge badge-error"
                     style="margin-left:.4rem;cursor:help"
@@ -102,7 +102,7 @@
           </tr>
         </template>
         <tr x-show="strips.length===0">
-          <td colspan="9" style="text-align:center;color:#999;padding:1.5rem">No strips yet. Add one below.</td>
+          <td colspan="9" style="text-align:center;color:var(--clr-text-muted);padding:1.5rem">No strips yet. Add one below.</td>
         </tr>
       </tbody>
     </table>

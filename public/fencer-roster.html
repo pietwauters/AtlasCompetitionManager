@@ -30,7 +30,7 @@
             gap: .25rem;
             font-size: .78rem;
             font-weight: bold;
-            color: #444;
+            color: var(--clr-text-muted);
         }
 
         .filters select,
@@ -42,13 +42,13 @@
             padding: .3rem .65rem;
             font-size: .82rem;
             border-radius: 4px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--clr-btn-border);
             cursor: pointer;
-            background: #fff;
+            background: var(--clr-surface);
         }
 
         button.sm:hover {
-            background: #f0f0f0;
+            background: var(--clr-th-bg);
         }
 
         /* ---- Roster table ---- */
@@ -57,16 +57,16 @@
 
         /* status badges */
         .s-active {
-            color: #1e8449;
+            color: var(--clr-success);
             font-weight: bold;
         }
 
         .s-withdrawn {
-            color: #c0392b;
+            color: var(--clr-danger);
         }
 
         .s-dns {
-            color: #888;
+            color: var(--clr-text-muted);
         }
 
         /* status toggle buttons */
@@ -80,21 +80,21 @@
         }
 
         .status-btn.active {
-            background: #d4efdf;
-            color: #1e8449;
-            border-color: #a9dfbf;
+            background: var(--clr-success-bg);
+            color: var(--clr-success);
+            border-color: var(--clr-success-border);
         }
 
         .status-btn.withdrawn {
-            background: #fde8e8;
-            color: #c0392b;
-            border-color: #f5b7b1;
+            background: var(--clr-danger-bg);
+            color: var(--clr-danger);
+            border-color: var(--clr-danger-border);
         }
 
         .status-btn.dns {
-            background: #eee;
-            color: #777;
-            border-color: #ddd;
+            background: var(--clr-th-bg);
+            color: var(--clr-text-muted);
+            border-color: var(--clr-border);
         }
 
         .status-btn:hover {
@@ -104,7 +104,7 @@
         /* summary bar */
         .summary {
             font-size: .82rem;
-            color: #555;
+            color: var(--clr-text-muted);
             margin-bottom: .8rem;
             display: flex;
             gap: 1.4rem;
@@ -120,14 +120,14 @@
             gap: .6rem;
             align-items: center;
             padding: .6rem .8rem;
-            background: #eaf0fb;
+            background: var(--clr-info-bg);
             border-radius: 6px;
             margin-bottom: .8rem;
             font-size: .85rem;
         }
 
         .error-msg {
-            color: #c0392b;
+            color: var(--clr-danger);
             font-size: .83rem;
             margin-top: .5rem;
         }
@@ -222,11 +222,11 @@
             <!-- Bulk action bar (shown when rows are checked) -->
             <div class="bulk-bar" x-show="selected.size > 0">
                 <strong x-text="selected.size + ' selected'"></strong>
-                <button class="sm" style="background:#d4efdf;color:#1e8449;border-color:#a9dfbf"
+                <button class="sm" style="background:var(--clr-success-bg);color:var(--clr-success);border-color:var(--clr-success-border)"
                     @click="bulkStatus('active')" :disabled="saving">Set Active</button>
-                <button class="sm" style="background:#fde8e8;color:#c0392b;border-color:#f5b7b1"
+                <button class="sm" style="background:var(--clr-danger-bg);color:var(--clr-danger);border-color:var(--clr-danger-border)"
                     @click="bulkStatus('withdrawn')" :disabled="saving">Set Withdrawn</button>
-                <button class="sm" style="background:#eee;color:#777" @click="bulkStatus('dns')" :disabled="saving">Set
+                <button class="sm" style="background:var(--clr-th-bg);color:var(--clr-text-muted)" @click="bulkStatus('dns')" :disabled="saving">Set
                     DNS</button>
                 <button class="sm" @click="selected.clear(); selected = new Set()">Deselect all</button>
             </div>
@@ -263,20 +263,20 @@
                                     <input type="checkbox" :checked="selected.has(f.fencerId)"
                                         @change="toggleOne(f.fencerId, $event.target.checked)">
                                 </td>
-                                <td data-label="#" x-text="f.initial_seed ?? '—'" style="color:#888"></td>
+                                <td data-label="#" x-text="f.initial_seed ?? '—'" style="color:var(--clr-text-muted)"></td>
                                 <td data-label="Name" x-text="f.display_name"></td>
-                                <td data-label="DOB" x-text="f.date_of_birth ?? '—'" style="color:#888;font-size:.8rem"></td>
+                                <td data-label="DOB" x-text="f.date_of_birth ?? '—'" style="color:var(--clr-text-muted);font-size:.8rem"></td>
                                 <td data-label="Cat.">
                                     <span x-text="f.category ?? '—'"
-                                        style="font-size:.78rem;padding:.1rem .4rem;background:#eaf0fb;color:#1a6bab;border-radius:999px"
+                                        style="font-size:.78rem;padding:.1rem .4rem;background:var(--clr-info-bg);color:var(--clr-brand);border-radius:999px"
                                         x-show="f.category"></span>
-                                    <span x-show="!f.category" style="color:#bbb">—</span>
+                                    <span x-show="!f.category" style="color:var(--clr-text-muted)">—</span>
                                 </td>
                                 <td data-label="Gender" x-text="f.gender ?? '—'"></td>
                                 <td data-label="Weapons" x-text="(f.weapons ?? []).join(', ') || '—'" style="font-size:.82rem"></td>
                                 <td data-label="Club" x-text="f.club || '—'"></td>
                                 <td data-label="NAT" x-text="f.nationality || '—'"></td>
-                                <td data-label="Licence" x-text="f.licence || '—'" style="font-size:.8rem;color:#888"></td>
+                                <td data-label="Licence" x-text="f.licence || '—'" style="font-size:.8rem;color:var(--clr-text-muted)"></td>
                                 <td data-label="Status">
                                     <button class="status-btn" :class="f.status" @click="cycleStatus(f)"
                                         x-text="f.status" :disabled="saving"></button>

@@ -7,14 +7,14 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-init.js"></script>
   <style>
-    .count { font-weight: 600; color: #1a6bab; }
-    .count-zero { color: #aaa; }
+    .count { font-weight: 600; color: var(--clr-brand); }
+    .count-zero { color: var(--clr-text-muted); }
     .inline-edit { display: flex; gap: .4rem; align-items: center; }
-    .inline-edit input { padding: .3rem .5rem; border: 1px solid #1a6bab; border-radius: 4px; font-size: .9rem; width: 100%; }
-    .merge-panel { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: .85rem 1rem; margin-top: .5rem; }
+    .inline-edit input { padding: .3rem .5rem; border: 1px solid var(--clr-brand); border-radius: 4px; font-size: .9rem; width: 100%; }
+    .merge-panel { background: var(--clr-warn-bg); border: 1px solid #ffe082; border-radius: 6px; padding: .85rem 1rem; margin-top: .5rem; }
     .btn-merge { background: #e65100; color: #fff; border: none; border-radius: 4px; padding: .35rem .85rem; cursor: pointer; font-size: .85rem; }
     .btn-merge:hover { background: #bf360c; }
-    .btn-cancel { background: #eee; border: none; border-radius: 4px; padding: .35rem .75rem; cursor: pointer; font-size: .85rem; }
+    .btn-cancel { background: var(--clr-th-bg); border: none; border-radius: 4px; padding: .35rem .75rem; cursor: pointer; font-size: .85rem; }
   </style>
 </head>
 <body x-data="app()" x-init="init()">
@@ -45,13 +45,13 @@
   <summary><h2 style="display:inline;margin:0">Add club</h2></summary>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-top:1rem">
       <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Name *
-        <input x-model="newForm.name" placeholder="Club Namur" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px">
+        <input x-model="newForm.name" placeholder="Club Namur" style="padding:.4rem .6rem;border:1px solid var(--clr-btn-border);border-radius:4px">
       </label>
       <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Short name
-        <input x-model="newForm.short_name" placeholder="NAM" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:6rem">
+        <input x-model="newForm.short_name" placeholder="NAM" style="padding:.4rem .6rem;border:1px solid var(--clr-btn-border);border-radius:4px;width:6rem">
       </label>
       <label style="font-size:.85rem;display:flex;flex-direction:column;gap:.2rem">Country
-        <input x-model="newForm.country" placeholder="BEL" style="padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;width:5rem">
+        <input x-model="newForm.country" placeholder="BEL" style="padding:.4rem .6rem;border:1px solid var(--clr-btn-border);border-radius:4px;width:5rem">
       </label>
       <button class="primary" @click="addClub()" :disabled="!newForm.name.trim()">Add club</button>
     </div>
@@ -86,7 +86,7 @@
             </td>
             <td data-label="Short name">
               <template x-if="editId !== c.id">
-                <span x-text="c.short_name || '—'" style="color:#888"></span>
+                <span x-text="c.short_name || '—'" style="color:var(--clr-text-muted)"></span>
               </template>
               <template x-if="editId === c.id">
                 <div class="inline-edit">
@@ -96,7 +96,7 @@
             </td>
             <td data-label="Country">
               <template x-if="editId !== c.id">
-                <span x-text="c.country || '—'" style="color:#888"></span>
+                <span x-text="c.country || '—'" style="color:var(--clr-text-muted)"></span>
               </template>
               <template x-if="editId === c.id">
                 <div class="inline-edit">
@@ -140,7 +140,7 @@
                       <option :value="other.id" x-text="other.name + ' (' + other.fencer_count + ' fencers)'"></option>
                     </template>
                   </select>
-                  <span style="font-size:.85rem;color:#666" x-show="mergeTargetId">
+                  <span style="font-size:.85rem;color:var(--clr-text-muted)" x-show="mergeTargetId">
                     <span x-text="c.fencer_count"></span> fencer(s) will move.
                     "<span x-text="c.name"></span>" will be deleted.
                   </span>
@@ -153,7 +153,7 @@
           </template>
         </template>
         <tr x-show="clubs.length === 0">
-          <td colspan="5" style="text-align:center;color:#999;padding:1.5rem">No clubs yet.</td>
+          <td colspan="5" style="text-align:center;color:var(--clr-text-muted);padding:1.5rem">No clubs yet.</td>
         </tr>
       </tbody>
     </table>

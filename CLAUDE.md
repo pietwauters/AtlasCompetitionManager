@@ -108,6 +108,27 @@ This applies to both `emit()` and any keepalive/heartbeat loops.
 Adding or changing a column means creating `db/migrations/005_describe_change.sql`.
 Never modify existing migration files. Never ALTER tables in application code.
 
+### No new hardcoded colors
+`public/css/style.css` defines the app's full color palette as CSS custom properties
+(`--clr-brand`, `--clr-surface`, `--clr-danger-bg`, etc. — see its `:root` block), each
+with a light and dark value. **Never write a literal hex color in `public/*.html`.**
+Reuse an existing `var(--clr-...)` token. If no existing token fits, **ask the user for
+explicit authorization before introducing a new color** — then add it to `style.css` as
+a proper named token (light + dark value), not an inline literal.
+
+`scripts/check-architecture.sh` enforces this: `scripts/color-debt-baseline.txt` lists
+every hardcoded color that already existed when the rule was added (2026-08-30) — those
+stay a non-blocking warning. Any hardcoded color **not** in that baseline fails the
+check. A genuinely deliberate one-off (a real-world fixed color, like an FIE card color,
+that must never theme-swap) gets a `theme-ok` comment on its line instead of a baseline
+entry — see the check script's own comments for the full reasoning, including why a
+domain-fixed color (FIE t.170 card colors) is not the same thing as a brand color
+someone forgot to tokenize.
+
+This was a real, previously-invisible bug, not just a style nit: before the 2026-08-29/30
+cleanup, `style.css`'s own shared `.badge`/`.chip` component had zero dark-mode handling,
+and the "Running" status badge was unreadable pastel-on-dark as a result.
+
 ### `docs/level2.md` is a mirror — spec changes need an upstream PR
 `docs/level2.md` is a local copy of the canonical OPP2 spec, which lives at
 **https://github.com/OpenPiste/protocols** (`docs/level2.md` there). Atlas's copy
