@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Login</title>
   <link rel="icon" type="image/svg+xml" href="/img/atlas-favicon.svg">
+  <link rel="stylesheet" href="/css/style.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, sans-serif;
-      background: #1a1a2e;
+      background: var(--brand-dark-bg);
       color: var(--clr-text-muted);
       min-height: 100vh;
       display: flex;
@@ -17,8 +18,8 @@
       justify-content: center;
     }
     .card {
-      background: #16213e;
-      border: 1px solid #0f3460;
+      background: var(--brand-dark-panel);
+      border: 1px solid var(--brand-dark-border);
       border-radius: 12px;
       padding: 2.5rem 2rem;
       width: 100%;
@@ -32,21 +33,21 @@
     input {
       width: 100%;
       padding: 0.75rem 1rem;
-      background: #0f3460;
-      border: 1px solid #1a4a7a;
+      background: var(--brand-dark-border);
+      border: 1px solid var(--brand-dark-border-strong);
       border-radius: 8px;
       color: var(--clr-text-muted);
       font-size: 1rem;
       outline: none;
     }
-    input:focus { border-color: #e94560; }
+    input:focus { border-color: var(--brand-dark-accent); }
     input[type=password] { letter-spacing: 0.3em; font-size: 1.4rem; }
     .hint { font-size: 0.78rem; color: var(--clr-text-muted); margin-top: 0.3rem; }
     button {
       width: 100%;
       margin-top: 2rem;
       padding: 0.85rem;
-      background: #e94560;
+      background: var(--brand-dark-accent);
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -54,16 +55,16 @@
       font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #c73652; }
+    button:hover { background: var(--brand-dark-accent-hover); }
     button:disabled { background: var(--clr-th-bg); cursor: default; }
     .error {
       margin-top: 1rem;
       padding: 0.75rem 1rem;
       background: rgba(233,69,96,0.15);
-      border: 1px solid #e94560;
+      border: 1px solid var(--brand-dark-accent);
       border-radius: 8px;
       font-size: 0.9rem;
-      color: #e94560;
+      color: var(--brand-dark-accent);
       display: none;
     }
     .qr-hint {

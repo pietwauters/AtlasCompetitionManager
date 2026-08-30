@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas — Change PIN</title>
+  <link rel="stylesheet" href="/css/style.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, sans-serif;
-      background: #1a1a2e;
+      background: var(--brand-dark-bg);
       color: var(--clr-text-muted);
       min-height: 100vh;
       display: flex;
@@ -16,33 +17,33 @@
       justify-content: center;
     }
     .card {
-      background: #16213e;
-      border: 1px solid #0f3460;
+      background: var(--brand-dark-panel);
+      border: 1px solid var(--brand-dark-border);
       border-radius: 12px;
       padding: 2.5rem 2rem;
       width: 100%;
       max-width: 360px;
     }
-    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: #e94560; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: var(--brand-dark-accent); }
     .subtitle { color: var(--clr-text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
     label { display: block; font-size: 0.85rem; color: var(--clr-text-muted); margin-bottom: 0.3rem; margin-top: 1.2rem; }
     input {
       width: 100%;
       padding: 0.75rem 1rem;
-      background: #0f3460;
-      border: 1px solid #1a4a7a;
+      background: var(--brand-dark-border);
+      border: 1px solid var(--brand-dark-border-strong);
       border-radius: 8px;
       color: var(--clr-text-muted);
       font-size: 1.4rem;
       letter-spacing: 0.3em;
       outline: none;
     }
-    input:focus { border-color: #e94560; }
+    input:focus { border-color: var(--brand-dark-accent); }
     button {
       width: 100%;
       margin-top: 2rem;
       padding: 0.85rem;
-      background: #e94560;
+      background: var(--brand-dark-accent);
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -50,7 +51,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #c73652; }
+    button:hover { background: var(--brand-dark-accent-hover); }
     .error, .success {
       margin-top: 1rem;
       padding: 0.75rem 1rem;
@@ -58,7 +59,7 @@
       font-size: 0.9rem;
       display: none;
     }
-    .error   { background: rgba(233,69,96,0.15); border: 1px solid #e94560; color: #e94560; }
+    .error   { background: rgba(233,69,96,0.15); border: 1px solid var(--brand-dark-accent); color: var(--brand-dark-accent); }
     .success { background: rgba(40,167,69,0.15);  border: 1px solid #28a745; color: #28a745; }
   </style>
 </head>
