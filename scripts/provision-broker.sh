@@ -21,8 +21,15 @@
 #
 # Usage:
 #   ./scripts/provision-broker.sh
+#   ./scripts/provision-broker.sh --yes   # answer both prompts "yes" non-interactively
+#                                          #   (for scripted/first-boot callers with no tty)
 
 set -euo pipefail
+
+ASSUME_YES=0
+if [[ "${1:-}" == "--yes" || "${1:-}" == "-y" ]]; then
+  ASSUME_YES=1
+fi
 
 MOSQ_CONF="/etc/mosquitto/mosquitto.conf"
 MOSQ_CONF_D="/etc/mosquitto/conf.d"
@@ -51,12 +58,16 @@ if ! command -v mosquitto &>/dev/null || [[ "$NEED_1883" == 1 || "$NEED_9001" ==
   else
     echo "Mosquitto is installed, but missing:$( [[ $NEED_1883 == 1 ]] && echo -n ' listener 1883' )$( [[ $NEED_9001 == 1 ]] && echo -n ' listener 9001' )."
   fi
-  read -r -p "Install/configure it now? [y/N] " ANSWER
+  if [[ "$ASSUME_YES" == 1 ]]; then
+    ANSWER=y
+  else
+    read -r -p "Install/configure it now? [y/N] " ANSWER
+  fi
   if [[ "$ANSWER" == "y" || "$ANSWER" == "Y" ]]; then
     if ! command -v mosquitto &>/dev/null; then
       echo "Installing mosquitto..."
       sudo apt-get update -y
-      sudo apt-get install -y mosquitto mosquitto-clients
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y mosquitto mosquitto-clients
     fi
 
     if [[ "$NEED_1883" == 1 || "$NEED_9001" == 1 ]]; then
@@ -115,12 +126,16 @@ else
   echo ""
   echo "docs/level2.md §4.3 recommends running a local NTP server (chrony) on this"
   echo "same machine, so devices reach it at the same address as the broker."
-  read -r -p "Install/configure chrony as a local NTP server now? [y/N] " ANSWER
+  if [[ "$ASSUME_YES" == 1 ]]; then
+    ANSWER=y
+  else
+    read -r -p "Install/configure chrony as a local NTP server now? [y/N] " ANSWER
+  fi
   if [[ "$ANSWER" == "y" || "$ANSWER" == "Y" ]]; then
     if ! command -v chronyd &>/dev/null; then
       echo "Installing chrony..."
       sudo apt-get update -y
-      sudo apt-get install -y chrony
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y chrony
     fi
 
     STAMP=$(date +%Y%m%d%H%M%S)

@@ -26,11 +26,10 @@ echo "    App user: $APP_USER"
 # 1. System packages
 # ---------------------------------------------------------------------------
 echo "==> Installing system packages"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y \
   git \
-  nodejs \
-  npm \
   sqlite3 \
   build-essential \
   python3 \
@@ -40,10 +39,16 @@ apt-get install -y \
   curl \
   lsof
 
-# Check Node.js version (18+ required)
-NODE_VERSION=$(node -e "console.log(parseInt(process.versions.node.split('.')[0]))")
-if (( NODE_VERSION < 18 )); then
-  echo "==> Node.js 18+ required. Installing via NodeSource..."
+# Node.js: always install directly from NodeSource, never apt's own nodejs/npm
+# packages. Debian/Raspberry Pi OS split Node's whole ecosystem into dozens of
+# separate .deb packages — confirmed in practice on a Pi 4, `apt install nodejs
+# npm` pulled in node-babel7, node-istanbul, node-tape and more: a full
+# test/coverage/transpiler toolchain Atlas never uses, since it manages its own
+# dependencies via `npm ci` against package.json, not Debian's packaged copies.
+# That multiplies install time for zero benefit, especially on modest hardware.
+# NodeSource's own package is self-contained and skips all of it.
+if ! command -v node &>/dev/null || (( $(node -e "console.log(parseInt(process.versions.node.split('.')[0]))") < 18 )); then
+  echo "==> Installing Node.js 20.x via NodeSource"
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
