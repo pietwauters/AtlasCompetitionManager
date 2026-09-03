@@ -168,3 +168,23 @@ after `time-sync.target`, not just `network-online.target`, so NTP gets a chance
 correct the clock before `apt`/`git clone`/any certificate operation runs). If you're
 re-testing after pulling a fresh copy of this repo, you shouldn't see the "Not live
 until" errors anymore.
+
+### `pm2 restart atlas` fails at the very end with "Process or Namespace atlas not found"
+
+Confirmed real (2026-09-03), not just a stale-session artifact: `sudo -u <user> pm2
+start ...` inside `install.sh` runs in a transient login session (sudo/PAM). PM2
+daemonizes into the background but stays in that session's cgroup — without
+"lingering" enabled for that user, `systemd-logind` kills every process belonging to
+them, including the just-detached PM2 daemon, once the session that spawned it ends.
+Everything else in the run (broker, TLS, Tier A certs, ACLs, CRL) still completes
+successfully; only this final restart fails, and `pm2 list` right after shows an
+empty, freshly-spawned daemon with nothing in it.
+
+Fixed: `install.sh` now runs `sudo loginctl enable-linger <user>` before starting PM2
+at all, and `atlas-firstboot.sh`'s final restart falls back to a fresh `pm2 start` if
+`restart` still can't find the process for any other reason. If you hit this on an
+older image, recover by hand over SSH:
+```bash
+sudo loginctl enable-linger <username>
+cd ~/AtlasCompetitionManager && pm2 start server.js --name atlas && pm2 save
+```

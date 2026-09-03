@@ -168,6 +168,19 @@ HOME_DIR="$(eval echo ~"${APP_USER}")"
 sudo mkdir -p "$HOME_DIR/.pm2"
 sudo chown -R "$APP_USER":"$APP_USER" "$HOME_DIR/.pm2"
 
+# Enable lingering for $APP_USER *before* starting PM2 — confirmed as a real
+# bug on real hardware (2026-09-03), not theoretical. `sudo -u $APP_USER pm2
+# start ...` below runs inside a transient login session (sudo/PAM); PM2
+# daemonizes into the background but stays in that same session's cgroup, and
+# without lingering, systemd-logind kills every process belonging to
+# $APP_USER — including that just-detached PM2 daemon — once the session that
+# spawned it ends. Symptom: `pm2 restart atlas` (or any later `pm2` command)
+# finds no daemon at all and has to spawn a fresh, empty one. Lingering tells
+# systemd-logind to keep the user's processes alive independent of any login
+# session, which is the standard fix for exactly this "background service
+# owned by a non-interactive user" pattern.
+sudo loginctl enable-linger "$APP_USER"
+
 sudo -u "$APP_USER" pm2 start "$APP_DIR/server.js" \
   --name atlas \
   --cwd "$APP_DIR" \

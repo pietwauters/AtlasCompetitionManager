@@ -91,7 +91,14 @@ echo "==> Pushing the CRL and enforcing Tier A certificates on listener 8883"
 bash scripts/push-tier-a-crl.sh
 
 echo "==> Restarting Atlas so it picks up its new mTLS client certificate"
-sudo -u "$TARGET_USER" pm2 restart atlas
+# install.sh's own `loginctl enable-linger` (added 2026-09-03) is the real fix
+# for the PM2 daemon dying between install.sh's PM2 setup and here — but fall
+# back to a fresh start rather than fail the whole run if `restart` still
+# can't find it for any other reason (belt-and-braces, not a substitute for
+# the actual fix).
+sudo -u "$TARGET_USER" pm2 restart atlas \
+  || sudo -u "$TARGET_USER" pm2 start "$APP_DIR/server.js" --name atlas --cwd "$APP_DIR"
+sudo -u "$TARGET_USER" pm2 save
 
 touch /opt/.atlas-firstboot-done
 systemctl disable atlas-firstboot.service || true
