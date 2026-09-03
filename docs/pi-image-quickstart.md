@@ -84,20 +84,21 @@ ssh <username>@raspberrypi.local
 tail -f /var/log/atlas-firstboot.log
 ```
 
-Note the hostname stays the OS default (`raspberrypi`, not `openpiste`) — step 2's file
-drop only sets the user account and SSH, not the hostname rpi-imager's (broken) dialog
-would have. If `raspberrypi.local` doesn't resolve yet, the Pi may still be early in boot
-(avahi hasn't started advertising yet) — try again in a minute, or use its IP address
-directly if your router shows it. Once logged in, `sudo bash scripts/set-hostname.sh` sets
-it to `openpiste` (matching what the rest of Atlas assumes) if you want that — optional,
-not required for anything in this doc to work.
+Use `raspberrypi.local` for this first connection — step 2's file drop only sets the user
+account and SSH, not the hostname. `atlas-firstboot.sh` sets it to `openpiste` itself,
+partway through the run (`scripts/set-hostname.sh --yes`, since nothing else in this flow
+does — rpi-imager's own dialog would have, if it weren't broken), so the hostname changes
+underneath you mid-watch: your `ssh`/`tail -f` session stays connected through the rename,
+but a *new* connection after that point needs `openpiste.local` instead. If
+`raspberrypi.local` doesn't resolve yet, the Pi may still be early in boot (avahi hasn't
+started advertising yet) — try again in a minute, or use its IP address directly if your
+router shows it.
 
 ## 5. Done
 
-Browse to `https://raspberrypi.local:3001` (or `http://` on the same port before this
+Browse to `https://openpiste.local:3001` (or `http://` on the same port before this
 device has trusted the local CA — `/install-cert.html` walks through that, same as any
-other new device per `generate-tls-cert.sh`'s own instructions; swap in `openpiste.local`
-if you ran `set-hostname.sh` above).
+other new device per `generate-tls-cert.sh`'s own instructions).
 
 The admin PIN `install.sh` generates is in the log:
 ```bash

@@ -16,8 +16,14 @@
 #
 # Usage:
 #   ./scripts/set-hostname.sh
+#   ./scripts/set-hostname.sh --yes   # skip the confirmation prompt (scripted/first-boot callers with no tty)
 
 set -euo pipefail
+
+ASSUME_YES=0
+if [[ "${1:-}" == "--yes" || "${1:-}" == "-y" ]]; then
+  ASSUME_YES=1
+fi
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOSTNAME_BACKUP="$DIR/data/hostname.backup"
@@ -30,7 +36,11 @@ fi
 
 echo "Atlas's OPP2 design (CLAUDE.md) assumes this device is reachable as"
 echo "openpiste.local via mDNS. Current hostname: '$CURRENT'."
-read -r -p "Set this machine's hostname to 'openpiste' now? [y/N] " ANSWER
+if [[ "$ASSUME_YES" == 1 ]]; then
+  ANSWER=y
+else
+  read -r -p "Set this machine's hostname to 'openpiste' now? [y/N] " ANSWER
+fi
 if [[ "$ANSWER" != "y" && "$ANSWER" != "Y" ]]; then
   echo "Leaving hostname as '$CURRENT'. OPP2 features that assume openpiste.local"
   echo "(TLS certs, broker mDNS discovery) may need manual reconfiguration without it."
@@ -55,7 +65,11 @@ else
   echo -e "127.0.1.1\topenpiste" | sudo tee -a /etc/hosts >/dev/null
 fi
 
+if command -v systemctl &>/dev/null && systemctl is-active --quiet avahi-daemon 2>/dev/null; then
+  echo "Restarting avahi-daemon so openpiste.local is advertised immediately..."
+  sudo systemctl restart avahi-daemon
+fi
+
 echo ""
-echo "Done. Hostname is now 'openpiste' (openpiste.local once avahi-daemon picks it"
-echo "up — may need: sudo systemctl restart avahi-daemon)."
+echo "Done. Hostname is now 'openpiste' — openpiste.local should resolve now."
 echo "Run ./scripts/restore-hostname.sh any time to undo this."

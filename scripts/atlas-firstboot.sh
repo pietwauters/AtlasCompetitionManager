@@ -65,6 +65,17 @@ cd "$APP_DIR"
 echo "==> Running install.sh (app, packages, DB, PM2/systemd service, admin account)"
 SUDO_USER="$TARGET_USER" bash install.sh
 
+# install.sh's own hostname step only runs interactively ([[ -t 0 ]]) — always
+# false here (a systemd unit has no tty) — so it's skipped there by design.
+# Set it explicitly instead: rpi-imager's OS Customisation would normally have
+# done this, but that dialog is confirmed broken on the current default OS
+# release (see docs/pi-image-quickstart.md), so nothing else in this flow sets
+# it. TLS certs are hardcoded to openpiste.local regardless of the live
+# hostname (generate-tls-cert.sh), so ordering relative to that step doesn't
+# matter — this only needs to run before "done" is printed at the end.
+echo "==> Setting hostname to openpiste"
+bash scripts/set-hostname.sh --yes
+
 echo "==> Provisioning MQTT broker + local NTP server"
 bash scripts/provision-broker.sh --yes
 
