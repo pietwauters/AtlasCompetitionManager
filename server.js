@@ -44,6 +44,7 @@ app.use(session({
   cookie:            { httpOnly: true, sameSite: 'lax', maxAge: 12 * 60 * 60 * 1000 },
 }));
 app.use(auth.attach);
+app.use(auth.requirePinChange);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
