@@ -150,3 +150,21 @@ that fails. `p7zip-full`, `sqlite3` (the CLI), and `lsof` are dropped entirely f
 default install — they're only needed by the optional failover-bundle scripts or manual
 debugging, and those scripts/`docs/admin-manual.md` now tell you how to install them
 on demand if you need them.
+
+### The Pi's clock is wrong, apt fails signature checks, everything crawls
+
+Symptom: `atlas-firstboot.log`'s very first line shows an obviously wrong date (e.g.
+months in the past), and the `apt-get install` right after it fails with `Verifying
+signature: Not live until <some future date>` for every Debian repo, falling back to
+stale cached package indexes. Confirmed real (2026-09-03): a Pi has no battery-backed
+RTC, so a cold first boot can start with the clock stuck wherever the OS image left it
+— from the clock's own wrong point of view, today's real repo signatures look like
+they're from the future. `apt` still limps forward on the stale fallback rather than
+hard-failing, so this shows up as things being unusually slow rather than an outright
+error — easy to mistake for "the whole install just takes this long."
+
+Fixed for future flashes (`prepare-pi-firstboot.sh` now orders `atlas-firstboot.service`
+after `time-sync.target`, not just `network-online.target`, so NTP gets a chance to
+correct the clock before `apt`/`git clone`/any certificate operation runs). If you're
+re-testing after pulling a fresh copy of this repo, you shouldn't see the "Not live
+until" errors anymore.

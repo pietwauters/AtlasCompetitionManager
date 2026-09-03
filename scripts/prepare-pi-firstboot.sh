@@ -66,13 +66,26 @@ sudo chmod 755 "$ROOT_MNT/opt/atlas-firstboot.sh"
 
 # ---------------------------------------------------------------------------
 # Write the systemd unit and enable it offline via `systemctl --root=`.
+#
+# Waits on time-sync.target, not just network-online.target: a Pi has no
+# battery-backed RTC, so a cold first boot's clock can start out badly wrong
+# (observed in practice: stuck on a months-old date) until NTP corrects it.
+# Confirmed in real testing (2026-09-03) that this alone made apt treat every
+# Debian repo's signature as "not live until" a future date (since the repo
+# really was signed after the Pi's wrong idea of "now"), forcing a slow
+# stale-index fallback right at atlas-firstboot.sh's very first apt-get. git
+# clone (HTTPS, also checks certificate validity windows against system time)
+# and every cert atlas-firstboot.sh later issues could hit the same problem.
+# time-sync.target is what systemd-timesyncd/chrony signal once they've
+# actually synced, so ordering after it means apt/git/openssl only ever run
+# with a clock that's actually correct.
 # ---------------------------------------------------------------------------
 echo "==> Writing etc/systemd/system/atlas-firstboot.service"
 sudo tee "$ROOT_MNT/etc/systemd/system/atlas-firstboot.service" >/dev/null <<'EOF'
 [Unit]
 Description=Atlas Competition Manager — first-boot provisioning
-After=network-online.target
-Wants=network-online.target
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
 ConditionPathExists=!/opt/.atlas-firstboot-done
 
 [Service]
