@@ -45,7 +45,9 @@ git clone <repo> && cd AtlasCompetitionManager
 sudo bash install.sh
 ```
 
-Installs system packages (Node 18+, sqlite3, build tools), runs `npm ci`, creates
+Installs system packages (git, avahi, openssl, curl), Node.js 20 via NodeSource,
+runs `npm ci` (build tools only if a prebuilt `better-sqlite3` binary isn't
+available for this platform), creates
 `data/`, runs DB migrations, creates `.env` (with a placeholder `SESSION_SECRET` you
 should change before going to production), installs PM2 and configures it to start
 Atlas on boot, and creates the initial `admin` account — **the one-time PIN is printed
@@ -306,6 +308,12 @@ like any SQLite file:
 # Safe to copy while the server is running (WAL mode) — quick outage-free snapshot:
 sqlite3 data/atlas.db ".backup data/atlas-backup-$(date +%F).db"
 ```
+
+`sqlite3` (the CLI) isn't installed by default since 2026-09-03 — `install.sh` no
+longer needs it (better-sqlite3, the npm package Atlas actually uses, is unrelated
+to the CLI binary). Install it once if you want ad-hoc access: `sudo apt-get install
+-y sqlite3`. `create-failover-bundle.sh` below checks for it itself and tells you
+the same thing if it's missing.
 
 ### 6.1 Mid-competition failover to a standby server
 

@@ -54,6 +54,13 @@ if ! command -v 7z &>/dev/null; then
   exit 1
 fi
 
+if ! command -v sqlite3 &>/dev/null; then
+  echo "sqlite3 not found — install it first: sudo apt-get install -y sqlite3" >&2
+  echo "(needed for the live '.backup' snapshot — install.sh no longer installs" >&2
+  echo "this by default, since better-sqlite3 the npm package doesn't need it.)" >&2
+  exit 1
+fi
+
 if [[ ! -f "$DB_PATH" ]]; then
   echo "Missing $DB_PATH — nothing to back up." >&2
   exit 1

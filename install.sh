@@ -30,14 +30,9 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y \
   git \
-  sqlite3 \
-  build-essential \
-  python3 \
-  p7zip-full \
   avahi-daemon \
   openssl \
-  curl \
-  lsof
+  curl
 
 # Node.js: always install directly from NodeSource, never apt's own nodejs/npm
 # packages. Debian/Raspberry Pi OS split Node's whole ecosystem into dozens of
@@ -59,9 +54,20 @@ echo "    npm : $(npm --version)"
 # ---------------------------------------------------------------------------
 # 2. Install Node dependencies
 # ---------------------------------------------------------------------------
+# better-sqlite3 ships prebuilt binaries for linux-arm64/x64 (its own install
+# script runs `prebuild-install || node-gyp rebuild`) — confirmed a prebuild
+# exists for Node 20's ABI (v115) on both arches, so a plain `npm ci` normally
+# needs no compiler at all. build-essential/python3 (node-gyp's toolchain) are
+# therefore only installed on demand, if a prebuild wasn't available for this
+# exact platform/Node combination — not unconditionally on every install.
 echo "==> Installing Node.js dependencies"
 cd "$APP_DIR"
-sudo -u "$APP_USER" npm ci --omit=dev
+if ! sudo -u "$APP_USER" npm ci --omit=dev; then
+  echo "==> npm ci failed (likely no better-sqlite3 prebuild for this platform)"
+  echo "    Installing build-essential + python3 so it can compile from source"
+  apt-get install -y build-essential python3
+  sudo -u "$APP_USER" npm ci --omit=dev
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Create runtime data directory
@@ -132,9 +138,13 @@ fi
 # ---------------------------------------------------------------------------
 # 5b. Check the chosen port is not already in use
 # ---------------------------------------------------------------------------
+# ss (iproute2) ships as part of the base OS on any Debian/Raspberry Pi OS
+# install, so it's the primary check with no package to install for it. lsof
+# is a nice-to-have second opinion, not installed by default — only used here
+# if it already happens to be present.
 APP_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d= -f2 | tr -d ' ' || echo 3001)
 if ss -tlnp 2>/dev/null | grep -q ":${APP_PORT} " || \
-   lsof -iTCP:"${APP_PORT}" -sTCP:LISTEN -t 2>/dev/null | grep -q .; then
+   { command -v lsof &>/dev/null && lsof -iTCP:"${APP_PORT}" -sTCP:LISTEN -t 2>/dev/null | grep -q .; }; then
   echo ""
   echo "  !! WARNING: port ${APP_PORT} is already in use on this machine."
   echo "     Edit $APP_DIR/.env and change PORT= before starting Atlas,"
