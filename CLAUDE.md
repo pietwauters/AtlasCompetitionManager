@@ -505,6 +505,53 @@ Docker-on-desktop doesn't actually solve that blocker, a pre-built Pi image as t
 low-risk packaging option, and a zero-Linux-knowledge WiFi setup flow (ethernet-first
 via the browser, using the same sudo-script pattern as the CRL/hostname scripts).
 
+### Pi-image first-boot automation — complete, 2026-09-02/03; verified end-to-end on real Pi 4 hardware
+`docs/pi-image-quickstart.md` is the authoritative runbook — read it first. Turns the
+discussion above's "pre-built Pi image" idea into real, working tooling: flash
+Raspberry Pi OS Lite via `rpi-imager`, drop `userconf.txt`/`ssh` onto the boot partition
+by hand (rpi-imager's own OS Customisation dialog is confirmed broken on the current
+default OS release — [raspberrypi/rpi-imager#1444](https://github.com/raspberrypi/rpi-imager/issues/1444)
+— so this file-drop is the documented **primary** path, not a fallback), then
+`scripts/prepare-pi-firstboot.sh` writes and enables `scripts/atlas-firstboot.sh` (a
+systemd oneshot unit) onto the not-yet-booted drive. On first real boot, that script
+unattended-provisions the entire stack: `install.sh`, `provision-broker.sh --yes`
+(Mosquitto + chrony), the full Tier A mTLS chain (`generate-tls-cert.sh` →
+`install-broker-cert.sh` → `provision-cms-client-cert.sh` → ACL sync → CRL push),
+hostname (`set-hostname.sh --yes`), and a final `pm2` restart. Privilege separation is
+deliberate per step (system paths as root, `data/tls/`/DB as the target user — the same
+failure mode the admin.html CRL button already documents).
+
+Three real bugs found and fixed via actual hardware testing (see the doc's own
+troubleshooting section for full detail): a Pi's clock can start badly wrong on a cold
+boot (no RTC), which made `apt` fail Debian's signature checks until NTP caught up —
+fixed by ordering the first-boot unit after `time-sync.target`, not just
+`network-online.target`; the PM2 daemon `install.sh` starts can get killed by
+`systemd-logind`'s session cleanup before `atlas-firstboot.sh`'s final restart, since it
+runs inside a transient sudo/PAM session without lingering enabled — fixed with
+`loginctl enable-linger`; and nothing was actually setting the hostname to `openpiste`
+in the unattended flow (`install.sh`'s own step is interactive-only, and rpi-imager's
+dialog is the broken one above) — fixed by calling `set-hostname.sh --yes` explicitly.
+`install.sh`'s package list was also trimmed to a genuinely minimal set
+(`build-essential`/`python3` only installed on demand if a `better-sqlite3` prebuild
+isn't available for the target platform; `p7zip-full`/`sqlite3`/`lsof` dropped
+entirely, installable on demand where they're actually used).
+
+One real, practical lesson from testing: cheap/degraded USB flash media can be the
+actual bottleneck, not the scripts — one bad drive measured under 1 MB/s write on the
+Pi (confirmed via `dd`, independently reproduced far below normal even on a known-good
+laptop with the same physical drive) vs. ~21 MB/s for an ordinary fresh drive of the
+same class. See `docs/distribution-and-licensing-discussion.md` for why this matters
+beyond just testing (shipping known-good storage as part of a future client kit).
+
+### Distribution & licensing — discussion, started 2026-09-03
+`docs/distribution-and-licensing-discussion.md` — non-normative brainstorm, nothing
+implemented. Golden-image appliance distribution (split a "build once" image carrying
+every package from a fast per-unit "personalize on first boot" step; the load-bearing
+rule is to never bake per-unit identity — TLS CA key, SSH host keys, `machine-id`,
+DB/admin account — into a shared image, or every client's Pi ends up trusting every
+other client's) and a first pass at commercial licensing model options, given this
+repo is currently public on GitHub.
+
 ### Competition formats (complete)
 `formats/*.json` shape files + `formats/catalog.json` (named/taggable aliases, 22+
 entries) define multi-phase flows with cohorts and exemptions. Covers FIE GP/Worlds/
@@ -657,7 +704,10 @@ every commit.
 - Authentication: fully wired — session-based PIN login, roles: `admin` / `director` / `assistant` / `referee`
 - GET requests are public; mutations are gated per route (`writeOnly(role)` in `server.js`)
 - OPP2/MQTT config and user management require `admin`; phase/bout scoring requires `director`
-- Install creates an `admin` account with a one-time PIN (forced change on first login)
+- Install creates an `admin` account with a one-time PIN, forced change on first login —
+  enforced server-side (`middleware/auth.js`'s `requirePinChange`, added 2026-09-03),
+  not just a client-side redirect on the login page, which a stale session cookie from
+  an earlier login could otherwise skip entirely
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
 ### 5. OPP2 cloud bridge
@@ -678,6 +728,7 @@ every commit.
 | Path | Purpose |
 |---|---|
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
+| `middleware/auth.js` | Role gate (`require(role)`) + `requirePinChange` (server-side forced-PIN-change enforcement, re-checked fresh from the DB every request) |
 | `db/migrator.js` | Runs pending `.sql` files on start |
 | `db/migrations/` | Numbered schema migrations (001–030) |
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) — see `docs/format-authoring-guide.md` for the full field reference |
@@ -711,6 +762,9 @@ every commit.
 | `public/opp2.html` | Pipeline builder, live piste status, piste + referee Gantt charts |
 | `public/referee-schedule.html` | By-piste / by-referee schedule views |
 | `scripts/sync-spec.sh` | Diff/update `docs/level2.md` against the canonical upstream spec |
+| `docs/pi-image-quickstart.md` | Pi-image first-boot automation runbook — flash → boot → fully provisioned app/broker/NTP/Tier A stack, plus known-hardware-quirk troubleshooting |
+| `scripts/atlas-firstboot.sh` | Template first-boot provisioning script; written onto a freshly-flashed, not-yet-booted Pi by `prepare-pi-firstboot.sh`, runs once via systemd on first real boot |
+| `scripts/prepare-pi-firstboot.sh` | Runs on the preparer's own machine — writes + offline-enables `atlas-firstboot.sh`'s systemd unit on a mounted, not-yet-booted Pi filesystem |
 | `scripts/check-architecture.sh` | Mechanical architecture/code-quality checks — run before committing any change under `services/`, `routes/`, `lib/`, `public/*.html`, or `public/js/*.js`. See `docs/architecture-kpis.md` |
 | `docs/architecture-kpis.md` | Full architecture/code-quality KPI reference — mechanical (scripted) + judgment-based (periodic review) |
 | `docs/schedule-planner-algorithm.md` | Full reference for the schedule-planner solver — piste eligibility, the min/max opportunistic-widening range, the fencer-rest minGap formula, referee cap, warnings |
