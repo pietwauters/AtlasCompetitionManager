@@ -25,6 +25,7 @@ unless stated otherwise.
 | Push Tier A certs/CRL to the broker (incl. after a revoke) | `./scripts/sync-mosquitto-tier-a.sh` | yes |
 | Add more scoresheet pairing credentials | `node scripts/top-up-credential-pool.js [count]` | no |
 | Push credential pool to the broker (incl. after a revoke) | `./scripts/sync-mosquitto-scoresheet-acl.sh` | yes |
+| Scan for / connect to WiFi networks (also triggered from admin.html's WiFi card) | `./scripts/configure-wifi.sh scan <CC>` / `connect <CC> <ssid>` | yes |
 | Check/update the OPP2 spec mirror | `./scripts/sync-spec.sh [--update]` | no |
 | Wipe the database (irreversible) | `node scripts/reset_database.js` | no |
 | Bundle everything a standby server needs | `./scripts/create-failover-bundle.sh` | no |
@@ -406,6 +407,22 @@ non-admin users go through `/admin.html` (Admin → Users), which requires an
 admin-role login. See `docs/security-and-roles.md` for the role model
 (`admin`/`director`/`assistant`/`referee`) and what each can do. §3 above covers the
 one case that *is* a script: recovering when the admin account itself is locked out.
+
+## 10. WiFi
+
+`/admin.html`'s WiFi card sets the regulatory country, scans for nearby networks, and
+connects — no SSH needed for day-to-day WiFi setup. Ethernet-first by design: keep
+ethernet connected while testing a new WiFi profile, since a wrong password just means
+retry, never a lockout (see `docs/cross-platform-deployment-discussion.md` §5).
+
+Needs the one-time sudoers grant below before the button does anything beyond
+surfacing "a password is required" — see the CLAUDE.md entry for this feature for the
+exact line. Same script also works run by hand:
+
+```bash
+./scripts/configure-wifi.sh scan BE
+./scripts/configure-wifi.sh connect BE "MyHomeWiFi"   # prompts for the password on stdin
+```
 
 ## What's deliberately *not* here
 

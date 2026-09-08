@@ -99,6 +99,64 @@
     </div>
   </details>
 
+  <details class="card" open data-key="wifi">
+  <summary><h2 style="display:inline;margin:0">WiFi</h2></summary>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-top:1rem">
+      <label class="form-label" style="min-width:12rem">Country
+        <select class="form-input" x-model="wifiForm.country">
+          <option value="">Select a country…</option>
+          <template x-for="c in WIFI_COUNTRIES" :key="c.code">
+            <option :value="c.code" x-text="c.name + ' (' + c.code + ')'"></option>
+          </template>
+        </select>
+      </label>
+      <button @click="scanWifi()" :disabled="!wifiForm.country || wifiScanning" style="background:var(--clr-th-bg)">
+        <span x-show="!wifiScanning">Scan for networks</span>
+        <span x-show="wifiScanning">Scanning…</span>
+      </button>
+    </div>
+
+    <div x-show="wifiNetworks.length" style="margin-top:.75rem;max-height:12rem;overflow-y:auto;border:1px solid var(--clr-border);border-radius:6px">
+      <table class="table" style="width:100%">
+        <tbody>
+          <template x-for="n in wifiNetworks" :key="n.ssid">
+            <tr style="cursor:pointer" @click="wifiForm.ssid = n.ssid; wifiForm.open = !n.security"
+                :style="wifiForm.ssid === n.ssid ? 'background:var(--clr-th-bg)' : ''">
+              <td x-text="n.ssid"></td>
+              <td style="color:var(--clr-text-muted)" x-text="n.security || 'open'"></td>
+              <td style="color:var(--clr-text-muted);text-align:right" x-text="n.signal + '%'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-top:.75rem">
+      <label class="form-label" style="min-width:14rem;flex:1">Network name (SSID)
+        <input class="form-input" type="text" x-model="wifiForm.ssid" placeholder="MyHomeWiFi">
+      </label>
+      <label class="form-label" style="min-width:14rem;flex:1">
+        <span :style="wifiForm.open ? 'color:var(--clr-text-muted)' : ''">Password</span>
+        <input class="form-input" type="password" x-model="wifiForm.password" :disabled="wifiForm.open"
+               placeholder="••••••••">
+      </label>
+      <label style="font-size:.85rem;display:flex;align-items:center;gap:.4rem;padding-bottom:.55rem">
+        <input type="checkbox" x-model="wifiForm.open" @change="wifiForm.password=''"> Open network (no password)
+      </label>
+    </div>
+
+    <div style="margin-top:.75rem">
+      <button class="primary" @click="connectWifi()"
+              :disabled="!wifiForm.country || !wifiForm.ssid || wifiConnecting">
+        <span x-show="!wifiConnecting">Connect</span>
+        <span x-show="wifiConnecting">Connecting…</span>
+      </button>
+      <span style="font-size:.75rem;color:var(--clr-text-muted);margin-left:.4rem">
+        Needs a one-time sudoers grant — see <code>scripts/configure-wifi.sh</code>.
+      </span>
+    </div>
+  </details>
+
   <details class="card" open data-key="pairing">
   <summary><h2 style="display:inline;margin:0">Device pairing</h2></summary>
     <p style="font-size:.85rem;color:var(--clr-text-muted);margin:1rem 0 .75rem">
@@ -312,6 +370,7 @@
 </main>
 <script src="/js/nav.js"></script>
 <script src="/js/collapse-persist.js"></script>
+<script src="/js/wifi-countries.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
@@ -319,6 +378,11 @@ function app() {
     notice:         { text: '', error: false },
     status:         { connected: false, brokerUrl: '', pistes: [] },
     crlRefreshing:  false,
+    WIFI_COUNTRIES: WIFI_COUNTRIES,
+    wifiForm:       { country: '', ssid: '', password: '', open: false },
+    wifiNetworks:   [],
+    wifiScanning:   false,
+    wifiConnecting: false,
     brokerUrl:      '',
     effectiveBrokerUrl: '',
     autoNextOnEnd:  false,
@@ -342,6 +406,10 @@ function app() {
       this.manualTieBreak = cs.manual_tie_break === '1';
       await Promise.all([ this.loadStatus(), this.loadUsers(), this.loadBoutStandards() ]);
       setInterval(() => this.loadStatus(), 5000);
+      try {
+        const region = new Intl.Locale(navigator.language).maximize().region;
+        if (region && WIFI_COUNTRIES.some(c => c.code === region)) this.wifiForm.country = region;
+      } catch (_) { /* best-effort convenience default only, never required */ }
     },
 
     async loadStatus() {
@@ -376,6 +444,35 @@ function app() {
         await this.loadStatus();
       } finally {
         this.crlRefreshing = false;
+      }
+    },
+
+    async scanWifi() {
+      this.wifiScanning = true;
+      try {
+        const r = await fetch('/api/wifi/scan?country=' + encodeURIComponent(this.wifiForm.country));
+        const d = await r.json();
+        if (!r.ok) { this.showNotice(d.error || 'WiFi scan failed', true); return; }
+        this.wifiNetworks = d.networks || [];
+        if (!this.wifiNetworks.length) this.showNotice('No networks found');
+      } finally {
+        this.wifiScanning = false;
+      }
+    },
+
+    async connectWifi() {
+      this.wifiConnecting = true;
+      try {
+        const r = await fetch('/api/wifi/connect', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.wifiForm),
+        });
+        const d = await r.json();
+        if (!r.ok) { this.showNotice(d.error || 'WiFi connect failed', true); return; }
+        this.showNotice('Connected to ' + this.wifiForm.ssid);
+      } finally {
+        this.wifiForm.password = '';
+        this.wifiConnecting = false;
       }
     },
 

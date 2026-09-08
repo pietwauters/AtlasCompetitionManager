@@ -631,6 +631,33 @@ sudo in the dev environment this was built in) — the prune/refresh half and th
 clean-ownership property were verified directly; the actual privileged push/restart
 was not.
 
+### Admin.html WiFi panel — built 2026-09-08, needs a one-time manual step
+Implements the browser-based WiFi setup sketched in
+`docs/cross-platform-deployment-discussion.md` §5 ("Zero-config WiFi setup from the
+admin UI"): scan/connect from `admin.html` instead of SSH + `nmcli`/`raspi-config` by
+hand. Same sudo-script pattern as the CRL button above, one instance of an existing
+architecture, not a new one — `scripts/configure-wifi.sh` (new) takes `scan <country>`
+or `connect <country> <ssid>` (password read from stdin, never argv, so it never
+appears in `services/wifiConfig.js`'s own `execFileSync` argv or this script's process
+listing — `nmcli` itself still receives it as an argument, but only root, already
+running this whole chain, ever sees that). Sets the WiFi regulatory country via
+`raspi-config nonint do_wifi_country` first (also clears the `rfkill` soft-block every
+fresh Pi ships with), then defers to `nmcli`. `services/wifiConfig.js` wraps the
+`execFileSync('sudo', [...])` call and parses `nmcli`'s terse scan output (dedup by
+SSID, strongest signal wins, `--` security treated as open). `GET /api/wifi/scan`,
+`POST /api/wifi/connect` (`routes/wifi.js`, whole router admin-gated at the `server.js`
+mount, same shape as `/api/users`) translate a few common `nmcli` failure strings into
+plain language (wrong password, network not found) rather than surfacing raw stderr,
+per the design doc's UX principle. New card on `admin.html`: country dropdown (full
+ISO 3166-1 alpha-2 list, `public/js/wifi-countries.js` — unrelated to the app's own
+NOC/IOC-code data, a different system), Scan button + clickable results list, SSID/
+password fields, Connect button. **Requires a one-time sudoers grant**
+(`<app-user> ALL=(root) NOPASSWD: <path-to>/scripts/configure-wifi.sh`) — without it
+the button surfaces sudo's own "a password is required" rather than doing anything.
+**Not yet tested end to end** — built and syntax-checked in the dev environment, no
+passwordless sudo or real WiFi radio available there; needs the sudoers grant installed
+and a real scan/connect click-through on `openpiste` to confirm.
+
 ### Kiosk waiting-room displays — complete, 2026-07-27
 `public/kiosk-fencers.html` (per-competition fencer schedule) and
 `public/kiosk-officials.html` (cross-competition officiating schedule), full-screen

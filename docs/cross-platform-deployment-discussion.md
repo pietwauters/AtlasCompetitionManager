@@ -150,6 +150,13 @@ operator doing it by hand?
 
 ## 5. Zero-config WiFi setup from the admin UI — the new idea, 2026-08-23
 
+**Built 2026-09-08** — see CLAUDE.md's "Admin.html WiFi panel" entry for what actually
+shipped (`scripts/configure-wifi.sh`, `services/wifiConfig.js`, `routes/wifi.js`, the
+new card on `admin.html`). The design below is what got built, not just discussed —
+kept here for the rationale. Not yet tested on real hardware (needs the sudoers grant
+installed and a real scan/connect click-through). §6's combined first-boot flow is
+still aspirational, not part of this.
+
 Goal: an organiser with zero Linux/Pi knowledge plugs the Pi into ethernet + power,
 browses to `openpiste.local`, and does everything else (admin PIN, WiFi credentials)
 from the browser. No SSH, no keyboard/monitor, no `raspi-config`.

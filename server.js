@@ -93,6 +93,7 @@ app.use('/api/strips', writeOnly('director'), require('./routes/strips'));
 app.use('/api/opp2',     writeOnly('director'), require('./routes/opp2'));
 app.use('/api/settings', writeOnly('director'), require('./routes/settings'));
 app.use('/api/users',    auth.require('admin'), require('./routes/users'));
+app.use('/api/wifi',     auth.require('admin'), require('./routes/wifi'));
 app.use('/api/fie',    writeOnly('director'), require('./routes/fieImport'));
 app.use('/api/pairing', auth.require('director'), require('./routes/pairing'));
 app.use('/api/pair',    require('./routes/pair'));
