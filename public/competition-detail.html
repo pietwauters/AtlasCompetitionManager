@@ -89,6 +89,16 @@
         Which fencer attribute(s) a referee/official assignment should avoid matching — not yet enforced automatically.
       </span>
     </div>
+    <div style="margin-top:.6rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <label style="font-size:.83rem;display:flex;align-items:center;gap:.4rem">
+        OPP2 code
+        <input class="inline" style="width:12rem" x-model="compCode" @change="updateCode()" spellcheck="false">
+      </label>
+      <span x-show="codeError" style="font-size:.78rem;color:var(--clr-danger-text)" x-text="codeError"></span>
+      <span x-show="!codeError" style="font-size:.78rem;color:var(--clr-text-muted)">
+        Identifies this competition to scoreboards, scoresheets and the cloud broker; unique within the tournament.
+      </span>
+    </div>
   </div>
 
   <!-- ── Rounds ──────────────────────────────────── -->
@@ -665,7 +675,7 @@ function app() {
     refereeRoster:[], eligibleReferees:[], selectedRefIds:[], eligRefClub:'',
     presenceModal:{open:false,unknownCount:0,onContinue:null},
     phases:[], poolRules:[], deRules:[], phaseFormOpen:false,
-    newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club', refereeSeparation:'',
+    newPhaseType:'pool', newRuleDoc:'', poolSeparation:'club', refereeSeparation:'', compCode:'', codeError:'',
     poolOptions:null, chosenSizes:null, deOptions:null, deSeedingMethod:'last',
     notice:{text:'',error:false},
     teams:[], newTeamName:'', addingTeam:false, expandedTeam:null,
@@ -730,6 +740,15 @@ function app() {
       this.comp=await fetch('/api/competitions/'+compId).then(r=>r.json());
       document.title='Atlas — '+(this.comp.name||'Competition');
       this.refereeSeparation=this.comp.referee_separation||'';
+      this.compCode=this.comp.code||'';
+    },
+
+    async updateCode() {
+      const r=await fetch('/api/competitions/'+compId,{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code:this.compCode.trim()})});
+      if (!r.ok) { this.codeError=(await r.json()).error||'Could not save code'; return; }
+      this.codeError='';
+      await this.loadComp();
     },
 
     async updateRefereeSeparation() {

@@ -738,9 +738,21 @@ every commit.
 - `scripts/reset_admin_pin.js` resets a lost admin PIN
 
 ### 5. OPP2 cloud bridge
-- Mosquitto bridge config to remote broker
-- `tournament_id` / `competition_id` from Atlas in payloads
-- Lower priority: local operation is fully functional without it
+Built 2026-09-25 (spec §31 reworked the same day — needs its upstream PR merged):
+`scripts/configure-cloud-bridge.sh` + `scripts/cloud-bridge.example.json` write a
+static native Mosquitto bridge (`/etc/mosquitto/conf.d/openpiste-cloud-bridge.conf`)
+with the **tournament-level** cloud prefix
+`openpiste/{NOC}/{yyyy}/{mm}/{dd}/{tournament_id}/…`. Competition is deliberately
+**not** a topic segment: pistes move between competitions during the day, which a
+static bridge can't follow, so the competition travels as data — the `competition`
+field of `software/record` (mandatory, retained) and `software/match`, holding the
+competition's `code` (migration 047, editable on `competition-detail.html`, unique per
+tournament). Relays `openpiste/+/{role}/#` per publisher role, never `openpiste/+/+/+`
+(would leak `_provision/response/*` certs). Collision check = the retained §31.5
+tournament identity message, not a separate registry. Tested against disposable
+local brokers only — not yet against the real `mqtt.openpiste.org` (TLS) or the real
+sudo/systemctl path. Still open: generating the identity's competition list from
+Atlas instead of the config file (§31.6 Option B).
 
 ### Out of scope for MVP
 | Feature | Notes |
@@ -757,7 +769,7 @@ every commit.
 | `server.js` | Entry point, route mounting, migration runner, OPP2 auto-connect |
 | `middleware/auth.js` | Role gate (`require(role)`) + `requirePinChange` (server-side forced-PIN-change enforcement, re-checked fresh from the DB every request) |
 | `db/migrator.js` | Runs pending `.sql` files on start |
-| `db/migrations/` | Numbered schema migrations (001–030) |
+| `db/migrations/` | Numbered schema migrations (001–047) |
 | `rules/` | JSON rule documents (pool-standard, de-standard, …) — see `docs/format-authoring-guide.md` for the full field reference |
 | `formats/` | Format shape files + `catalog.json` — see `docs/format-authoring-guide.md` |
 | `docs/format-authoring-guide.md` | Complete authoring reference: rule files → format shapes → catalog entries, with a worked end-to-end example |

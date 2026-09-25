@@ -8,6 +8,18 @@ const db = require('../db');
 const { isValidPartition, fillDeBoutCount, fillDeByeInfo } = require('../lib/deSlotMath');
 
 const stmtSlotById    = db.prepare('SELECT * FROM pipeline_slots WHERE id = ?');
+// OPP2 `competition` identifier for a slot (docs/level2.md §31.4) — resolves the
+// same pool/DE/team_match/virtual paths as stmtFindByStripQuery.
+const stmtSlotCompetitionCode = db.prepare(`
+  SELECT COALESCE(co.code, co_v.code) AS code
+  FROM pipeline_slots ps
+  LEFT JOIN pools        po ON po.id = ps.pool_id
+  LEFT JOIN team_matches tm ON tm.id = ps.team_match_id
+  LEFT JOIN phases       ph ON ph.id = COALESCE(ps.phase_id, po.phase_id, tm.phase_id)
+  LEFT JOIN competitions co   ON co.id   = ph.competition_id
+  LEFT JOIN competitions co_v ON co_v.id = ps.virtual_competition_id
+  WHERE ps.id = ?
+`);
 const stmtRefereeName = db.prepare(`
   SELECT p.first_name AS ref_first, p.last_name AS ref_last, p.nationality AS ref_nation
   FROM referees r JOIN people p ON p.id = r.person_id WHERE r.id = ?
@@ -46,6 +58,7 @@ const stmtFindByStripQuery = db.prepare(`
     ph.type       AS phase_type,
     ph.phase_order,
     COALESCE(co.name, co_v.name)     AS competition_name,
+    COALESCE(co.code, co_v.code)     AS competition_code,
     COALESCE(co.weapon, co_v.weapon) AS weapon,
     po.pool_number, po.strip_count, po.dynamic_reorder,
     tm_slot.left_team_id, tm_left.name AS left_team_name,
@@ -102,6 +115,7 @@ const stmtFindAllForRefereeQuery = db.prepare(`
     po.pool_number,
     ph.type AS phase_type, ph.phase_order,
     COALESCE(co.name, co_v.name)     AS competition_name,
+    COALESCE(co.code, co_v.code)     AS competition_code,
     COALESCE(co.weapon, co_v.weapon) AS weapon,
     tm_slot.left_team_id, tm_left.name AS left_team_name,
     tm_slot.right_team_id, tm_right.name AS right_team_name,
@@ -329,6 +343,10 @@ const PipelineSlots = {
 
   findById(id) {
     return stmtSlotById.get(id);
+  },
+
+  competitionCode(slotId) {
+    return stmtSlotCompetitionCode.get(slotId)?.code || '';
   },
 
   refereeName(refereeId) {

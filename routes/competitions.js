@@ -37,7 +37,12 @@ router.post('/', (req, res) => {
 });
 
 router.patch('/:id', (req, res) => {
-  const c = Competition.update(req.params.id, req.body);
+  let c;
+  try {
+    c = Competition.update(req.params.id, req.body);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
   if (!c) return res.status(404).json({ error: 'Competition not found' });
   res.json(c);
 });

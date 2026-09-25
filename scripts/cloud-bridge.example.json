@@ -1,0 +1,36 @@
+{
+  "broker": {
+    "host": "mqtt.openpiste.org",
+    "port": 8883,
+    "username": "bridge",
+    "password_file": "/etc/openpiste/bridge_password"
+  },
+  "tournament": {
+    "id": "bel-nat-champ-2026",
+    "name": "Belgian National Championships 2026",
+    "city": "Gent",
+    "country": "BEL",
+    "start_date": "2026-06-15",
+    "end_date": "2026-06-16",
+    "organiser": "KBSB-FRBE"
+  },
+  "competitions": [
+    {
+      "id": "senior-m-foil",
+      "name": "Senior Men's Foil Individual",
+      "weapon": "F",
+      "type": "I",
+      "category": "Senior",
+      "gender": "M"
+    },
+    {
+      "id": "senior-f-epee",
+      "name": "Senior Women's Épée Individual",
+      "weapon": "E",
+      "type": "I",
+      "category": "Senior",
+      "gender": "F"
+    }
+  ],
+  "extra_publishers": []
+}

@@ -1,5 +1,6 @@
 'use strict';
 const db = require('../db');
+const Competition = require('./competitions');
 
 // ---------------------------------------------------------------------------
 // Minimal XML parser — handles the two FIE document formats:
@@ -154,6 +155,7 @@ const findOrCreateCompetition = db.transaction((tournamentId, attrs, weapon) => 
     fie_id:          attrs.ID ? Number(attrs.ID) : null,
     seeding_issuer:  attrs.Championnat || null,
   });
+  Competition.assignDefaultCode(lastInsertRowid);
   return lastInsertRowid;
 });
 

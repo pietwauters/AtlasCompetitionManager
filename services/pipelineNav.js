@@ -104,7 +104,7 @@ const stmtRelayMatchInfo = db.prepare(`
   SELECT tm.id, tm.left_team_id, tm.right_team_id, tm.phase_id,
          tl.name AS left_team_name, tr.name AS right_team_name,
          ph.phase_order,
-         co.name AS competition_name, co.weapon
+         co.name AS competition_name, co.code AS competition_code, co.weapon
   FROM team_matches tm
   LEFT JOIN teams tl ON tl.id = tm.left_team_id
   LEFT JOIN teams tr ON tr.id = tm.right_team_id
@@ -152,7 +152,7 @@ const stmtDeNext = db.prepare(`
     rc.first_name AS right_first, rc.last_name  AS right_last,
     rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
     ph.phase_order,
-    co.name AS competition_name, co.weapon
+    co.name AS competition_name, co.code AS competition_code, co.weapon
   FROM bouts b
   JOIN ordered o ON o.id = b.id
   JOIN phases     ph  ON ph.id  = b.phase_id
@@ -180,7 +180,7 @@ const stmtDePrev = db.prepare(`
     lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
     rc.first_name AS right_first, rc.last_name  AS right_last,
     rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-    ph.phase_order, co.name AS competition_name, co.weapon
+    ph.phase_order, co.name AS competition_name, co.code AS competition_code, co.weapon
   FROM bouts b
   JOIN ordered o ON o.id = b.id
   JOIN phases ph ON ph.id = b.phase_id
@@ -265,6 +265,7 @@ function buildRelayBout(matchId, relay) {
     cumul_right:     cumul.cum_right,
     weapon:          match.weapon,
     competition_name: match.competition_name,
+    competition_code: match.competition_code,
     phase_order:     match.phase_order,
   };
 }
@@ -379,7 +380,7 @@ const PipelineNav = {
           ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
           po.pool_number,
           ph.phase_order,
-          co.name AS competition_name, co.weapon
+          co.name AS competition_name, co.code AS competition_code, co.weapon
         FROM bouts b
         JOIN pools      po  ON po.id  = b.pool_id
         JOIN phases     ph  ON ph.id  = po.phase_id
@@ -431,7 +432,7 @@ const PipelineNav = {
           rc.first_name AS right_first, rc.last_name  AS right_last,
           rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
           ph.phase_order,
-          co.name AS competition_name, co.weapon
+          co.name AS competition_name, co.code AS competition_code, co.weapon
         FROM bouts b
         JOIN phases     ph  ON ph.id  = b.phase_id
         JOIN competitions co ON co.id = ph.competition_id
@@ -504,7 +505,7 @@ const PipelineNav = {
           rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
           ref_p.first_name AS ref_first, ref_p.last_name AS ref_last,
           po.pool_number, ph.phase_order,
-          co.name AS competition_name, co.weapon
+          co.name AS competition_name, co.code AS competition_code, co.weapon
         FROM bouts b
         JOIN pools      po  ON po.id  = b.pool_id
         JOIN phases     ph  ON ph.id  = po.phase_id
@@ -544,7 +545,7 @@ const PipelineNav = {
           lc.nationality AS left_nation, lcl.name AS left_club, lcl.short_name AS left_club_abbr,
           rc.first_name AS right_first, rc.last_name  AS right_last,
           rc.nationality AS right_nation, rcl.name AS right_club, rcl.short_name AS right_club_abbr,
-          ph.phase_order, co.name AS competition_name, co.weapon
+          ph.phase_order, co.name AS competition_name, co.code AS competition_code, co.weapon
         FROM bouts b
         JOIN phases ph ON ph.id = b.phase_id
         JOIN competitions co ON co.id = ph.competition_id

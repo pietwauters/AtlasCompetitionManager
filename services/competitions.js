@@ -68,6 +68,31 @@ const stmtDeleteBoutsForCompetition = db.prepare(`
   DELETE FROM bouts WHERE phase_id IN (SELECT id FROM phases WHERE competition_id = ?)
 `);
 const stmtDeleteCompetition = db.prepare('DELETE FROM competitions WHERE id = ?');
+const stmtCodeTaken = db.prepare(
+  'SELECT 1 FROM competitions WHERE tournament_id IS @tournament_id AND code = @code AND id != @id'
+);
+const stmtSetCode = db.prepare('UPDATE competitions SET code = ? WHERE id = ?');
+
+// OPP2 `competition` identifier (docs/level2.md §31.3): lowercase, hyphen-separated.
+const CODE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+function slug(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Mirrors migration 047's backfill: {age categories}-{gender}-{weapon}[-team].
+function defaultCodeBase(comp) {
+  const cats = stmtAgeCategoriesForCompetition.all(comp.id).map(c => slug(c.code)).filter(Boolean);
+  return [cats.length ? cats.join('-') : 'open', slug(comp.gender), slug(comp.weapon)]
+    .join('-') + (comp.is_team ? '-team' : '');
+}
+
+function uniqueCode(comp, base) {
+  for (let n = 1; ; n++) {
+    const code = n === 1 ? base : `${base}-${n}`;
+    if (!stmtCodeTaken.get({ tournament_id: comp.tournament_id, code, id: comp.id })) return code;
+  }
+}
 
 function withAgeCategories(comp) {
   if (!comp) return null;
@@ -124,24 +149,37 @@ const Competition = {
   },
 
   create({ tournament_id, name, weapon, gender, date, status, age_category_ids, is_team, format_id, referee_separation }) {
-    const { lastInsertRowid } = stmtCreate.run({
-      tournament_id: tournament_id || null,
-      name, weapon, gender,
-      date: date || null,
-      status: status || 'active',
-      is_team: is_team ? 1 : 0,
-      format_id: format_id || null,
-      referee_separation: referee_separation || null,
+    const run = db.transaction(() => {
+      const { lastInsertRowid } = stmtCreate.run({
+        tournament_id: tournament_id || null,
+        name, weapon, gender,
+        date: date || null,
+        status: status || 'active',
+        is_team: is_team ? 1 : 0,
+        format_id: format_id || null,
+        referee_separation: referee_separation || null,
+      });
+      if (age_category_ids?.length) {
+        this.setAgeCategories(lastInsertRowid, age_category_ids);
+      }
+      this.assignDefaultCode(lastInsertRowid);
+      return lastInsertRowid;
     });
-    if (age_category_ids?.length) {
-      this.setAgeCategories(lastInsertRowid, age_category_ids);
-    }
-    return this.findById(lastInsertRowid);
+    return this.findById(run());
+  },
+
+  // Gives a competition with no code yet its derived default, unique within its
+  // tournament. Leaves an existing (possibly hand-edited) code untouched.
+  assignDefaultCode(id) {
+    const comp = stmtRawById.get(id);
+    if (!comp || comp.code) return;
+    stmtSetCode.run(uniqueCode(comp, defaultCodeBase(comp)), id);
   },
 
   update(id, fields) {
     const current = stmtRawById.get(id);
     if (!current) return null;
+    if ('code' in fields) this.setCode(id, fields.code);
     const m = { ...current, ...fields };
     stmtUpdate.run({ id: Number(id), tournament_id: m.tournament_id || null,
              name: m.name, weapon: m.weapon, gender: m.gender,
@@ -156,6 +194,20 @@ const Competition = {
       this.setAgeCategories(id, fields.age_category_ids || []);
     }
     return this.findById(id);
+  },
+
+  // Throws with a user-facing message on an invalid or duplicate code.
+  setCode(id, code) {
+    const comp = stmtRawById.get(id);
+    if (!comp) return;
+    const value = String(code ?? '').trim();
+    if (!CODE_RE.test(value)) {
+      throw new Error('Code must be lowercase letters and digits separated by single hyphens (e.g. "u17-m-foil")');
+    }
+    if (stmtCodeTaken.get({ tournament_id: comp.tournament_id, code: value, id: comp.id })) {
+      throw new Error(`Another competition in this tournament already uses the code "${value}"`);
+    }
+    stmtSetCode.run(value, id);
   },
 
   // Replace all age categories for a competition.
