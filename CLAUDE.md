@@ -752,7 +752,10 @@ tournament). Relays `openpiste/+/{role}/#` per publisher role, never `openpiste/
 tournament identity message, not a separate registry. Tested against disposable
 local brokers only — not yet against the real `mqtt.openpiste.org` (TLS) or the real
 sudo/systemctl path. Still open: generating the identity's competition list from
-Atlas instead of the config file (§31.6 Option B).
+Atlas instead of the config file (§31.6 Option B). **Auth is a placeholder:** one
+shared `bridge` username/password with `readwrite openpiste/#` on the cloud broker —
+see `docs/cloud-bridge-auth-discussion.md` (recommended direction: per-tournament,
+short-lived client certificates scoped by a `%u` ACL pattern).
 
 ### Out of scope for MVP
 | Feature | Notes |
