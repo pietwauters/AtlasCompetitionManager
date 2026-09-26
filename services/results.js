@@ -391,4 +391,4 @@ function getCompetitionResults(compId) {
   return format ? _getResultsForFormat(compId, phases, format) : _getResultsFreeForm(compId, phases);
 }
 
-module.exports = { getCompetitionResults };
+module.exports = { getCompetitionResults, rankDePhase };
