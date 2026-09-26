@@ -96,8 +96,10 @@
                      @change="updateCapabilities(s, {min_de_tableau: $event.target.value || null})"
                      title="OK to use this piste up until round T{value}, then excluded once a round drops below that, e.g. 32 — for reserving colored/video pistes to the later rounds. Blank = usable all the way to the final.">
             </td>
-            <td data-label="">
+            <td data-label="" style="white-space:nowrap">
               <button class="danger" @click="deleteStrip(s)">Delete</button>
+              <button @click="sendAck(s)" :disabled="!s.name" style="font-size:.8rem;padding:.2rem .5rem"
+                      title="Send an ACK to this piste — releases a scoring apparatus stuck waiting for confirmation">ACK</button>
             </td>
           </tr>
         </template>
@@ -194,6 +196,14 @@ function app() {
       if(!r.ok){this.showNotice('Delete failed — strip may be in use',true);return;}
       this.showNotice('Deleted');
       await this.load();
+    },
+
+    async sendAck(s) {
+      if(!confirm('Send ACK to piste '+s.name+'?\n\nThis releases the scoring apparatus if it is stuck waiting for confirmation. Atlas does NOT record the bout result this way — enter it by hand if needed.'))return;
+      const r = await fetch('/api/strips/'+s.id+'/ack',{method:'POST'});
+      const data = await r.json().catch(()=>({}));
+      if(!r.ok){this.showNotice(data.error||'ACK failed',true);return;}
+      this.showNotice('ACK sent to piste '+s.name);
     },
 
     showNotice(text,error=false){

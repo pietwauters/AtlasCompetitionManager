@@ -71,6 +71,20 @@ router.patch('/:id', (req, res) => {
   res.json(s);
 });
 
+// POST /api/strips/:id/ack — send an OPP2 ACK to this piste (topic id = strip name)
+// to release an apparatus stuck waiting for confirmation.
+router.post('/:id/ack', (req, res) => {
+  const s = Strip.findById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Strip not found' });
+  if (!s.name) return res.status(400).json({ error: 'This strip has no name, so it has no OPP2 piste to send to.' });
+  try {
+    OPP2.manualAck(s.name);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 router.delete('/:id', (req, res) => {
   const result = Strip.delete(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Strip not found' });
