@@ -1,13 +1,15 @@
 'use strict';
-// FIE XML results export — CompetitionIndividuelle, grammar version 3.3.
+// FIE XML results export — CompetitionIndividuelle / CompetitionParEquipes, grammar version 3.3.
 // Reference: docs/FIE_XML/XML_Specifications_FIE_2019.docx + competitionSchema-v20.xsd.
 // Element/attribute order follows the XSD sequences exactly (Match: Arbitre
 // before Tireur; Poule: Tireur, Arbitre, Match; root: Tireurs, Arbitres, Phases).
-// Stage writers live in services/fieExportPhases.js.
+// Stage writers live in services/fieExportPhases.js (individual) and
+// services/fieExportTeams.js (teams).
 const db      = require('../db');
 const Format  = require('./formats');
 const Results = require('./results');
 const Phases  = require('./fieExportPhases');
+const Teams   = require('./fieExportTeams');
 const { XmlWriter, fieDate, fieNow, lateralite, makeIdFn } = require('../lib/fieXml');
 
 const stmtCompetition = db.prepare(`
@@ -50,7 +52,8 @@ const stmtReferencedReferees = db.prepare(`
   WITH ph AS (SELECT id FROM phases WHERE competition_id = @comp),
        pl AS (SELECT id FROM pools WHERE phase_id IN (SELECT id FROM ph)),
        sl AS (SELECT id, referee_id FROM pipeline_slots
-              WHERE pool_id IN (SELECT id FROM pl) OR phase_id IN (SELECT id FROM ph))
+              WHERE pool_id IN (SELECT id FROM pl) OR phase_id IN (SELECT id FROM ph)
+                 OR team_match_id IN (SELECT id FROM team_matches WHERE phase_id IN (SELECT id FROM ph)))
   SELECT referee_id FROM pools WHERE id IN (SELECT id FROM pl) AND referee_id IS NOT NULL
   UNION SELECT referee_id FROM bouts WHERE phase_id IN (SELECT id FROM ph) AND referee_id IS NOT NULL
   UNION SELECT referee_id FROM sl WHERE referee_id IS NOT NULL
@@ -78,15 +81,33 @@ const DOMAIN_CODE   = [
 function buildContext(compId) {
   const comp = stmtCompetition.get(compId);
   if (!comp) throw Object.assign(new Error('Competition not found.'), { status: 404 });
-  if (comp.is_team) {
-    throw Object.assign(new Error('FIE XML export for team competitions (CompetitionParEquipes) is not supported yet.'), { status: 400 });
-  }
 
-  const phases = stmtPhases.all(compId).filter(p => p.type === 'pool' || p.type === 'de');
+  const types = comp.is_team ? ['team_de'] : ['pool', 'de'];
+  const phases = stmtPhases.all(compId).filter(p => types.includes(p.type));
   if (!phases.length) {
-    throw Object.assign(new Error('Nothing to export yet — a results file needs at least one round (the XSD requires one phase).'), { status: 400 });
+    throw Object.assign(new Error('Nothing to export yet — create at least one round first.'), { status: 400 });
   }
 
+  const refereeIds = new Set([
+    ...stmtRosterReferees.all({ comp: comp.id, tourn: comp.tournament_id }),
+    ...stmtReferencedReferees.all({ comp: comp.id }),
+  ].map(r => r.referee_id));
+  const referees = [...refereeIds].map(id => stmtReferee.get(id)).filter(Boolean);
+  const refIdOf = makeIdFn(referees, 'R');
+  const refIds = new Map(referees.map(r => [r.id, refIdOf(r)]));
+
+  const ctx = {
+    comp, phases,
+    referees, refId: id => refIds.get(id) ?? `R${id}`,
+    strips: new Map(stmtStrips.all().map(s => [s.id, s])),
+    date: fieDate(comp.date),
+    phaseIdOf: new Map(),
+  };
+  return comp.is_team ? Teams.extendContext(ctx) : extendIndividualContext(ctx);
+}
+
+function extendIndividualContext(ctx) {
+  const { comp, phases } = ctx;
   let format = null;
   if (comp.format_id) {
     try { format = Format.loadFormat(comp.format_id); } catch { /* format file missing/renamed */ }
@@ -100,7 +121,7 @@ function buildContext(compId) {
     ? !!p.format_stage && terminalStages.has(p.format_stage)
     : (lastDe ? p.id === lastDe.id : p === phases[phases.length - 1]));
 
-  const allCompetitors = stmtCompetitors.all(compId);
+  const allCompetitors = stmtCompetitors.all(comp.id);
   const byId = new Map(allCompetitors.map(c => [c.id, c]));
 
   const participantsByPhase = new Map(phases.map(ph => [ph.id, Phases.participantsOf(ph)]));
@@ -111,15 +132,8 @@ function buildContext(compId) {
   const competitors = allCompetitors.filter(c =>
     fenced.has(c.id) || (c.checked_in === 1 && c.status === 'active'));
 
-  const refereeIds = new Set([
-    ...stmtRosterReferees.all({ comp: comp.id, tourn: comp.tournament_id }),
-    ...stmtReferencedReferees.all({ comp: comp.id }),
-  ].map(r => r.referee_id));
-  const referees = [...refereeIds].map(id => stmtReferee.get(id)).filter(Boolean);
-  const refIdOf = makeIdFn(referees, 'R');
-  const refIds = new Map(referees.map(r => [r.id, refIdOf(r)]));
   const cards = new Map();
-  for (const c of stmtCardsForCompetition.all(compId)) {
+  for (const c of stmtCardsForCompetition.all(comp.id)) {
     const key = `${c.bout_id}:${c.side}`;
     const e = cards.get(key) || { yellow: 0, red: 0 };
     if (c.card === 'yellow') e.yellow++;
@@ -128,12 +142,8 @@ function buildContext(compId) {
   }
 
   return {
-    comp, phases, isTerminal, parallel, byId, competitors, participantsByPhase,
+    ...ctx, isTerminal, parallel, byId, competitors, participantsByPhase, cards,
     fencerId: makeIdFn(competitors, 'C'),
-    referees, refId: id => refIds.get(id) ?? `R${id}`, cards,
-    strips: new Map(stmtStrips.all().map(s => [s.id, s])),
-    date: fieDate(comp.date),
-    phaseIdOf: new Map(),
   };
 }
 
@@ -170,63 +180,87 @@ function rootAttrs(ctx) {
   };
 }
 
+function writeArbitres(w, ctx, isFie) {
+  w.open('Arbitres');
+  const weaponGrade = { foil: 'CategorieFleuret', epee: 'CategorieEpee', sabre: 'CategorieSabre' }[ctx.comp.weapon];
+  const byName = (a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || '');
+  for (const r of [...ctx.referees].sort(byName)) {
+    // FIE grades referees A/B/C; Atlas's free-text level is only passed on when it is one.
+    const grade = /^[ABC]$/i.test(String(r.level || '').trim()) ? String(r.level).trim().toUpperCase() : null;
+    w.empty('Arbitre', {
+      ID: ctx.refId(r.id),
+      Nom: r.last_name,
+      Prenom: r.first_name,
+      Sexe: ['M', 'F'].includes(r.gender) ? r.gender : null,
+      Nation: r.nationality,
+      DateNaissance: fieDate(r.date_of_birth),
+      Club: isFie ? null : r.club_name,
+      Categorie: grade,
+      ...(weaponGrade ? { [weaponGrade]: grade } : {}),
+    });
+  }
+  w.close('Arbitres');
+}
+
+// Attributes of a competition-level <Tireur> (§7.2.1) — also used for team members.
+function fencerAttrs(ctx, c, isFie) {
+  return {
+    ID: ctx.fencerId(c),
+    Nom: c.last_name,
+    Prenom: c.first_name,
+    Sexe: c.gender,
+    DateNaissance: fieDate(c.date_of_birth),
+    Lateralite: lateralite(c.handedness),
+    Nation: c.nationality,
+    Club: isFie ? null : c.club_name,
+    Licence: c.fie_licence,
+  };
+}
+
+function writeIndividual(w, ctx, root) {
+  const results = Results.getCompetitionResults(ctx.comp.id);
+  const finalPlaces = new Map(results.map(r => [r.competitor_id, r.place]));
+  const isFie = root.Championnat === 'FIE';
+  w.open('CompetitionIndividuelle', root);
+
+  w.open('Tireurs');
+  for (const c of ctx.competitors) {
+    w.empty('Tireur', { ...fencerAttrs(ctx, c, isFie), RangInitial: c.seeding_position, Classement: finalPlaces.get(c.id) });
+  }
+  w.close('Tireurs');
+
+  writeArbitres(w, ctx, isFie);
+
+  w.open('Phases');
+  ctx.phases.forEach((ph, i) => (ph.type === 'pool'
+    ? Phases.writeTourDePoules(w, ctx, ph, i + 1)
+    : Phases.writePhaseDeTableaux(w, ctx, ph, i + 1, finalPlaces)));
+  w.close('Phases');
+
+  w.close('CompetitionIndividuelle');
+}
+
+// §7.1.2: CompetitionParEquipes — Equipes (each holding its Tireurs) replace
+// the Tireurs list; order Equipes, Arbitres, Phases.
+function writeTeam(w, ctx, root) {
+  const isFie = root.Championnat === 'FIE';
+  w.open('CompetitionParEquipes', { ...root, TypeCompetition: 'S' });
+  Teams.writeEquipes(w, ctx, c => fencerAttrs(ctx, c, isFie), isFie);
+  writeArbitres(w, ctx, isFie);
+  w.open('Phases');
+  ctx.phases.forEach((ph, i) => Teams.writeTeamPhase(w, ctx, ph, i + 1));
+  w.close('Phases');
+  w.close('CompetitionParEquipes');
+}
+
 const FieExport = {
-  // Returns { xml, filename } for an individual competition's results file.
+  // Returns { xml, filename } for a competition's results file —
+  // CompetitionIndividuelle or CompetitionParEquipes.
   exportCompetition(compId) {
     const ctx = buildContext(Number(compId));
-    const results = Results.getCompetitionResults(ctx.comp.id);
-    const finalPlaces = new Map(results.map(r => [r.competitor_id, r.place]));
-
-    const w = new XmlWriter();
     const root = rootAttrs(ctx);
-    w.open('CompetitionIndividuelle', root);
-
-    w.open('Tireurs');
-    const isFie = root.Championnat === 'FIE';
-    for (const c of ctx.competitors) {
-      w.empty('Tireur', {
-        ID: ctx.fencerId(c),
-        Nom: c.last_name,
-        Prenom: c.first_name,
-        Sexe: c.gender,
-        DateNaissance: fieDate(c.date_of_birth),
-        Lateralite: lateralite(c.handedness),
-        Nation: c.nationality,
-        Club: isFie ? null : c.club_name,
-        Licence: c.fie_licence,
-        RangInitial: c.seeding_position,
-        Classement: finalPlaces.get(c.id),
-      });
-    }
-    w.close('Tireurs');
-
-    w.open('Arbitres');
-    const weaponGrade = { foil: 'CategorieFleuret', epee: 'CategorieEpee', sabre: 'CategorieSabre' }[ctx.comp.weapon];
-    const byName = (a, b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || '');
-    for (const r of [...ctx.referees].sort(byName)) {
-      // FIE grades referees A/B/C; Atlas's free-text level is only passed on when it is one.
-      const grade = /^[ABC]$/i.test(String(r.level || '').trim()) ? String(r.level).trim().toUpperCase() : null;
-      w.empty('Arbitre', {
-        ID: ctx.refId(r.id),
-        Nom: r.last_name,
-        Prenom: r.first_name,
-        Sexe: ['M', 'F'].includes(r.gender) ? r.gender : null,
-        Nation: r.nationality,
-        DateNaissance: fieDate(r.date_of_birth),
-        Club: isFie ? null : r.club_name,
-        Categorie: grade,
-        ...(weaponGrade ? { [weaponGrade]: grade } : {}),
-      });
-    }
-    w.close('Arbitres');
-
-    w.open('Phases');
-    ctx.phases.forEach((ph, i) => (ph.type === 'pool'
-      ? Phases.writeTourDePoules(w, ctx, ph, i + 1)
-      : Phases.writePhaseDeTableaux(w, ctx, ph, i + 1, finalPlaces)));
-    w.close('Phases');
-
-    w.close('CompetitionIndividuelle');
+    const w = new XmlWriter();
+    (ctx.comp.is_team ? writeTeam : writeIndividual)(w, ctx, root);
 
     const safe = String(ctx.comp.code || ctx.comp.name || 'competition').replace(/[^A-Za-z0-9_-]+/g, '_');
     return { xml: w.toString(), filename: `${root.ID}-RESULTS_${safe}.xml` };

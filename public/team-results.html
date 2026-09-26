@@ -33,7 +33,10 @@
     <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
       <h2 style="margin:0" x-text="(comp?.name||'Competition')+' — Final Results'"></h2>
       <a :href="'/competition-detail.html?id='+compId" style="font-size:.85rem;color:var(--clr-text-muted)">← Back to competition</a>
+      <button @click="exportFieXml()" style="margin-left:auto;font-size:.85rem"
+              title="Download the results as an FIE XML file (CompetitionParEquipes, version 3.3)">⬇ FIE XML</button>
     </div>
+    <div x-show="exportError" style="margin-top:.4rem;font-size:.85rem;color:var(--clr-danger)" x-text="exportError"></div>
     <div style="margin-top:.3rem;font-size:.85rem;color:var(--clr-text-muted)"
          x-text="({foil:'Foil',epee:'Épée',sabre:'Sabre'}[comp?.weapon]||'') + ' · ' + ({M:'Men',F:'Women',X:'Mixed'}[comp?.gender]||'') + ' · Teams'">
     </div>
@@ -73,11 +76,12 @@
     </table>
   </div>
 </main>
+<script src="/js/fie-export.js"></script>
 <script>
 function app() {
   const compId = new URLSearchParams(window.location.search).get('id');
   return {
-    compId, comp: null, results: [],
+    compId, comp: null, results: [], exportError: '',
 
     async init() {
       if (!compId) return;
@@ -86,6 +90,10 @@ function app() {
         fetch('/api/competitions/'+compId+'/teams/results').then(r=>r.json()).catch(()=>[]),
       ]);
       document.title = 'Atlas — '+(this.comp?.name||'')+' Results';
+    },
+
+    async exportFieXml() {
+      this.exportError = await downloadFieXml(compId);
     },
 
     memberList(team) {

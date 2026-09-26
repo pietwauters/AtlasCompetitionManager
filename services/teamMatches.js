@@ -315,6 +315,8 @@ const TeamMatch = {
         right_position: ruleDef?.right ?? null,
         left_fencer:    leftFencer,
         right_fencer:   rightFencer,
+        left_competitor_id:  leftCompId,
+        right_competitor_id: rightCompId,
         left_cumulative:  leftCum,
         right_cumulative: rightCum,
       };

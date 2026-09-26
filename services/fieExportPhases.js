@@ -378,4 +378,4 @@ function writePhaseDeTableaux(w, ctx, ph, seq, finalPlaces) {
 }
 
 
-module.exports = { participantsOf, writeTourDePoules, writePhaseDeTableaux };
+module.exports = { participantsOf, officialsFor, writeTourDePoules, writePhaseDeTableaux };

@@ -565,12 +565,14 @@ Full competition results combining DE + pool-eliminated fencers, unique ranks ex
 shared 3rd. Format-driven multi-stage under-counting bug fixed 2026-07-07 (now branches
 format-driven vs free-form competitions).
 
-### FIE XML results export — built 2026-09-26 (individual only)
+### FIE XML results export — built 2026-09-26 (individual + team)
 `services/fieExport.js` (context + root), `services/fieExportPhases.js` (TourDePoules /
-PhaseDeTableaux writers), `lib/fieXml.js` (XML primitives) produce a
-`CompetitionIndividuelle` file, grammar version 3.3, per `docs/FIE_XML/`
+PhaseDeTableaux writers), `services/fieExportTeams.js` (Equipes + team DE with relays as
+`<Assaut>`), `lib/fieXml.js` (XML primitives) produce a `CompetitionIndividuelle` or
+`CompetitionParEquipes` file, grammar version 3.3, per `docs/FIE_XML/`
 (`XML_Specifications_FIE_2019.docx` is authoritative; the v18 docx is an older draft of
-the same). `GET /api/fie/export/:competitionId`; "⬇ FIE XML" button on `results.html`.
+the same). `GET /api/fie/export/:competitionId`; "⬇ FIE XML" button on `results.html` and
+`team-results.html` (shared `public/js/fie-export.js`).
 Output validates against `docs/FIE_XML/competitionSchema-v20.xsd` (checked with Python
 `lxml`, as is the FencingTime reference file in `docs/GP/`). Mapping decisions worth knowing:
 - Each `deLayout.buildSections` section (main / repechage / finals / placement group) is
@@ -587,8 +589,12 @@ Output validates against `docs/FIE_XML/competitionSchema-v20.xsd` (checked with 
   other rows in the file do carry fie_ids, so the numbering spaces can't collide.
 - Officials per match: bout/slot referee = `P`, `referee2` = `A`, `video_assistant` = `V`;
   assessors aren't exported. Cards → `CartonJaune`/`CartonRouge` counts per side.
-Not built: team export (`CompetitionParEquipes` — returns 400), in-competition
-DNS/DNF/MED/EXC statuses (Atlas doesn't record them yet), `MatchesDeBarrage`.
+- Teams: members are `<Tireur>`s inside each `<Equipe>` (§7.2.8); `Equipe Nation` only
+  when every member shares one. Team DE = suite A (main) + suite B (bronze); each started
+  relay is an `<Assaut>` with the two relay fencers' own touches. No team cards: `card_reasons`
+  only links to individual `bouts`, not relays.
+Not built: in-competition DNS/DNF/MED/EXC statuses (Atlas doesn't record them yet),
+`MatchesDeBarrage`, Italian relay (`TypeCompetition="I"`).
 
 ### Team competitions
 Built to a meaningful degree: `services/teamMatches.js`/`teamPhases.js`,
@@ -810,7 +816,7 @@ short-lived client certificates scoped by a `%u` ACL pattern).
 | `services/dePhases.js` | DE-specific: getDeOptions, createDE |
 | `services/bouts.js` | Score entry, undo, advanceDEWinner |
 | `services/results.js` | Final competition results combining DE + pool |
-| `services/fieExport.js` | FIE XML results export (CompetitionIndividuelle v3.3) — see "FIE XML results export" above; stage writers in `services/fieExportPhases.js` |
+| `services/fieExport.js` | FIE XML results export (individual + team, v3.3) — see "FIE XML results export" above; stage writers in `services/fieExportPhases.js` / `services/fieExportTeams.js` |
 | `services/deLayout.js` | Builds de.html's main/repechage/placement sections incl. stripSlot (bracket, de_round, tableau, partition) for each round; `placementGroupBoutIds` resolves a placement pipeline slot to bout IDs |
 | `services/pipeline.js` | Orchestrator: re-exports pipelineSlots/pipelineNav/pipelineRosters as one `Pipeline` API |
 | `services/pipelineSlots.js` | Slot CRUD, officiating roster, referee double-booking enforcement |

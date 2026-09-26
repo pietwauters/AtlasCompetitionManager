@@ -83,6 +83,7 @@
   </div>
 </main>
 <script src="/js/nav.js"></script>
+<script src="/js/fie-export.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
 function app() {
@@ -105,20 +106,8 @@ function app() {
       });
     },
 
-    // Fetched rather than a plain link so a refusal (e.g. no rounds yet)
-    // shows its message instead of downloading an error body as a file.
     async exportFieXml() {
-      this.exportError = '';
-      const res = await fetch('/api/fie/export/' + compId);
-      if (!res.ok) {
-        this.exportError = (await res.json().catch(() => ({}))).error || 'Export failed.';
-        return;
-      }
-      const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'results.xml';
-      const url = URL.createObjectURL(await res.blob());
-      const a = Object.assign(document.createElement('a'), { href: url, download: name });
-      a.click();
-      URL.revokeObjectURL(url);
+      this.exportError = await downloadFieXml(compId);
     },
   };
 }

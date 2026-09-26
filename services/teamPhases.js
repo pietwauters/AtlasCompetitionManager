@@ -231,8 +231,9 @@ const TeamPhase = {
       }
 
       // Remaining teams: rank by the de_round they exited (lower round = worse rank)
-      // Group losers by round and assign shared ranks
-      const allRounds = stmtDistinctRounds.all(phaseId).map(r => r.de_round);
+      // Group losers by round and assign shared ranks, latest round first so
+      // e.g. quarter-final losers (5th) rank ahead of round-of-16 losers (9th).
+      const allRounds = stmtDistinctRounds.all(phaseId).map(r => r.de_round).reverse();
 
       let currentRank = bronze ? 5 : 3;
       for (const round of allRounds) {
@@ -240,6 +241,7 @@ const TeamPhase = {
         const losers = roundMatches.map(m =>
           m.winner_team_id === m.left_team_id ? m.right_team_id : m.left_team_id
         ).filter(id => {
+          if (id == null) return false; // bye — no loser
           const existing = stmtTeamFinalRank.get(id);
           return !existing?.final_rank;
         });
