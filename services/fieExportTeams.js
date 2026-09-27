@@ -1,7 +1,8 @@
 'use strict';
 // Team-competition writers for the FIE XML results export (services/fieExport.js):
 // the Equipes list and one PhaseDeTableaux per team_de phase, with each match's
-// relays as <Assaut> elements (§7.2.13). `ctx` is fieExport.js's export context.
+// relays as <Assaut> elements (§7.2.13) carrying running match totals.
+// `ctx` is fieExport.js's export context.
 const db        = require('../db');
 const TeamMatch = require('./teamMatches');
 const { officialsFor } = require('./fieExportPhases');
@@ -97,13 +98,19 @@ function writeTeamMatch(w, ctx, m, matchId) {
     });
   }
   if (!isBye && hasLeft && hasRight) {
+    // Assaut scores are the match's running totals after each relay (5-3,
+    // 10-9, … 45-31), as in the §7.2.13 example and Engarde's own files —
+    // Atlas stores per-relay touches, so they're accumulated here.
+    let leftTotal = 0, rightTotal = 0;
     for (const r of TeamMatch.getRelays(m.id)) {
       const started = r.status === 'finished' || r.left_touches != null || r.right_touches != null;
       if (!started) continue;
+      leftTotal += r.left_touches ?? 0;
+      rightTotal += r.right_touches ?? 0;
       w.open('Assaut', { ID: r.relay_number, Statut: r.status === 'finished' ? 'O' : 'L' });
-      for (const [cid, touches] of [[r.left_competitor_id, r.left_touches], [r.right_competitor_id, r.right_touches]]) {
+      for (const [cid, total] of [[r.left_competitor_id, leftTotal], [r.right_competitor_id, rightTotal]]) {
         const c = cid && ctx.byId.get(cid);
-        w.empty('Tireur', { REF: c ? ctx.fencerId(c) : null, Score: touches ?? null });
+        w.empty('Tireur', { REF: c ? ctx.fencerId(c) : null, Score: total });
       }
       w.close('Assaut');
     }

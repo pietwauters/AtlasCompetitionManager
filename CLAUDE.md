@@ -591,8 +591,9 @@ Output validates against `docs/FIE_XML/competitionSchema-v20.xsd` (checked with 
   assessors aren't exported. Cards → `CartonJaune`/`CartonRouge` counts per side.
 - Teams: members are `<Tireur>`s inside each `<Equipe>` (§7.2.8); `Equipe Nation` only
   when every member shares one. Team DE = suite A (main) + suite B (bronze); each started
-  relay is an `<Assaut>` with the two relay fencers' own touches. No team cards: `card_reasons`
-  only links to individual `bouts`, not relays.
+  relay is an `<Assaut>` whose scores are the match's running totals (5–3, 10–9 … 45–31,
+  as in the spec's §7.2.13 example and Engarde's files), not that relay's own touches.
+  No team cards: `card_reasons` only links to individual `bouts`, not relays.
 Not built: in-competition DNS/DNF/MED/EXC statuses (Atlas doesn't record them yet),
 `MatchesDeBarrage`, Italian relay (`TypeCompetition="I"`).
 
